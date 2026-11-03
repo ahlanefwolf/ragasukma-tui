@@ -10,25 +10,26 @@ use crate::agent_view::state::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
 
-pub fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
+pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(7), Constraint::Min(8)])
+        .constraints([Constraint::Length(8), Constraint::Min(5)])
         .split(area);
 
-    let is_focused = state.focus_area == AgentFocusArea::Inspector;
+    let is_model_focused = state.focus_area == AgentFocusArea::ModelTelemetry;
+    let is_tools_focused = state.focus_area == AgentFocusArea::McpTools;
 
     let breakdown = state.calculate_token_breakdown();
     let usage_pct = (breakdown.usage_ratio() * 100.0) as usize;
 
     let model_block = Block::default()
-        .title(if is_focused {
+        .title(if is_model_focused {
             Span::styled(" 🧠 Model Telemetry [Focused] ", Theme::badge_gold())
         } else {
             Span::styled(" 🧠 Model Telemetry ", Theme::header_title())
         })
         .borders(Borders::ALL)
-        .border_style(if is_focused {
+        .border_style(if is_model_focused {
             Theme::border_focused()
         } else {
             Theme::border_subtle()
@@ -72,13 +73,13 @@ pub fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorksp
     frame.render_widget(Paragraph::new(lines_model).block(model_block), chunks[0]);
 
     let block_tools = Block::default()
-        .title(if is_focused {
+        .title(if is_tools_focused {
             Span::styled(" 🛠️ MCP Tool Status [Focused] ", Theme::badge_gold())
         } else {
             Span::styled(" 🛠️ MCP Tool Status ", Theme::header_title())
         })
         .borders(Borders::ALL)
-        .border_style(if is_focused {
+        .border_style(if is_tools_focused {
             Theme::border_focused()
         } else {
             Theme::border_subtle()

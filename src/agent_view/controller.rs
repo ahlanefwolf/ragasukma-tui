@@ -133,7 +133,7 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Files => Some(Action::AgentScanFiles),
                 _ => Some(Action::AgentToggleReasoning),
             },
-            KeyCode::Char('t') if self.focus_area == AgentFocusArea::Inspector => {
+            KeyCode::Char('t') if self.focus_area == AgentFocusArea::McpTools => {
                 Some(Action::AgentCycleToolFilter)
             }
             KeyCode::Char('n') if self.focus_area == AgentFocusArea::Tasks => {
@@ -145,14 +145,16 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Files => Some(Action::AgentSelectFileNext),
                 AgentFocusArea::Folders => Some(Action::AgentNextFolder),
                 AgentFocusArea::Chat | AgentFocusArea::Input => Some(Action::AgentScrollDown),
-                AgentFocusArea::Inspector => Some(Action::AgentScrollDown),
+                AgentFocusArea::McpTools => Some(Action::AgentScrollDown),
+                AgentFocusArea::ModelTelemetry => None,
             },
             KeyCode::Up | KeyCode::Char('k') => match self.focus_area {
                 AgentFocusArea::Tasks => Some(Action::AgentPrevTask),
                 AgentFocusArea::Files => Some(Action::AgentSelectFilePrev),
                 AgentFocusArea::Folders => Some(Action::AgentPrevFolder),
                 AgentFocusArea::Chat | AgentFocusArea::Input => Some(Action::AgentScrollUp),
-                AgentFocusArea::Inspector => Some(Action::AgentScrollUp),
+                AgentFocusArea::McpTools => Some(Action::AgentScrollUp),
+                AgentFocusArea::ModelTelemetry => None,
             },
             KeyCode::Enter => match self.focus_area {
                 AgentFocusArea::Tasks => Some(Action::AgentSwitchTask),
@@ -160,7 +162,7 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Folders => Some(Action::AgentFocusFiles),
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
                 AgentFocusArea::Input => Some(Action::AgentSubmitPrompt),
-                AgentFocusArea::Inspector => None,
+                AgentFocusArea::ModelTelemetry | AgentFocusArea::McpTools => None,
             },
             KeyCode::Char('a') if matches!(self.focus_area, AgentFocusArea::Folders | AgentFocusArea::Files) => {
                 Some(Action::AgentOpenAddFolderModal)

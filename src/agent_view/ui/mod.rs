@@ -19,13 +19,14 @@ pub fn get_help_lines(state: &AgentWorkspaceState) -> (String, &'static str, Vec
         AgentFocusArea::Files => "Workspace Files Sidebar",
         AgentFocusArea::Chat => "Chat Messages History",
         AgentFocusArea::Input => "Prompt Input Field",
-        AgentFocusArea::Inspector => "Right Inspector / Tool Activity",
+        AgentFocusArea::ModelTelemetry => "Model Telemetry Panel",
+        AgentFocusArea::McpTools => "MCP Tool Status Panel",
     };
 
     let lines = vec![
         Line::from(vec![
             Span::styled("  Tab / Shift+Tab  ", Theme::key_badge()),
-            Span::raw(" Cycle focus between panels (Folders -> Tasks/Files -> Chat -> Input -> Inspector)"),
+            Span::raw(" Cycle focus between panels (Folders -> Tasks/Files -> Chat -> Input -> Telemetry -> MCP Tools)"),
         ]),
         Line::from(vec![
             Span::styled("  a                ", Theme::key_badge()),
@@ -128,7 +129,7 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
 
     // Right Inspector Panel
     if state.is_inspector_visible {
-        inspector::render_right_inspector(frame, chunks[current_idx], state);
+        inspector::render_inspector(frame, chunks[current_idx], state);
     }
 
     // Floating Modals
@@ -222,7 +223,10 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             Span::styled(" [✏️ INPUT:INSERT] ", Theme::badge_gold())
         }
         AgentFocusArea::Input => Span::styled(" [✏️ INPUT:NORMAL] ", Theme::badge_cyan()),
-        AgentFocusArea::Inspector => Span::styled(" [🔍 INSPECTOR] ", Theme::badge_gold()),
+        AgentFocusArea::ModelTelemetry => {
+            Span::styled(" [🧠 MODEL TELEMETRY] ", Theme::badge_gold())
+        }
+        AgentFocusArea::McpTools => Span::styled(" [🛠️ MCP TOOLS] ", Theme::badge_gold()),
     };
     hints.push(card_badge);
 
@@ -314,29 +318,25 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
             hints.push(Span::raw("Scroll Chat "));
         }
-        AgentFocusArea::Inspector => {
+        AgentFocusArea::ModelTelemetry => {
+            hints.push(Span::styled(" [m] ", Theme::key_badge()));
+            hints.push(Span::raw("Cycle Model "));
+            hints.push(Span::styled(" [r] ", Theme::key_badge()));
+            hints.push(Span::raw("Toggle Reasoning "));
+        }
+        AgentFocusArea::McpTools => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
-            hints.push(Span::raw("Scroll "));
+            hints.push(Span::raw("Scroll Tools "));
             hints.push(Span::styled(" [t] ", Theme::key_badge()));
             hints.push(Span::raw("Filter "));
             hints.push(Span::styled(" [x] ", Theme::key_badge()));
             hints.push(Span::raw("Expand "));
-            hints.push(Span::styled(" [r] ", Theme::key_badge()));
-            hints.push(Span::raw("Reasoning "));
-            hints.push(Span::styled(" [m] ", Theme::key_badge()));
-            hints.push(Span::raw("Model "));
         }
     }
 
-    // Common navigation & model badge
+    // Common navigation
     hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
     hints.push(Span::raw("Next Card "));
-
-    // Reactive Model Badge
-    if width > 115 {
-        let model_display = format!(" 🤖 {} ", state.active_model);
-        hints.push(Span::styled(model_display, Theme::badge_cyan()));
-    }
 
     hints
 }

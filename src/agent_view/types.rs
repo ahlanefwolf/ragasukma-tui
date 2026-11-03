@@ -62,7 +62,8 @@ pub enum AgentFocusArea {
     Folders,
     Chat,
     Input,
-    Inspector,
+    ModelTelemetry,
+    McpTools,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

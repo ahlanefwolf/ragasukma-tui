@@ -260,7 +260,8 @@ impl AgentWorkspaceState {
         order.push(AgentFocusArea::Chat);
         order.push(AgentFocusArea::Input);
         if self.is_inspector_visible {
-            order.push(AgentFocusArea::Inspector);
+            order.push(AgentFocusArea::ModelTelemetry);
+            order.push(AgentFocusArea::McpTools);
         }
 
         if let Some(pos) = order.iter().position(|&f| f == self.focus_area) {
@@ -285,7 +286,8 @@ impl AgentWorkspaceState {
         order.push(AgentFocusArea::Chat);
         order.push(AgentFocusArea::Input);
         if self.is_inspector_visible {
-            order.push(AgentFocusArea::Inspector);
+            order.push(AgentFocusArea::ModelTelemetry);
+            order.push(AgentFocusArea::McpTools);
         }
 
         if let Some(pos) = order.iter().position(|&f| f == self.focus_area) {
@@ -299,14 +301,22 @@ impl AgentWorkspaceState {
     }
 
     pub fn scroll_up(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_add(3);
-        self.auto_scroll = false;
+        if self.focus_area == AgentFocusArea::McpTools {
+            self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_sub(1);
+        } else {
+            self.scroll_offset = self.scroll_offset.saturating_add(3);
+            self.auto_scroll = false;
+        }
     }
 
     pub fn scroll_down(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(3);
-        if self.scroll_offset == 0 {
-            self.auto_scroll = true;
+        if self.focus_area == AgentFocusArea::McpTools {
+            self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_add(1);
+        } else {
+            self.scroll_offset = self.scroll_offset.saturating_sub(3);
+            if self.scroll_offset == 0 {
+                self.auto_scroll = true;
+            }
         }
     }
 
