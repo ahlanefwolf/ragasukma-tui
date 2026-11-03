@@ -5,7 +5,12 @@ use super::types::Action;
 
 impl App {
     pub fn is_text_input_active(&self) -> bool {
-        (self.active_tab == 0 && self.agent.is_input_focused)
+        (self.active_tab == 0
+            && (self.agent.is_input_focused
+                || self.agent.add_folder_modal.is_open
+                || self.agent.create_project_modal.is_open
+                || self.agent.pending_approval.is_some()
+                || self.agent.project_modal.is_open))
             || (self.active_tab == 4 && self.custom_llm.is_form_open)
     }
 

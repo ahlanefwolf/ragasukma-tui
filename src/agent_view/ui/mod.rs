@@ -146,15 +146,16 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     }
 }
 
-pub fn get_footer_key_hints<'a>(state: &AgentWorkspaceState, width: u16) -> Vec<Span<'a>> {
+pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span<'static>> {
     let mut hints = Vec::new();
 
     // 1. Modal: Add Folder to Workspace
     if state.add_folder_modal.is_open {
+        hints.push(Span::styled(" [📂 ADD FOLDER] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-        hints.push(Span::raw("Add Folder "));
+        hints.push(Span::raw("Confirm "));
         hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
-        hints.push(Span::raw("Browse Dialog "));
+        hints.push(Span::raw("Browse/Complete "));
         hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
         hints.push(Span::raw("Cancel "));
         return hints;
@@ -162,6 +163,7 @@ pub fn get_footer_key_hints<'a>(state: &AgentWorkspaceState, width: u16) -> Vec<
 
     // 2. Modal: Create Project
     if state.create_project_modal.is_open {
+        hints.push(Span::styled(" [➕ NEW PROJECT] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
         hints.push(Span::raw("Create "));
         hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
@@ -171,10 +173,11 @@ pub fn get_footer_key_hints<'a>(state: &AgentWorkspaceState, width: u16) -> Vec<
 
     // 3. Modal: Project Switcher / List Project
     if state.project_modal.is_open {
+        hints.push(Span::styled(" [📦 PROJECTS] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
         hints.push(Span::raw("Select "));
         hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-        hints.push(Span::raw("Switch Project "));
+        hints.push(Span::raw("Switch "));
         hints.push(Span::styled(" [n] ", Theme::key_badge()));
         hints.push(Span::raw("New Project "));
         hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
@@ -184,6 +187,7 @@ pub fn get_footer_key_hints<'a>(state: &AgentWorkspaceState, width: u16) -> Vec<
 
     // 4. Modal: Pending Tool Approval / Diff Review
     if state.pending_approval.is_some() {
+        hints.push(Span::styled(" [⚠️ APPROVAL] ", Theme::badge_gold()));
         hints.push(Span::styled(" [y] ", Theme::key_badge()));
         hints.push(Span::raw("Approve "));
         hints.push(Span::styled(" [n] ", Theme::key_badge()));
@@ -194,104 +198,144 @@ pub fn get_footer_key_hints<'a>(state: &AgentWorkspaceState, width: u16) -> Vec<
     }
 
     // 5. Popup: Tag Picker / Tag Query active
-    if state.tag_query.is_some() {
+    if let Some(ref tq) = state.tag_query {
+        hints.push(Span::styled(" [🏷️ TAG POPUP] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
-        hints.push(Span::raw("Navigate Tags "));
+        hints.push(Span::raw("Select "));
         hints.push(Span::styled(" [Enter/Tab] ", Theme::key_badge()));
-        hints.push(Span::raw("Insert Tag "));
+        hints.push(Span::raw("Insert "));
         hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
-        hints.push(Span::raw("Close Tag Picker "));
+        hints.push(Span::raw("Close "));
+        if tq.has_more() && width > 80 {
+            hints.push(Span::styled(" [↓ Scroll more] ", Theme::badge_gold()));
+        }
         return hints;
     }
 
-    // General focus areas when no modal is open
+    // Reactive Focus Card Badge
+    let card_badge = match state.focus_area {
+        AgentFocusArea::Folders => Span::styled(" [📁 FOLDERS] ", Theme::badge_gold()),
+        AgentFocusArea::Tasks => Span::styled(" [📋 TASKS] ", Theme::badge_gold()),
+        AgentFocusArea::Files => Span::styled(" [🗂️ FILES] ", Theme::badge_gold()),
+        AgentFocusArea::Chat => Span::styled(" [💬 CHAT] ", Theme::badge_gold()),
+        AgentFocusArea::Input if state.is_input_focused => {
+            Span::styled(" [✏️ INPUT:INSERT] ", Theme::badge_gold())
+        }
+        AgentFocusArea::Input => Span::styled(" [✏️ INPUT:NORMAL] ", Theme::badge_cyan()),
+        AgentFocusArea::Inspector => Span::styled(" [🔍 INSPECTOR] ", Theme::badge_gold()),
+    };
+    hints.push(card_badge);
+
+    // Context-sensitive card hints matching actual controller keybindings
     match state.focus_area {
+        AgentFocusArea::Folders => {
+            hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+            hints.push(Span::raw("Select "));
+            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+            hints.push(Span::raw("Focus Files "));
+            hints.push(Span::styled(" [a] ", Theme::key_badge()));
+            hints.push(Span::raw("Add "));
+            hints.push(Span::styled(" [d] ", Theme::key_badge()));
+            hints.push(Span::raw("Remove "));
+            if width > 90 {
+                hints.push(Span::styled(" [o] ", Theme::key_badge()));
+                hints.push(Span::raw("Open "));
+                hints.push(Span::styled(" [P] ", Theme::key_badge()));
+                hints.push(Span::raw("Projects "));
+            }
+        }
         AgentFocusArea::Tasks => {
-            hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
-            hints.push(Span::raw("Next Card "));
+            hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+            hints.push(Span::raw("Select "));
             hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
             hints.push(Span::raw("Switch Task "));
             hints.push(Span::styled(" [n] ", Theme::key_badge()));
-            hints.push(Span::raw("New Task "));
+            hints.push(Span::raw("New "));
             hints.push(Span::styled(" [d] ", Theme::key_badge()));
-            hints.push(Span::raw("Delete Task "));
-            hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
-            hints.push(Span::raw("Select "));
+            hints.push(Span::raw("Delete "));
             hints.push(Span::styled(" [s] ", Theme::key_badge()));
-            hints.push(Span::raw("Switch to Files "));
+            hints.push(Span::raw("Files Tab "));
+            if width > 95 {
+                hints.push(Span::styled(" [P] ", Theme::key_badge()));
+                hints.push(Span::raw("Projects "));
+            }
         }
         AgentFocusArea::Files => {
-            hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
-            hints.push(Span::raw("Next Card "));
+            hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+            hints.push(Span::raw("Select "));
             hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
             hints.push(Span::raw("Expand/Collapse "));
             hints.push(Span::styled(" [Space] ", Theme::key_badge()));
-            hints.push(Span::raw("Tag File "));
-            hints.push(Span::styled(" [o] ", Theme::key_badge()));
-            hints.push(Span::raw("Open Folder "));
-            hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
-            hints.push(Span::raw("Select "));
+            hints.push(Span::raw("Insert Path "));
             hints.push(Span::styled(" [s] ", Theme::key_badge()));
-            hints.push(Span::raw("Switch to Tasks "));
-        }
-        AgentFocusArea::Folders => {
-            hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
-            hints.push(Span::raw("Next Card "));
-            hints.push(Span::styled(" [a] ", Theme::key_badge()));
-            hints.push(Span::raw("Add Folder "));
-            hints.push(Span::styled(" [d] ", Theme::key_badge()));
-            hints.push(Span::raw("Remove Folder "));
-            hints.push(Span::styled(" [o] ", Theme::key_badge()));
-            hints.push(Span::raw("Open Folder "));
-            hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
-            hints.push(Span::raw("Select "));
-            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-            hints.push(Span::raw("View Files "));
+            hints.push(Span::raw("Tasks Tab "));
+            if width > 90 {
+                hints.push(Span::styled(" [a] ", Theme::key_badge()));
+                hints.push(Span::raw("Add Folder "));
+                hints.push(Span::styled(" [r] ", Theme::key_badge()));
+                hints.push(Span::raw("Rescan "));
+                hints.push(Span::styled(" [o] ", Theme::key_badge()));
+                hints.push(Span::raw("Open "));
+            }
         }
         AgentFocusArea::Chat => {
-            hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
-            hints.push(Span::raw("Next Card "));
-            hints.push(Span::styled(" [i] ", Theme::key_badge()));
-            hints.push(Span::raw("Write Input "));
-            hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
-            hints.push(Span::raw("Scroll Chat "));
-            hints.push(Span::styled(" [x] ", Theme::key_badge()));
-            hints.push(Span::raw("Toggle Tools "));
-            hints.push(Span::styled(" [c] ", Theme::key_badge()));
-            hints.push(Span::raw("Clear Chat "));
-        }
-        AgentFocusArea::Input => {
-            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-            hints.push(Span::raw("Send Prompt "));
-            hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
-            hints.push(Span::raw("Unfocus "));
-            hints.push(Span::styled(" [@] ", Theme::key_badge()));
-            hints.push(Span::raw("Tag File "));
-            hints.push(Span::styled(" [Ctrl+U] ", Theme::key_badge()));
-            hints.push(Span::raw("Clear Line "));
-        }
-        AgentFocusArea::Inspector => {
-            hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
-            hints.push(Span::raw("Next Card "));
+            hints.push(Span::styled(" [i/Enter] ", Theme::key_badge()));
+            hints.push(Span::raw("Write "));
+            hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+            hints.push(Span::raw("Scroll "));
             hints.push(Span::styled(" [m] ", Theme::key_badge()));
             hints.push(Span::raw("Model "));
+            hints.push(Span::styled(" [c] ", Theme::key_badge()));
+            hints.push(Span::raw("Clear "));
+            if width > 95 {
+                hints.push(Span::styled(" [x] ", Theme::key_badge()));
+                hints.push(Span::raw("Tools "));
+                hints.push(Span::styled(" [r] ", Theme::key_badge()));
+                hints.push(Span::raw("Reasoning "));
+                hints.push(Span::styled(" [b] ", Theme::key_badge()));
+                hints.push(Span::raw("Sidebar "));
+            }
+        }
+        AgentFocusArea::Input if state.is_input_focused => {
+            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+            hints.push(Span::raw("Send Prompt "));
+            hints.push(Span::styled(" [@] ", Theme::key_badge()));
+            hints.push(Span::raw("Tag File/Folder "));
+            hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+            hints.push(Span::raw("Normal Mode "));
+            hints.push(Span::styled(" [Ctrl+U] ", Theme::key_badge()));
+            hints.push(Span::raw("Clear "));
+        }
+        AgentFocusArea::Input => {
+            hints.push(Span::styled(" [i/Enter] ", Theme::key_badge()));
+            hints.push(Span::raw("Insert Mode "));
+            hints.push(Span::styled(" [m] ", Theme::key_badge()));
+            hints.push(Span::raw("Model "));
+            hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
+            hints.push(Span::raw("Scroll Chat "));
+        }
+        AgentFocusArea::Inspector => {
+            hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+            hints.push(Span::raw("Scroll "));
             hints.push(Span::styled(" [t] ", Theme::key_badge()));
-            hints.push(Span::raw("Filter Tools "));
+            hints.push(Span::raw("Filter "));
+            hints.push(Span::styled(" [x] ", Theme::key_badge()));
+            hints.push(Span::raw("Expand "));
             hints.push(Span::styled(" [r] ", Theme::key_badge()));
             hints.push(Span::raw("Reasoning "));
-            hints.push(Span::styled(" [x] ", Theme::key_badge()));
-            hints.push(Span::raw("Toggle Expand "));
-            hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
-            hints.push(Span::raw("Scroll "));
+            hints.push(Span::styled(" [m] ", Theme::key_badge()));
+            hints.push(Span::raw("Model "));
         }
     }
 
-    if width > 110 {
-        hints.push(Span::raw(" | "));
-        hints.push(Span::styled(" [B] ", Theme::key_badge()));
-        hints.push(Span::raw("Toggle Sidebar "));
-        hints.push(Span::styled(" [P] ", Theme::key_badge()));
-        hints.push(Span::raw("Projects "));
+    // Common navigation & model badge
+    hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
+    hints.push(Span::raw("Next Card "));
+
+    // Reactive Model Badge
+    if width > 115 {
+        let model_display = format!(" 🤖 {} ", state.active_model);
+        hints.push(Span::styled(model_display, Theme::badge_cyan()));
     }
 
     hints
