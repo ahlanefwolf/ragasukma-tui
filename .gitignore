@@ -13,6 +13,12 @@ Thumbs.db
 
 # Runtime Databases & Local Credentials
 assets/antigravity_accounts.json
+assets/codex_accounts.json
+assets/claude_accounts.json
+assets/api_llm_accounts.json
+*.db
+*.db-shm
+*.db-wal
 assets/*.db
 assets/*.db-shm
 assets/*.db-wal

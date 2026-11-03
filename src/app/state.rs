@@ -1,7 +1,7 @@
 use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::agent_view::AgentWorkspaceState;
+use crate::agent_view::state::AgentWorkspaceState;
 use crate::core_bridge::CoreBridgeCommand;
 use crate::custom_llm_view::CustomLlmTabState;
 use crate::event::AppEvent;

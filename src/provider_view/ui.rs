@@ -293,3 +293,55 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
         frame.render_widget(msg, main_chunks[1]);
     }
 }
+
+pub fn get_footer_key_hints() -> Vec<Span<'static>> {
+    vec![
+        Span::styled(" [j/k] ", Theme::key_badge()),
+        Span::raw("Select "),
+        Span::styled(" [Space] ", Theme::key_badge()),
+        Span::raw("Toggle Active "),
+        Span::styled(" [Enter] ", Theme::key_badge()),
+        Span::raw("Set Default "),
+        Span::styled(" [r] ", Theme::key_badge()),
+        Span::raw("Refresh "),
+        Span::styled(" [a/n] ", Theme::key_badge()),
+        Span::raw("Add OAuth "),
+        Span::styled(" [d] ", Theme::key_badge()),
+        Span::raw("Delete "),
+        Span::styled(" [1-5] ", Theme::key_badge()),
+        Span::raw("Tabs "),
+        Span::styled(" [?] ", Theme::key_badge()),
+        Span::raw("Help "),
+        Span::styled(" [q] ", Theme::key_badge()),
+        Span::raw("Quit "),
+    ]
+}
+
+pub fn get_help_lines(provider_name: &str) -> Vec<Line<'static>> {
+    vec![
+        Line::from(vec![
+            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+            Span::raw(format!("Navigate {provider_name} accounts list")),
+        ]),
+        Line::from(vec![
+            Span::styled("   Space          : ", Theme::badge_cyan()),
+            Span::raw("Toggle active/inactive status of account"),
+        ]),
+        Line::from(vec![
+            Span::styled("   Enter          : ", Theme::badge_cyan()),
+            Span::raw("Set selected account as Default active"),
+        ]),
+        Line::from(vec![
+            Span::styled("   r              : ", Theme::badge_cyan()),
+            Span::raw("Refresh model rate limits & quota usage"),
+        ]),
+        Line::from(vec![
+            Span::styled("   a / n          : ", Theme::badge_cyan()),
+            Span::raw("Login & add new account via OAuth browser"),
+        ]),
+        Line::from(vec![
+            Span::styled("   d              : ", Theme::badge_cyan()),
+            Span::raw("Delete selected account"),
+        ]),
+    ]
+}

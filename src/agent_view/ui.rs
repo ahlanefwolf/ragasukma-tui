@@ -849,3 +849,449 @@ fn render_add_folder_modal(
     };
     frame.render_widget(Paragraph::new(feedback_line), chunks[1]);
 }
+
+pub fn get_footer_key_hints(agent: &AgentWorkspaceState, width: u16) -> Vec<Span<'static>> {
+    if agent.project_modal.is_open {
+        vec![
+            Span::styled(" [Enter] ", Theme::key_badge()),
+            Span::raw("Switch "),
+            Span::styled(" [j/k] ", Theme::key_badge()),
+            Span::raw("Nav "),
+            Span::styled(" [n] ", Theme::key_badge()),
+            Span::raw("New Project "),
+            Span::styled(" [Esc] ", Theme::key_badge()),
+            Span::raw("Close "),
+        ]
+    } else if agent.create_project_modal.is_open {
+        vec![
+            Span::styled(" [Enter] ", Theme::key_badge()),
+            Span::raw("Create "),
+            Span::styled(" [Esc] ", Theme::key_badge()),
+            Span::raw("Cancel "),
+        ]
+    } else if agent.add_folder_modal.is_open {
+        vec![
+            Span::styled(" [Enter] ", Theme::key_badge()),
+            Span::raw("Add "),
+            Span::styled(" [Tab/F2] ", Theme::key_badge()),
+            Span::raw("Browse OS "),
+            Span::styled(" [Esc] ", Theme::key_badge()),
+            Span::raw("Cancel "),
+        ]
+    } else if agent.is_input_focused {
+        vec![
+            Span::styled(" [Enter] ", Theme::key_badge()),
+            Span::raw("Send "),
+            Span::styled(" [Esc] ", Theme::key_badge()),
+            Span::raw("Unfocus "),
+            Span::styled(" [Ctrl+U] ", Theme::key_badge()),
+            Span::raw("Clear "),
+            Span::styled(" [Ctrl+C] ", Theme::key_badge()),
+            Span::raw("Quit "),
+        ]
+    } else if width < 90 {
+        vec![
+            Span::styled(" [i] ", Theme::key_badge()),
+            Span::raw("Prompt "),
+            Span::styled(" [j/k] ", Theme::key_badge()),
+            Span::raw("Nav "),
+            Span::styled(" [x] ", Theme::key_badge()),
+            Span::raw("Tools "),
+            Span::styled(" [?] ", Theme::key_badge()),
+            Span::raw("Help "),
+            Span::styled(" [q] ", Theme::key_badge()),
+            Span::raw("Quit "),
+        ]
+    } else {
+        match agent.focus_area {
+            AgentFocusArea::Files => match agent.sidebar_tab {
+                crate::agent_view::types::AgentSidebarTab::Tasks => vec![
+                    Span::styled(" [P] ", Theme::key_badge()),
+                    Span::raw("Project "),
+                    Span::styled(" [t] ", Theme::key_badge()),
+                    Span::raw("Files "),
+                    Span::styled(" [n] ", Theme::key_badge()),
+                    Span::raw("New Task "),
+                    Span::styled(" [j/k] ", Theme::key_badge()),
+                    Span::raw("Select "),
+                    Span::styled(" [d] ", Theme::key_badge()),
+                    Span::raw("Del "),
+                    Span::styled(" [Tab] ", Theme::key_badge()),
+                    Span::raw("Focus "),
+                    Span::styled(" [1-5] ", Theme::key_badge()),
+                    Span::raw("Tabs "),
+                    Span::styled(" [?] ", Theme::key_badge()),
+                    Span::raw("Help "),
+                    Span::styled(" [q] ", Theme::key_badge()),
+                    Span::raw("Quit "),
+                ],
+                crate::agent_view::types::AgentSidebarTab::Files => vec![
+                    Span::styled(" [P] ", Theme::key_badge()),
+                    Span::raw("Project "),
+                    Span::styled(" [t] ", Theme::key_badge()),
+                    Span::raw("Tasks "),
+                    Span::styled(" [j/k] ", Theme::key_badge()),
+                    Span::raw("Tree "),
+                    Span::styled(" [Enter] ", Theme::key_badge()),
+                    Span::raw("Expand "),
+                    Span::styled(" [Space] ", Theme::key_badge()),
+                    Span::raw("@Mention "),
+                    Span::styled(" [a] ", Theme::key_badge()),
+                    Span::raw("Add Dir "),
+                    Span::styled(" [f/F2] ", Theme::key_badge()),
+                    Span::raw("Browse OS "),
+                    Span::styled(" [o] ", Theme::key_badge()),
+                    Span::raw("Open Mgr "),
+                    Span::styled(" [d] ", Theme::key_badge()),
+                    Span::raw("Remove "),
+                    Span::styled(" [Tab] ", Theme::key_badge()),
+                    Span::raw("Focus "),
+                    Span::styled(" [1-5] ", Theme::key_badge()),
+                    Span::raw("Tabs "),
+                    Span::styled(" [?] ", Theme::key_badge()),
+                    Span::raw("Help "),
+                    Span::styled(" [q] ", Theme::key_badge()),
+                    Span::raw("Quit "),
+                ],
+            },
+            AgentFocusArea::Chat => {
+                if agent.is_input_focused {
+                    vec![
+                        Span::styled(" [Enter] ", Theme::key_badge()),
+                        Span::raw("Send "),
+                        Span::styled(" [@] ", Theme::key_badge()),
+                        Span::raw("Attach File "),
+                        Span::styled(" [Esc] ", Theme::key_badge()),
+                        Span::raw("Unfocus "),
+                        Span::styled(" [?] ", Theme::key_badge()),
+                        Span::raw("Help "),
+                    ]
+                } else {
+                    vec![
+                        Span::styled(" [i/Enter] ", Theme::key_badge()),
+                        Span::raw("Type "),
+                        Span::styled(" [j/k] ", Theme::key_badge()),
+                        Span::raw("Scroll "),
+                        Span::styled(" [x] ", Theme::key_badge()),
+                        Span::raw("Cards "),
+                        Span::styled(" [t] ", Theme::key_badge()),
+                        Span::raw("Filter "),
+                        Span::styled(" [c] ", Theme::key_badge()),
+                        Span::raw("Clear "),
+                        Span::styled(" [Tab] ", Theme::key_badge()),
+                        Span::raw("Focus "),
+                        Span::styled(" [1-5] ", Theme::key_badge()),
+                        Span::raw("Tabs "),
+                        Span::styled(" [?] ", Theme::key_badge()),
+                        Span::raw("Help "),
+                        Span::styled(" [q] ", Theme::key_badge()),
+                        Span::raw("Quit "),
+                    ]
+                }
+            }
+            AgentFocusArea::Inspector => vec![
+                Span::styled(" [j/k] ", Theme::key_badge()),
+                Span::raw("Scroll "),
+                Span::styled(" [t] ", Theme::key_badge()),
+                Span::raw("Filter "),
+                Span::styled(" [Tab] ", Theme::key_badge()),
+                Span::raw("Focus "),
+                Span::styled(" [1-5] ", Theme::key_badge()),
+                Span::raw("Tabs "),
+                Span::styled(" [?] ", Theme::key_badge()),
+                Span::raw("Help "),
+                Span::styled(" [q] ", Theme::key_badge()),
+                Span::raw("Quit "),
+            ],
+        }
+    }
+}
+
+pub fn get_help_lines(agent: &AgentWorkspaceState) -> (String, &'static str, Vec<Line<'static>>) {
+    let focus_str = match agent.focus_area {
+        AgentFocusArea::Files => match agent.sidebar_tab {
+            crate::agent_view::types::AgentSidebarTab::Tasks => "Tasks Sidebar (Panel Kiri)",
+            crate::agent_view::types::AgentSidebarTab::Files => "File Tree (Panel Kiri)",
+        },
+        AgentFocusArea::Chat => {
+            if agent.is_input_focused {
+                "Prompt Input (Sedang Mengetik)"
+            } else {
+                "Chat History (Panel Tengah)"
+            }
+        }
+        AgentFocusArea::Inspector => "Tools & Status (Panel Kanan)",
+    };
+
+    let mut lines = Vec::new();
+
+    if agent.project_modal.is_open {
+        lines.push(Line::from(vec![
+            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+            Span::raw("Pilih project workspace dari daftar"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   Enter          : ", Theme::badge_cyan()),
+            Span::raw("Beralih ke project yang dipilih"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   n              : ", Theme::badge_cyan()),
+            Span::raw("Buat project baru"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   d              : ", Theme::badge_cyan()),
+            Span::raw("Hapus project terpilih"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   Esc / q        : ", Theme::badge_cyan()),
+            Span::raw("Tutup popup project modal"),
+        ]));
+    } else if agent.create_project_modal.is_open {
+        lines.push(Line::from(vec![
+            Span::styled("   Enter          : ", Theme::badge_cyan()),
+            Span::raw("Simpan dan buat project"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   Esc            : ", Theme::badge_cyan()),
+            Span::raw("Batal membuat project baru"),
+        ]));
+    } else if agent.add_folder_modal.is_open {
+        lines.push(Line::from(vec![
+            Span::styled("   Enter          : ", Theme::badge_cyan()),
+            Span::raw("Tambahkan path direktori ke workspace aktif"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   Tab / F2       : ", Theme::badge_cyan()),
+            Span::raw("Buka native OS file dialog untuk memilih folder"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   Esc            : ", Theme::badge_cyan()),
+            Span::raw("Batal menambahkan folder"),
+        ]));
+    } else {
+        match agent.focus_area {
+            AgentFocusArea::Files => match agent.sidebar_tab {
+                crate::agent_view::types::AgentSidebarTab::Tasks => {
+                    lines.push(Line::from(vec![
+                        Span::styled("   t              : ", Theme::badge_cyan()),
+                        Span::raw("Switch sidebar tab ke Files (Tree view)"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   P              : ", Theme::badge_cyan()),
+                        Span::raw("Buka popup manajemen project workspace"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                        Span::raw("Pilih item task"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   n              : ", Theme::badge_cyan()),
+                        Span::raw("Tambah task baru"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   d              : ", Theme::badge_cyan()),
+                        Span::raw("Hapus task terpilih"),
+                    ]));
+                }
+                crate::agent_view::types::AgentSidebarTab::Files => {
+                    lines.push(Line::from(vec![
+                        Span::styled("   t              : ", Theme::badge_cyan()),
+                        Span::raw("Switch sidebar tab ke Tasks list"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   P              : ", Theme::badge_cyan()),
+                        Span::raw("Buka popup manajemen project workspace"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                        Span::raw("Navigate directory tree items"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   Enter          : ", Theme::badge_cyan()),
+                        Span::raw("Expand or collapse folder"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   Space          : ", Theme::badge_cyan()),
+                        Span::raw("Insert selected file as @mention into chat prompt"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   r              : ", Theme::badge_cyan()),
+                        Span::raw("Rescan and reload workspace files"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   a / +          : ", Theme::badge_cyan()),
+                        Span::raw("Attach new folder to workspace"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   f / F2         : ", Theme::badge_cyan()),
+                        Span::raw("Browse folder using native OS file picker"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   o / F3         : ", Theme::badge_cyan()),
+                        Span::raw("Open active folder in OS file manager (GUI)"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   [ / ]          : ", Theme::badge_cyan()),
+                        Span::raw("Switch active workspace folder"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   d / -          : ", Theme::badge_cyan()),
+                        Span::raw("Remove active folder from workspace"),
+                    ]));
+                }
+            },
+            AgentFocusArea::Chat => {
+                if agent.is_input_focused {
+                    lines.push(Line::from(vec![
+                        Span::styled("   Enter          : ", Theme::badge_cyan()),
+                        Span::raw("Send prompt instruction to agent"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   @              : ", Theme::badge_cyan()),
+                        Span::raw("Open file suggestion popup to mention file"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   Ctrl+U         : ", Theme::badge_cyan()),
+                        Span::raw("Clear input prompt"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   Esc            : ", Theme::badge_cyan()),
+                        Span::raw("Exit input mode (return to navigation)"),
+                    ]));
+                } else {
+                    lines.push(Line::from(vec![
+                        Span::styled("   i / Enter      : ", Theme::badge_cyan()),
+                        Span::raw("Focus prompt input to type instructions"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                        Span::raw("Scroll chat message history"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   x              : ", Theme::badge_cyan()),
+                        Span::raw("Toggle tool call argument & output cards"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   t              : ", Theme::badge_cyan()),
+                        Span::raw("Cycle tool call detail filter mode"),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::styled("   c              : ", Theme::badge_cyan()),
+                        Span::raw("Clear current chat session message history"),
+                    ]));
+                }
+            }
+            AgentFocusArea::Inspector => {
+                lines.push(Line::from(vec![
+                    Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                    Span::raw("Scroll active inspector panel"),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled("   t              : ", Theme::badge_cyan()),
+                    Span::raw("Cycle tool filter mode"),
+                ]));
+            }
+        }
+    }
+
+    (
+        "Agent Control (Tab [1])".to_string(),
+        focus_str,
+        lines,
+    )
+}
+
+pub fn render_diff_preview_modal(
+    frame: &mut Frame,
+    diff: &crate::app::DiffApprovalState,
+    area: Rect,
+) {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(10),
+            Constraint::Percentage(80),
+            Constraint::Percentage(10),
+        ])
+        .split(area);
+
+    let popup_area = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(10),
+            Constraint::Percentage(80),
+            Constraint::Percentage(10),
+        ])
+        .split(popup_layout[1])[1];
+
+    frame.render_widget(Clear, popup_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Header / File info
+            Constraint::Min(5),    // Diff lines
+            Constraint::Length(3), // Footer buttons
+        ])
+        .split(popup_area);
+
+    // 1. Header Box
+    let title = format!(" [⚡ DIFF APPROVAL] {} ", diff.tool_name);
+    let header_text = vec![
+        Line::from(vec![
+            Span::styled("Target File: ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(&diff.file_path, Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
+        ]),
+    ];
+    let header_widget = Paragraph::new(header_text).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Theme::TEXT_SECONDARY))
+            .title(title),
+    );
+    frame.render_widget(header_widget, chunks[0]);
+
+    // 2. Diff Lines Box
+    let visible_height = (chunks[1].height as usize).saturating_sub(2);
+    let total_lines = diff.diff_lines.len();
+    let start_idx = diff.scroll_offset.min(total_lines.saturating_sub(1));
+    let end_idx = (start_idx + visible_height).min(total_lines);
+
+    let mut rendered_lines = Vec::new();
+    for l in &diff.diff_lines[start_idx..end_idx] {
+        let style = match l.line_type {
+            crate::app::DiffLineType::Added => Style::default().fg(Theme::STATUS_SUCCESS),
+            crate::app::DiffLineType::Removed => Style::default().fg(Theme::STATUS_DANGER),
+            crate::app::DiffLineType::Header => Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+            crate::app::DiffLineType::Context => Style::default().fg(Theme::TEXT_MUTED),
+        };
+        rendered_lines.push(Line::from(Span::styled(&l.content, style)));
+    }
+
+    let scroll_info = format!(" Lines {}-{}/{} [↑/↓/PgUp/PgDn] ", start_idx + 1, end_idx, total_lines);
+    let diff_widget = Paragraph::new(rendered_lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Theme::BORDER_GOLD))
+            .title(scroll_info),
+    );
+    frame.render_widget(diff_widget, chunks[1]);
+
+    // 3. Footer Action Buttons
+    let footer_text = vec![
+        Line::from(vec![
+            Span::styled(" [Y / Enter] ", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
+            Span::raw(" Approve & Apply Patch    "),
+            Span::styled(" [N / Esc] ", Style::default().fg(Theme::STATUS_DANGER).add_modifier(Modifier::BOLD)),
+            Span::raw(" Reject Patch"),
+        ]),
+    ];
+    let footer_widget = Paragraph::new(footer_text)
+        .alignment(ratatui::layout::Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Theme::BORDER_GOLD)),
+        );
+    frame.render_widget(footer_widget, chunks[2]);
+}

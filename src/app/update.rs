@@ -1,10 +1,50 @@
-use crate::agent_view::types::{AgentFocusArea, ChatMessage, MessageRole};
-use crate::app::state::{current_time_str, App};
+use crate::agent_view::types::AgentFocusArea;
+use crate::app::state::App;
 use crate::app::types::{Action, DiffApprovalState};
-use crate::core_bridge::CoreBridgeCommand;
 
 impl App {
     pub fn update(&mut self, action: Action) {
+        // 1. Coba delegasikan ke Agent View module
+        if let Some(status_opt) = crate::agent_view::update::handle_agent_action(
+            &mut self.agent,
+            action.clone(),
+            self.bridge_cmd_tx.as_ref(),
+        ) {
+            if let Some(status) = status_opt {
+                self.set_status(status);
+            }
+            return;
+        }
+
+        // 2. Coba delegasikan ke Custom LLM View module
+        if let Some(status_opt) =
+            crate::custom_llm_view::update::handle_custom_llm_action(&mut self.custom_llm, &action)
+        {
+            if let Some(status) = status_opt {
+                self.set_status(status);
+            }
+            return;
+        }
+
+        // 3. Coba delegasikan ke Provider View module
+        if let Some(status_opt) = crate::provider_view::update::handle_provider_action(
+            self.active_tab,
+            &mut self.antigravity,
+            &mut self.codex,
+            &mut self.claude,
+            &action,
+            self.bridge_cmd_tx.as_ref(),
+        ) {
+            if let Some(status) = status_opt {
+                self.set_status(status);
+            }
+            if matches!(action, Action::RefreshQuota) {
+                self.request_selected_account_quota();
+            }
+            return;
+        }
+
+        // 4. Tangani Action Root / Global App Level
         match action {
             Action::Quit => {
                 self.should_quit = true;
@@ -45,44 +85,40 @@ impl App {
             Action::SetStatus(msg) => {
                 self.set_status(msg);
             }
-            Action::FocusNext => {
-                match self.active_tab {
-                    0 => self.agent.cycle_focus_next(),
-                    1 => {
-                        self.antigravity.next_account();
-                        self.request_selected_account_quota();
-                    }
-                    2 => {
-                        self.codex.next_account();
-                        self.request_selected_account_quota();
-                    }
-                    3 => {
-                        self.claude.next_account();
-                        self.request_selected_account_quota();
-                    }
-                    4 => self.custom_llm.select_next(),
-                    _ => {}
+            Action::FocusNext => match self.active_tab {
+                0 => self.agent.cycle_focus_next(),
+                1 => {
+                    self.antigravity.next_account();
+                    self.request_selected_account_quota();
                 }
-            }
-            Action::FocusPrev => {
-                match self.active_tab {
-                    0 => self.agent.cycle_focus_prev(),
-                    1 => {
-                        self.antigravity.prev_account();
-                        self.request_selected_account_quota();
-                    }
-                    2 => {
-                        self.codex.prev_account();
-                        self.request_selected_account_quota();
-                    }
-                    3 => {
-                        self.claude.prev_account();
-                        self.request_selected_account_quota();
-                    }
-                    4 => self.custom_llm.select_prev(),
-                    _ => {}
+                2 => {
+                    self.codex.next_account();
+                    self.request_selected_account_quota();
                 }
-            }
+                3 => {
+                    self.claude.next_account();
+                    self.request_selected_account_quota();
+                }
+                4 => self.custom_llm.select_next(),
+                _ => {}
+            },
+            Action::FocusPrev => match self.active_tab {
+                0 => self.agent.cycle_focus_prev(),
+                1 => {
+                    self.antigravity.prev_account();
+                    self.request_selected_account_quota();
+                }
+                2 => {
+                    self.codex.prev_account();
+                    self.request_selected_account_quota();
+                }
+                3 => {
+                    self.claude.prev_account();
+                    self.request_selected_account_quota();
+                }
+                4 => self.custom_llm.select_prev(),
+                _ => {}
+            },
             Action::Select => match self.active_tab {
                 4 => {
                     self.custom_llm.toggle_enabled();
@@ -92,96 +128,18 @@ impl App {
                 }
                 _ => {}
             },
-            Action::ToggleAccountActive => match self.active_tab {
-                1 => {
-                    if let Some(status) = self.antigravity.toggle_selected_account() {
-                        let status_label = if status { "Aktif" } else { "Nonaktif" };
-                        self.set_status(format!("Status akun Antigravity diubah: {status_label}"));
-                    }
-                }
-                2 => {
-                    if let Some(status) = self.codex.toggle_selected_account() {
-                        let status_label = if status { "Aktif" } else { "Nonaktif" };
-                        self.set_status(format!("Status akun Codex diubah: {status_label}"));
-                    }
-                }
-                3 => {
-                    if let Some(status) = self.claude.toggle_selected_account() {
-                        let status_label = if status { "Aktif" } else { "Nonaktif" };
-                        self.set_status(format!("Status akun Claude diubah: {status_label}"));
-                    }
-                }
-                _ => {}
-            },
-            Action::SetAccountActive => match self.active_tab {
-                1 if self.antigravity.set_selected_account_active().is_some() => {
-                    self.set_status("Akun Antigravity disetel sebagai Default".to_string());
-                }
-                2 if self.codex.set_selected_account_active().is_some() => {
-                    self.set_status("Akun Codex disetel sebagai Default".to_string());
-                }
-                3 if self.claude.set_selected_account_active().is_some() => {
-                    self.set_status("Akun Claude disetel sebagai Default".to_string());
-                }
-                _ => {}
-            },
-            Action::RefreshQuota => {
-                self.set_status("Menyegarkan kuota model provider...".to_string());
-                self.request_selected_account_quota();
-                if let Some(tx) = &self.bridge_cmd_tx {
-                    let prov = match self.active_tab {
-                        1 => "antigravity",
-                        2 => "codex",
-                        3 => "claude",
-                        _ => "",
-                    };
-                    if !prov.is_empty() {
-                        let _ = tx.send(CoreBridgeCommand::RefreshQuota {
-                            provider: prov.to_string(),
-                        });
-                    }
-                }
-            }
             Action::ConfirmOk => {
                 if let Some(dialog) = self.confirm_dialog.take() {
                     self.update(*dialog.on_confirm_action);
                 }
             }
-            Action::ConfirmCancel => {
+            Action::ConfirmCancel | Action::CancelDelete => {
                 self.confirm_dialog = None;
             }
             Action::ShowError(err) => {
                 tracing::error!("Application error modal: {err}");
                 self.error_modal = Some(err);
             }
-            Action::ConfirmDelete => match self.active_tab {
-                4 => {
-                    self.custom_llm.confirm_delete();
-                }
-                1 => {
-                    if let Some(removed_name) = self.antigravity.remove_selected_account() {
-                        self.set_status(format!(
-                            "Akun Antigravity '{}' berhasil dihapus",
-                            removed_name
-                        ));
-                    }
-                }
-                2 => {
-                    if let Some(removed_name) = self.codex.remove_selected_account() {
-                        self.set_status(format!("Akun Codex '{}' berhasil dihapus", removed_name));
-                    }
-                }
-                3 => {
-                    if let Some(removed_name) = self.claude.remove_selected_account() {
-                        self.set_status(format!("Akun Claude '{}' berhasil dihapus", removed_name));
-                    }
-                }
-                _ => {}
-            },
-            Action::CancelDelete => {
-                self.confirm_dialog = None;
-            }
-
             Action::StartAntigravityOAuth => {
                 let port = 51121;
                 let state = format!(
@@ -245,389 +203,6 @@ impl App {
                 crate::oauth_listener::open_browser_oauth(&auth_url);
                 self.set_status(format!("OAuth Codex dibuka di browser (port {port})"));
             }
-
-            Action::AgentInsertChar(c) => {
-                self.agent.insert_char(c);
-                self.agent.check_and_update_tag_query();
-            }
-            Action::AgentBackspace => {
-                self.agent.backspace();
-                self.agent.check_and_update_tag_query();
-            }
-            Action::AgentClearInput => {
-                self.agent.clear_input();
-                self.agent.close_tag_query();
-            }
-            Action::AgentClearChat => self.agent.clear_chat(),
-            Action::AgentSubmitPrompt => {
-                self.agent.close_tag_query();
-                if let Some(prompt) = self.agent.submit_prompt() {
-                    if let Some(tx) = &self.bridge_cmd_tx {
-                        let _ = tx.send(CoreBridgeCommand::ExecuteTurn {
-                            prompt: prompt.clone(),
-                            model_override: None,
-                        });
-                    }
-                    self.agent.messages.push(ChatMessage {
-                        role: MessageRole::User,
-                        sender_name: "You".to_string(),
-                        content: prompt,
-                        timestamp: current_time_str(),
-                        tool_calls: Vec::new(),
-                        reasoning: None,
-                    });
-                }
-            }
-            Action::AgentFocusInput => self.agent.focus_input(),
-            Action::AgentUnfocusInput => self.agent.unfocus_input(),
-            Action::AgentFocusFiles => self.agent.focus_area = AgentFocusArea::Files,
-            Action::AgentFocusChat => self.agent.focus_area = AgentFocusArea::Chat,
-            Action::AgentFocusNextPanel => self.agent.cycle_focus_next(),
-            Action::AgentFocusPrevPanel => self.agent.cycle_focus_prev(),
-            Action::AgentSelectFileNext => self.agent.select_file_next(),
-            Action::AgentSelectFilePrev => self.agent.select_file_prev(),
-            Action::AgentInsertSelectedFile => self.agent.insert_selected_file_to_input(),
-            Action::AgentToggleFileTreeExpand => self.agent.toggle_file_tree_expand(),
-            Action::AgentScanFiles => self.agent.scan_workspace_files(),
-            Action::AgentScrollUp => self.agent.scroll_up(),
-            Action::AgentScrollDown => self.agent.scroll_down(),
-            Action::AgentToggleToolExpand => self.agent.toggle_tool_expand(),
-
-            // Phase 1 Foundations
-            Action::AgentTagQueryNext => self.agent.select_tag_query_next(),
-            Action::AgentTagQueryPrev => self.agent.select_tag_query_prev(),
-            Action::AgentApplyTag => {
-                self.agent.apply_selected_tag();
-            }
-            Action::AgentCloseTagQuery => self.agent.close_tag_query(),
-
-            // Phase 2 Chat Streaming & Reasoning
-            Action::AgentToggleReasoning => {
-                self.agent.toggle_reasoning();
-                let status = if self.agent.reasoning_expanded {
-                    "Reasoning: Ditampilkan"
-                } else {
-                    "Reasoning: Disembunyikan (collapsed)"
-                };
-                self.set_status(status.to_string());
-            }
-            Action::AgentScrollToTop => {
-                self.agent.scroll_to_top();
-                self.set_status("Scroll ke atas [Lock auto-scroll aktif]".to_string());
-            }
-            Action::AgentScrollToBottom => {
-                self.agent.scroll_to_bottom();
-                self.set_status("Scroll ke bawah [Auto-scroll aktif]".to_string());
-            }
-
-            // Phase 3 Tool Execution & Approval
-            Action::AgentApprovePending => {
-                if let Some(req) = self.agent.approve_pending() {
-                    self.set_status(format!("Eksekusi disetujui: {}", req.tool_name));
-                }
-            }
-            Action::AgentRejectPending => {
-                if let Some(req) = self.agent.reject_pending() {
-                    self.set_status(format!("Eksekusi ditolak: {}", req.tool_name));
-                }
-            }
-            Action::AgentCycleToolFilter => {
-                self.agent.cycle_tool_filter();
-                self.set_status(format!("Tool Filter: {:?}", self.agent.tool_filter));
-            }
-            Action::AgentToggleToolCard(idx) => {
-                self.agent.toggle_tool_card(idx);
-            }
-
-            // Phase 4 Tasks & Sessions (1:1 with ai-voice AgentSidebar)
-            Action::AgentSwitchSidebarTab => {
-                self.agent.switch_sidebar_tab();
-                let tab_name = match self.agent.sidebar_tab {
-                    crate::agent_view::types::AgentSidebarTab::Tasks => "Tasks",
-                    crate::agent_view::types::AgentSidebarTab::Files => "Files",
-                };
-                self.set_status(format!("Sidebar tab switched to {}", tab_name));
-            }
-            Action::AgentNewTask => {
-                let default_title = format!("Task #{}", self.agent.sessions.len() + 1);
-                if let Some(tx) = &self.bridge_cmd_tx {
-                    let _ = tx.send(CoreBridgeCommand::CreateSession {
-                        title: default_title,
-                    });
-                } else {
-                    self.agent.create_new_task(None);
-                }
-                self.set_status("Creating new agent task session...".to_string());
-            }
-            Action::AgentDeleteSelectedTask => {
-                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
-                    let sid = s.id.clone();
-                    if let Some(tx) = &self.bridge_cmd_tx {
-                        let _ = tx.send(CoreBridgeCommand::DeleteSession { session_id: sid });
-                    } else {
-                        self.agent.delete_selected_task();
-                    }
-                    self.set_status("Deleting task session...".to_string());
-                }
-            }
-            Action::AgentSwitchTask => {
-                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
-                    let sid = s.id.clone();
-                    self.agent.active_session_id = Some(sid.clone());
-                    if let Some(tx) = &self.bridge_cmd_tx {
-                        let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
-                    }
-                    self.set_status(format!("Switched to task: {}", s.title));
-                }
-            }
-            Action::AgentNextTask => {
-                self.agent.next_session();
-                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
-                    let sid = s.id.clone();
-                    self.agent.active_session_id = Some(sid.clone());
-                    if let Some(tx) = &self.bridge_cmd_tx {
-                        let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
-                    }
-                    self.set_status(format!("Selected task: {}", s.title));
-                }
-            }
-            Action::AgentPrevTask => {
-                self.agent.prev_session();
-                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
-                    let sid = s.id.clone();
-                    self.agent.active_session_id = Some(sid.clone());
-                    if let Some(tx) = &self.bridge_cmd_tx {
-                        let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
-                    }
-                    self.set_status(format!("Selected task: {}", s.title));
-                }
-            }
-            Action::AgentCancelTurn => {
-                if let Some(tx) = &self.bridge_cmd_tx {
-                    let _ = tx.send(CoreBridgeCommand::CancelTurn);
-                }
-                self.agent.cancel_turn();
-                self.set_status("Cancelling turn...".to_string());
-            }
-            Action::AgentRetryTurn => {
-                if let Some(tx) = &self.bridge_cmd_tx {
-                    let _ = tx.send(CoreBridgeCommand::RetryTurn);
-                }
-                self.agent.start_turn();
-                self.set_status("Retrying turn...".to_string());
-            }
-            Action::AgentToggleSidebar => {
-                self.agent.toggle_sidebar();
-                let status_msg = if self.agent.is_sidebar_visible {
-                    "Sidebar opened"
-                } else {
-                    "Sidebar hidden"
-                };
-                self.set_status(status_msg.to_string());
-            }
-            Action::AgentFocusPrompt => {
-                self.agent.focus_input();
-                self.set_status("Prompt focused".to_string());
-            }
-            Action::AgentCycleModel => {
-                self.agent.cycle_model();
-                let model_name = self.agent.active_model.clone();
-                self.set_status(format!("Selected model: {}", model_name));
-            }
-
-            // Multi-Folder Workspace Support (1:1 with web agent)
-            Action::AgentOpenAddFolderModal => {
-                self.agent.open_add_folder_modal();
-                self.set_status("Add folder to workspace (Enter path or press Tab to browse)".to_string());
-            }
-            Action::AgentCloseAddFolderModal => {
-                self.agent.close_add_folder_modal();
-                self.set_status("Cancelled adding folder".to_string());
-            }
-            Action::AgentAddFolderChar(c) => {
-                self.agent.add_folder_modal.input_path.push(c);
-            }
-            Action::AgentAddFolderBackspace => {
-                self.agent.add_folder_modal.input_path.pop();
-            }
-            Action::AgentSubmitAddFolder => {
-                match self.agent.submit_add_folder() {
-                    Ok(()) => {
-                        let count = self.agent.workspace_folders.len();
-                        self.set_status(format!("Folder attached successfully (Total: {} folders)", count));
-                    }
-                    Err(err) => {
-                        self.set_status(format!("Failed to attach folder: {}", err));
-                    }
-                }
-            }
-            Action::AgentRemoveActiveFolder => {
-                let idx = self.agent.active_folder_idx;
-                match self.agent.remove_workspace_folder(idx) {
-                    Ok(()) => {
-                        self.set_status("Folder detached from workspace".to_string());
-                    }
-                    Err(err) => {
-                        self.set_status(format!("Failed to detach folder: {}", err));
-                    }
-                }
-            }
-            Action::AgentNextFolder => {
-                self.agent.select_next_folder();
-                if let Some(f) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
-                    self.set_status(format!("Active folder: {}", f.display()));
-                }
-            }
-            Action::AgentPrevFolder => {
-                self.agent.select_prev_folder();
-                if let Some(f) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
-                    self.set_status(format!("Active folder: {}", f.display()));
-                }
-            }
-            Action::AgentBrowseFolderDialog => {
-                let initial = if !self.agent.add_folder_modal.input_path.trim().is_empty() {
-                    Some(self.agent.add_folder_modal.input_path.as_str())
-                } else {
-                    self.agent
-                        .workspace_folders
-                        .get(self.agent.active_folder_idx)
-                        .and_then(|p| p.to_str())
-                };
-
-                match ragasukma_core::agent::tools::pick_folder_dialog(initial) {
-                    Ok(Some(selected_path)) => {
-                        if self.agent.add_folder_modal.is_open {
-                            self.agent.add_folder_modal.input_path = selected_path;
-                            let _ = self.agent.submit_add_folder();
-                            self.set_status("Folder attached from file manager dialog".to_string());
-                        } else {
-                            match self.agent.add_workspace_folder(std::path::PathBuf::from(selected_path)) {
-                                Ok(()) => {
-                                    self.set_status("Folder attached from file manager dialog".to_string());
-                                }
-                                Err(err) => {
-                                    self.set_status(format!("Failed to attach folder: {}", err));
-                                }
-                            }
-                        }
-                    }
-                    Ok(None) => {
-                        self.set_status("Folder selection cancelled".to_string());
-                    }
-                    Err(err) => {
-                        self.set_status(format!("File manager dialog error: {}", err));
-                    }
-                }
-            }
-            Action::AgentOpenFolderInFileManager => {
-                if let Some(folder) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
-                    match ragasukma_core::agent::tools::open_path_in_file_manager(&folder.to_string_lossy()) {
-                        Ok(()) => {
-                            self.set_status(format!("Opened file manager for {}", folder.display()));
-                        }
-                        Err(err) => {
-                            self.set_status(format!("Failed to open file manager: {}", err));
-                        }
-                    }
-                }
-            }
-
-            Action::AgentOpenProjectModal => {
-                self.agent.project_modal.is_open = true;
-                self.set_status("Project Switcher dibuka. Pilih project atau tekan 'n' untuk buat baru.".to_string());
-            }
-            Action::AgentCloseProjectModal => {
-                self.agent.project_modal.is_open = false;
-            }
-            Action::AgentSelectNextProject => {
-                if !self.agent.projects.is_empty() {
-                    self.agent.project_modal.selected_idx =
-                        (self.agent.project_modal.selected_idx + 1) % self.agent.projects.len();
-                }
-            }
-            Action::AgentSelectPrevProject => {
-                if !self.agent.projects.is_empty() {
-                    if self.agent.project_modal.selected_idx == 0 {
-                        self.agent.project_modal.selected_idx = self.agent.projects.len() - 1;
-                    } else {
-                        self.agent.project_modal.selected_idx -= 1;
-                    }
-                }
-            }
-            Action::AgentSwitchProject => {
-                if let Some(target) = self.agent.projects.get(self.agent.project_modal.selected_idx) {
-                    let target_id = target.id.clone();
-                    let target_name = target.name.clone();
-                    self.agent.project_modal.is_open = false;
-                    if let Some(tx) = &self.bridge_cmd_tx {
-                        let _ = tx.send(CoreBridgeCommand::SwitchProject {
-                            project_id: target_id,
-                        });
-                        self.set_status(format!("Beralih ke project: {}", target_name));
-                    }
-                }
-            }
-            Action::AgentOpenCreateProjectModal => {
-                self.agent.project_modal.is_open = false;
-                self.agent.create_project_modal.is_open = true;
-                self.agent.create_project_modal.name_input.clear();
-                self.set_status("Buat Project Baru".to_string());
-            }
-            Action::AgentCloseCreateProjectModal => {
-                self.agent.create_project_modal.is_open = false;
-            }
-            Action::AgentCreateProjectChar(c) => {
-                self.agent.create_project_modal.name_input.push(c);
-            }
-            Action::AgentCreateProjectBackspace => {
-                self.agent.create_project_modal.name_input.pop();
-            }
-            Action::AgentSubmitCreateProject => {
-                let name = self.agent.create_project_modal.name_input.trim().to_string();
-                if !name.is_empty()
-                    && let Some(tx) = &self.bridge_cmd_tx
-                {
-                    let _ = tx.send(CoreBridgeCommand::CreateProject {
-                        name: name.clone(),
-                        description: None,
-                    });
-                    self.set_status(format!("Project '{}' dibuat", name));
-                }
-                self.agent.create_project_modal.is_open = false;
-            }
-
-            Action::FormChar(c) => self.custom_llm.form_input(c),
-            Action::FormBackspace => self.custom_llm.form_backspace(),
-            Action::FormNextField => self.custom_llm.form_next_field(),
-            Action::FormPrevField => self.custom_llm.form_prev_field(),
-            Action::FormSubmit => {
-                match self.custom_llm.form_submit() {
-                    Ok(msg) => {
-                        tracing::info!("Custom LLM endpoint saved: {msg}");
-                        self.set_status(msg);
-                    }
-                    Err(err) => {
-                        tracing::warn!("Custom LLM form submit error: {err}");
-                        self.set_status(format!("Gagal: {err}"));
-                    }
-                }
-            }
-            Action::CancelForm => self.custom_llm.close_form(),
-            Action::CustomLlmAdd => {
-                self.custom_llm.open_add_form();
-                self.set_status("Tambah Custom LLM Endpoint".to_string());
-            }
-            Action::CustomLlmEdit => {
-                self.custom_llm.open_edit_form();
-                self.set_status("Edit Custom LLM Endpoint".to_string());
-            }
-            Action::CustomLlmToggle => {
-                if let Some(msg) = self.custom_llm.toggle_enabled() {
-                    tracing::info!("{msg}");
-                    self.set_status(msg);
-                }
-            }
-
             Action::ShowDiffPreview {
                 file_path,
                 tool_name,
@@ -671,6 +246,7 @@ impl App {
                     tracing::warn!("Bridge command sender is unavailable");
                 }
             }
+            _ => {}
         }
     }
 }
