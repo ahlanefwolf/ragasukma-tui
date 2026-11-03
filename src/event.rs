@@ -14,6 +14,8 @@ pub enum AppEvent {
     Resize(u16, u16),
     Tick,
     CoreEvent(CoreBridgeEvent),
+    OAuthSuccess { provider: String, email: String },
+    OAuthFailed { provider: String, error: String },
     Error(String),
 }
 

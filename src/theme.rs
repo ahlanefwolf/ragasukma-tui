@@ -39,6 +39,7 @@ impl Theme {
     pub const STATUS_SUCCESS: Color = Color::Rgb(69, 184, 118); // #45b876 --gi-status-success
     pub const STATUS_WARNING: Color = Color::Rgb(224, 159, 62); // #e09f3e --gi-status-warning
     pub const STATUS_DANGER: Color = Color::Rgb(224, 83, 69); // #e05345 --gi-status-danger
+    pub const STATUS_ERROR: Color = Self::STATUS_DANGER;
     pub const STATUS_INFO: Color = Color::Rgb(62, 153, 224); // #3e99e0 --gi-status-info
 
     // -------------------------------------------------------------
@@ -107,6 +108,24 @@ impl Theme {
             .bg(Self::CYAN_ACCENT)
             .fg(Self::GOLD_FOREGROUND)
             .add_modifier(Modifier::BOLD)
+    }
+
+    #[must_use]
+    pub fn badge_info() -> Style {
+        Self::badge_cyan()
+    }
+
+    #[must_use]
+    pub fn badge_gray() -> Style {
+        Style::default()
+            .bg(Self::BG_SURFACE_ELEVATED)
+            .fg(Self::TEXT_SECONDARY)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    #[must_use]
+    pub fn block_surface() -> Style {
+        Style::default().bg(Self::BG_SURFACE_ELEVATED).fg(Self::TEXT_PRIMARY)
     }
 
     #[must_use]

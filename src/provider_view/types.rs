@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelQuotaItem {
     pub name: String,
     pub percentage: u16,
@@ -6,7 +6,7 @@ pub struct ModelQuotaItem {
     pub reset_in: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountInfo {
     pub id: String,
     pub email: String,
@@ -22,6 +22,6 @@ pub struct ProviderTabState {
     pub icon: String,
     pub accounts: Vec<AccountInfo>,
     pub selected_account_idx: usize,
-    pub is_refreshing: bool,
     pub last_refreshed: Option<String>,
+    pub is_refreshing: bool,
 }

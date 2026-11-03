@@ -4,6 +4,8 @@ pub mod assets;
 pub mod core_bridge;
 pub mod custom_llm_view;
 pub mod event;
+pub mod logging;
+pub mod oauth_listener;
 pub mod provider_view;
 pub use provider_view as provider_views;
 pub mod terminal;

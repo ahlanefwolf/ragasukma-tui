@@ -1,6 +1,10 @@
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
-use super::types::{AgentFocusArea, ChatMessage, ChatSession, MessageRole, ToolCallInfo, ToolExecutionStatus};
+use super::types::{
+    AgentFocusArea, ApprovalRequest, ChatMessage, ContextFileItem, FileTagQuery, MessageRole,
+    TokenBreakdown, ToolFilter, WorkspaceFileNode,
+};
 use crate::core_bridge::PersistedMessageDto;
 
 #[derive(Debug, Clone)]
@@ -10,303 +14,476 @@ pub struct AgentWorkspaceState {
     pub cursor_pos: usize,
     pub scroll_offset: usize,
     pub is_input_focused: bool,
-    pub is_streaming: bool,
+    pub focus_area: AgentFocusArea,
+    pub is_running: bool,
+    pub active_turn_id: Option<String>,
     pub active_model: String,
-    pub active_provider: String,
-    pub temperature: f32,
-    pub max_tokens: usize,
+    pub available_models: Vec<String>,
+    pub expanded_tools: HashSet<usize>,
+    pub expanded_tool_idx: Option<usize>,
+    pub reasoning_expanded: bool,
+    pub auto_scroll: bool,
+    pub spinner_tick: usize,
+
+    // Phase 1: Workspace Files & Tag Autocomplete
+    pub workspace_files: Vec<WorkspaceFileNode>,
+    pub selected_file_idx: usize,
+    pub expanded_dirs: HashSet<String>,
+    pub tag_query: Option<FileTagQuery>,
+
+    // Phase 3: Tool Execution & Filter
+    pub tool_filter: ToolFilter,
+    pub pending_approval: Option<ApprovalRequest>,
+
+    // Phase 4: Context Management & Tokens
+    pub context_files: Vec<ContextFileItem>,
+    pub selected_context_file_idx: usize,
     pub total_prompt_tokens: usize,
     pub total_completion_tokens: usize,
-    pub sessions: Vec<ChatSession>,
-    pub active_session_idx: usize,
-    pub selected_session_idx: usize,
-    pub workspace_files: Vec<String>,
-    pub selected_file_idx: usize,
-    pub focus_area: AgentFocusArea,
-    pub expanded_tool_idx: Option<usize>,
+    pub max_context_limit: usize,
+
+    // Phase 6: Responsive Layout & Inspection
+    pub is_sidebar_visible: bool,
+    pub is_inspector_visible: bool,
 }
 
 impl Default for AgentWorkspaceState {
     fn default() -> Self {
-        Self::sample()
-    }
-}
-
-impl AgentWorkspaceState {
-    #[must_use]
-    pub fn sample() -> Self {
-        let msg1 = ChatMessage {
-            role: MessageRole::System,
-            sender_name: "System".to_string(),
-            content: "Ragasukma Autonomous Agent engine initialized with memory bank & local tool loop.".to_string(),
-            timestamp: "10:00:00".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: None,
-        };
-
-        let msg2 = ChatMessage {
-            role: MessageRole::User,
-            sender_name: "User".to_string(),
-            content: "Check workspace directory structure and summarize the core modules.".to_string(),
-            timestamp: "10:01:15".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: None,
-        };
-
-        let msg3 = ChatMessage {
-            role: MessageRole::Assistant,
-            sender_name: "Claude-3.5-Sonnet".to_string(),
-            content: "I will inspect the workspace root and examine Cargo.toml and core source layout.".to_string(),
-            timestamp: "10:01:17".to_string(),
-            tool_calls: vec![
-                ToolCallInfo {
-                    id: "call_01".to_string(),
-                    name: "workspace_list_dir".to_string(),
-                    args_summary: "{\"path\": \".\", \"depth\": 2}".to_string(),
-                    output_summary: Some("Found 12 crates and files: Cargo.toml, ragasukma-core, ragasukma-tui...".to_string()),
-                    status: ToolExecutionStatus::Success,
-                    duration_ms: Some(42),
-                },
-                ToolCallInfo {
-                    id: "call_02".to_string(),
-                    name: "workspace_read_file".to_string(),
-                    args_summary: "{\"path\": \"ragasukma-core/Cargo.toml\"}".to_string(),
-                    output_summary: Some("[package]\nname = \"ragasukma-core\"\nversion = \"0.2.0\"".to_string()),
-                    status: ToolExecutionStatus::Success,
-                    duration_ms: Some(18),
-                },
-            ],
-            reasoning: Some("Inspected the root configuration. Now summarizing the project modular structure.".to_string()),
-        };
-
-        let msg4 = ChatMessage {
-            role: MessageRole::Assistant,
-            sender_name: "Claude-3.5-Sonnet".to_string(),
-            content: "The workspace contains ragasukma-core and ragasukma-tui. Ready for autonomous execution.".to_string(),
-            timestamp: "10:01:21".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: None,
-        };
-
-        let initial_messages = vec![msg1, msg2, msg3, msg4];
-
-        let sessions = vec![
-            ChatSession {
-                id: "sess-default".to_string(),
-                title: "Default Session".to_string(),
-                created_at: "Today 10:00".to_string(),
-                messages: initial_messages.clone(),
-            },
-            ChatSession {
-                id: "sess-refactor".to_string(),
-                title: "Feature Refactor".to_string(),
-                created_at: "Today 09:30".to_string(),
-                messages: vec![ChatMessage {
-                    role: MessageRole::System,
-                    sender_name: "System".to_string(),
-                    content: "Session initialized for code refactoring and architecture polish.".to_string(),
-                    timestamp: "09:30:00".to_string(),
-                    tool_calls: Vec::new(),
-                    reasoning: None,
-                }],
-            },
-            ChatSession {
-                id: "sess-quota".to_string(),
-                title: "Quota Inspection".to_string(),
-                created_at: "Yesterday".to_string(),
-                messages: vec![ChatMessage {
-                    role: MessageRole::System,
-                    sender_name: "System".to_string(),
-                    content: "Session initialized for provider rate limits and token tracking.".to_string(),
-                    timestamp: "Yesterday".to_string(),
-                    tool_calls: Vec::new(),
-                    reasoning: None,
-                }],
-            },
-        ];
-
-        let mut state = Self {
-            messages: initial_messages,
+        Self {
+            messages: Vec::new(),
             input_buffer: String::new(),
             cursor_pos: 0,
             scroll_offset: 0,
             is_input_focused: false,
-            is_streaming: false,
+            focus_area: AgentFocusArea::Chat,
+            is_running: false,
+            active_turn_id: None,
             active_model: "claude-3-5-sonnet-20241022".to_string(),
-            active_provider: "Claude".to_string(),
-            temperature: 0.7,
-            max_tokens: 4096,
-            total_prompt_tokens: 3420,
-            total_completion_tokens: 1180,
-            sessions,
-            active_session_idx: 0,
-            selected_session_idx: 0,
+            available_models: vec![
+                "claude-3-5-sonnet-20241022".to_string(),
+                "gpt-4o".to_string(),
+                "gemini-1.5-pro".to_string(),
+                "deepseek-chat".to_string(),
+            ],
+            expanded_tools: HashSet::new(),
+            expanded_tool_idx: None,
+            reasoning_expanded: true,
+            auto_scroll: true,
+            spinner_tick: 0,
             workspace_files: Vec::new(),
             selected_file_idx: 0,
-            focus_area: AgentFocusArea::Chat,
-            expanded_tool_idx: None,
-        };
-        state.scan_workspace_files();
-        state
+            expanded_dirs: HashSet::new(),
+            tag_query: None,
+            tool_filter: ToolFilter::All,
+            pending_approval: None,
+            context_files: Vec::new(),
+            selected_context_file_idx: 0,
+            total_prompt_tokens: 0,
+            total_completion_tokens: 0,
+            max_context_limit: 128_000,
+            is_sidebar_visible: true,
+            is_inspector_visible: true,
+        }
+    }
+}
+
+impl AgentWorkspaceState {
+    pub fn sample() -> Self {
+        Self {
+            messages: vec![ChatMessage {
+                role: MessageRole::System,
+                sender_name: "System".to_string(),
+                content: "Ragasukma Agent ready. Tech Gold & Dark Slate theme active.".to_string(),
+                timestamp: "09:00".to_string(),
+                tool_calls: Vec::new(),
+                reasoning: None,
+            }],
+            ..Default::default()
+        }
+    }
+
+    pub fn set_messages_from_persisted(&mut self, list: Vec<PersistedMessageDto>) {
+        self.messages = list
+            .into_iter()
+            .map(|dto| {
+                let role = match dto.role.to_lowercase().as_str() {
+                    "user" => MessageRole::User,
+                    "assistant" => MessageRole::Assistant,
+                    "system" => MessageRole::System,
+                    _ => MessageRole::Tool,
+                };
+                ChatMessage {
+                    role,
+                    sender_name: "Agent".to_string(),
+                    content: dto.content.unwrap_or_default(),
+                    timestamp: dto.created_at.to_string(),
+                    tool_calls: Vec::new(),
+                    reasoning: dto.thought,
+                }
+            })
+            .collect();
+    }
+
+    pub fn clear_chat(&mut self) {
+        self.messages.clear();
+        self.scroll_offset = 0;
+        self.expanded_tools.clear();
+        self.expanded_tool_idx = None;
+        self.auto_scroll = true;
+    }
+
+    pub fn clear_input(&mut self) {
+        self.input_buffer.clear();
+        self.cursor_pos = 0;
+        self.tag_query = None;
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        let prefix = &self.input_buffer[..self.cursor_pos];
+        let suffix = &self.input_buffer[self.cursor_pos..];
+        self.input_buffer = format!("{}{}{}", prefix, c, suffix);
+        self.cursor_pos += c.len_utf8();
+        self.check_and_update_tag_query();
+    }
+
+    pub fn backspace(&mut self) {
+        if self.cursor_pos > 0 {
+            let prev = self.input_buffer[..self.cursor_pos]
+                .chars()
+                .last()
+                .map(|c| c.len_utf8())
+                .unwrap_or(1);
+            let start = self.cursor_pos - prev;
+            let end = self.cursor_pos;
+            self.input_buffer.replace_range(start..end, "");
+            self.cursor_pos = start;
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn append_chunk(&mut self, chunk: &str) {
+        if let Some(last) = self
+            .messages
+            .last_mut()
+            .filter(|m| m.role == MessageRole::Assistant)
+        {
+            last.content.push_str(chunk);
+            return;
+        }
+        self.messages.push(ChatMessage {
+            role: MessageRole::Assistant,
+            sender_name: "Agent".to_string(),
+            content: chunk.to_string(),
+            timestamp: "now".to_string(),
+            tool_calls: Vec::new(),
+            reasoning: None,
+        });
+    }
+
+    pub fn append_thought(&mut self, thought: &str) {
+        if let Some(last) = self
+            .messages
+            .last_mut()
+            .filter(|m| m.role == MessageRole::Assistant)
+        {
+            if let Some(ref mut r) = last.reasoning {
+                r.push_str(thought);
+            } else {
+                last.reasoning = Some(thought.to_string());
+            }
+        }
+    }
+
+    pub fn finish_turn(&mut self) {
+        self.is_running = false;
+        self.active_turn_id = None;
+    }
+
+    pub fn fail_turn(&mut self, _err: String) {
+        self.is_running = false;
+        self.active_turn_id = None;
+    }
+
+    pub fn submit_prompt(&mut self) -> Option<String> {
+        let trimmed = self.input_buffer.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            self.input_buffer.clear();
+            self.cursor_pos = 0;
+            self.tag_query = None;
+            Some(trimmed)
+        }
     }
 
     pub fn focus_input(&mut self) {
         self.is_input_focused = true;
+        self.focus_area = AgentFocusArea::Chat;
     }
 
     pub fn unfocus_input(&mut self) {
         self.is_input_focused = false;
     }
 
-    pub fn input_char(&mut self, c: char) {
-        self.insert_char(c);
-    }
-
-    pub fn insert_char(&mut self, c: char) {
-        if self.cursor_pos >= self.input_buffer.len() {
-            self.input_buffer.push(c);
-            self.cursor_pos = self.input_buffer.len();
-        } else {
-            let byte_idx = self
-                .input_buffer
-                .char_indices()
-                .nth(self.cursor_pos)
-                .map_or(self.input_buffer.len(), |(i, _)| i);
-            self.input_buffer.insert(byte_idx, c);
-            self.cursor_pos += 1;
-        }
-    }
-
-    pub fn backspace(&mut self) {
-        if self.cursor_pos > 0 && !self.input_buffer.is_empty() {
-            let prev_idx = self.cursor_pos - 1;
-            let byte_idx = self
-                .input_buffer
-                .char_indices()
-                .nth(prev_idx)
-                .map(|(i, _)| i);
-            if let Some(b) = byte_idx {
-                self.input_buffer.remove(b);
-                self.cursor_pos = prev_idx;
+    pub fn cycle_focus_next(&mut self) {
+        self.focus_area = match self.focus_area {
+            AgentFocusArea::Files => AgentFocusArea::Chat,
+            AgentFocusArea::Chat => {
+                if self.is_inspector_visible {
+                    AgentFocusArea::Inspector
+                } else if self.is_sidebar_visible {
+                    AgentFocusArea::Files
+                } else {
+                    AgentFocusArea::Chat
+                }
             }
-        }
-    }
-
-    pub fn clear_input(&mut self) {
-        self.input_buffer.clear();
-        self.cursor_pos = 0;
-    }
-
-    pub fn clear_chat(&mut self) {
-        self.messages.clear();
-        self.scroll_offset = 0;
-        self.expanded_tool_idx = None;
-    }
-
-    pub fn submit_prompt(&mut self) -> Option<String> {
-        let trimmed = self.input_buffer.trim().to_string();
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        let user_msg = ChatMessage {
-            role: MessageRole::User,
-            sender_name: "User".to_string(),
-            content: trimmed.clone(),
-            timestamp: "Now".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: None,
+            AgentFocusArea::Inspector => {
+                if self.is_sidebar_visible {
+                    AgentFocusArea::Files
+                } else {
+                    AgentFocusArea::Chat
+                }
+            }
         };
-        self.messages.push(user_msg);
-        self.input_buffer.clear();
-        self.cursor_pos = 0;
-        self.scroll_to_bottom();
-        Some(trimmed)
     }
 
-    pub fn add_assistant_response(
-        &mut self,
-        content: &str,
-        tool_calls: Vec<ToolCallInfo>,
-        reasoning: Option<String>,
-    ) {
-        let msg = ChatMessage {
-            role: MessageRole::Assistant,
-            sender_name: self.active_model.clone(),
-            content: content.to_string(),
-            timestamp: "Now".to_string(),
-            tool_calls,
-            reasoning,
+    pub fn cycle_focus_prev(&mut self) {
+        self.focus_area = match self.focus_area {
+            AgentFocusArea::Files => {
+                if self.is_inspector_visible {
+                    AgentFocusArea::Inspector
+                } else {
+                    AgentFocusArea::Chat
+                }
+            }
+            AgentFocusArea::Chat => {
+                if self.is_sidebar_visible {
+                    AgentFocusArea::Files
+                } else if self.is_inspector_visible {
+                    AgentFocusArea::Inspector
+                } else {
+                    AgentFocusArea::Chat
+                }
+            }
+            AgentFocusArea::Inspector => AgentFocusArea::Chat,
         };
-        self.messages.push(msg);
-        self.scroll_to_bottom();
     }
 
     pub fn scroll_up(&mut self) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
-        }
+        self.scroll_offset = self.scroll_offset.saturating_add(3);
+        self.auto_scroll = false;
     }
 
     pub fn scroll_down(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_add(1);
+        self.scroll_offset = self.scroll_offset.saturating_sub(3);
+        if self.scroll_offset == 0 {
+            self.auto_scroll = true;
+        }
+    }
+
+    pub fn scroll_to_top(&mut self) {
+        self.scroll_offset = 9999;
+        self.auto_scroll = false;
     }
 
     pub fn scroll_to_bottom(&mut self) {
-        self.scroll_offset = self.messages.len().saturating_sub(1);
+        self.scroll_offset = 0;
+        self.auto_scroll = true;
     }
 
     pub fn toggle_tool_expand(&mut self) {
         if self.expanded_tool_idx.is_some() {
             self.expanded_tool_idx = None;
         } else {
-            for (idx, msg) in self.messages.iter().enumerate().rev() {
-                if !msg.tool_calls.is_empty() {
-                    self.expanded_tool_idx = Some(idx);
-                    break;
+            self.expanded_tool_idx = Some(0);
+        }
+    }
+
+    pub fn toggle_tool_card(&mut self, idx: usize) {
+        if self.expanded_tools.contains(&idx) {
+            self.expanded_tools.remove(&idx);
+        } else {
+            self.expanded_tools.insert(idx);
+        }
+    }
+
+    pub fn toggle_reasoning(&mut self) {
+        self.reasoning_expanded = !self.reasoning_expanded;
+    }
+
+    pub fn toggle_sidebar(&mut self) {
+        self.is_sidebar_visible = !self.is_sidebar_visible;
+        if !self.is_sidebar_visible && self.focus_area == AgentFocusArea::Files {
+            self.focus_area = AgentFocusArea::Chat;
+        }
+    }
+
+    pub fn cycle_model(&mut self) {
+        if self.available_models.is_empty() {
+            return;
+        }
+        if let Some(pos) = self.available_models.iter().position(|m| m == &self.active_model) {
+            let next = (pos + 1) % self.available_models.len();
+            self.active_model = self.available_models[next].clone();
+        } else {
+            self.active_model = self.available_models[0].clone();
+        }
+    }
+
+    pub fn start_turn(&mut self) {
+        self.is_running = true;
+    }
+
+    pub fn cancel_turn(&mut self) {
+        self.is_running = false;
+        self.active_turn_id = None;
+    }
+
+    pub fn tick_spinner(&mut self) {
+        self.spinner_tick = (self.spinner_tick + 1) % 10;
+    }
+
+    pub fn check_and_update_tag_query(&mut self) {
+        if let Some(at_pos) = self.input_buffer[..self.cursor_pos].rfind('@') {
+            let query = self.input_buffer[at_pos + 1..self.cursor_pos].to_string();
+            let matches: Vec<String> = self
+                .workspace_files
+                .iter()
+                .filter(|f| !f.is_dir && f.name.to_lowercase().contains(&query.to_lowercase()))
+                .map(|f| f.path.clone())
+                .take(8)
+                .collect();
+
+            self.tag_query = Some(FileTagQuery {
+                query,
+                matched_files: matches,
+                selected_idx: 0,
+                tag_start_idx: at_pos,
+            });
+        } else {
+            self.tag_query = None;
+        }
+    }
+
+    pub fn close_tag_query(&mut self) {
+        self.tag_query = None;
+    }
+
+    pub fn select_tag_query_next(&mut self) {
+        if let Some(tq) = &mut self.tag_query {
+            let len = tq.matched_files.len();
+            if len > 0 {
+                tq.selected_idx = (tq.selected_idx + 1) % len;
+            }
+        }
+    }
+
+    pub fn select_tag_query_prev(&mut self) {
+        if let Some(tq) = &mut self.tag_query {
+            let len = tq.matched_files.len();
+            if len > 0 {
+                if tq.selected_idx == 0 {
+                    tq.selected_idx = len - 1;
+                } else {
+                    tq.selected_idx -= 1;
                 }
             }
         }
     }
 
-    pub fn scan_workspace_files(&mut self) {
-        let mut found = Vec::new();
-
-        // Check local current workspace directory
-        let search_dirs = [".", "src", "docs", "../ragasukma-core/src", "../ai-voice/src"];
-        for d in search_dirs {
-            let p = Path::new(d);
-            if let Ok(entries) = std::fs::read_dir(p) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_file() {
-                        let name = path.to_string_lossy().to_string();
-                        // Ignore git and target build artifacts
-                        if !name.contains(".git") && !name.contains("target") {
-                            found.push(name);
-                        }
-                    }
+    pub fn apply_selected_tag(&mut self) {
+        let (prefix, insertion, suffix) = match self.tag_query.take() {
+            Some(tq) => match tq.matched_files.get(tq.selected_idx) {
+                Some(path) => {
+                    let prefix = self.input_buffer[..tq.tag_start_idx].to_string();
+                    let suffix = self.input_buffer[self.cursor_pos..].to_string();
+                    let insertion = format!("@{} ", path);
+                    (prefix, insertion, suffix)
                 }
+                None => return,
+            },
+            None => return,
+        };
+        let new_cursor = prefix.len() + insertion.len();
+        self.input_buffer = format!("{}{}{}", prefix, insertion, suffix);
+        self.cursor_pos = new_cursor;
+    }
+
+    pub fn toggle_pin_file(&mut self, path: &str) {
+        if let Some(cf) = self.context_files.iter_mut().find(|f| f.path == path) {
+            cf.is_pinned = !cf.is_pinned;
+        } else {
+            self.context_files.push(ContextFileItem {
+                path: path.to_string(),
+                name: Path::new(path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.to_string()),
+                token_count: 50,
+                is_pinned: true,
+                is_readonly: false,
+                is_modified: false,
+            });
+        }
+    }
+
+    pub fn toggle_pin_selected_file(&mut self) {
+        if let Some(cf) = self.context_files.get_mut(self.selected_context_file_idx) {
+            cf.is_pinned = !cf.is_pinned;
+        }
+    }
+
+    pub fn remove_context_file(&mut self, idx: usize) {
+        if idx < self.context_files.len() {
+            self.context_files.remove(idx);
+            if self.selected_context_file_idx >= self.context_files.len() && !self.context_files.is_empty() {
+                self.selected_context_file_idx = self.context_files.len() - 1;
             }
         }
+    }
 
-        found.sort();
-        if found.is_empty() {
-            // Fallback default files if environment has restricted filesystem
-            found = vec![
-                "Cargo.toml".to_string(),
-                "src/lib.rs".to_string(),
-                "src/main.rs".to_string(),
-                "src/app.rs".to_string(),
-                "src/agent_view.rs".to_string(),
-                "src/ui.rs".to_string(),
-            ];
+    pub fn next_context_file(&mut self) {
+        if !self.context_files.is_empty() {
+            self.selected_context_file_idx = (self.selected_context_file_idx + 1) % self.context_files.len();
         }
+    }
 
-        self.workspace_files = found;
-        if self.selected_file_idx >= self.workspace_files.len() {
-            self.selected_file_idx = self.workspace_files.len().saturating_sub(1);
+    pub fn prev_context_file(&mut self) {
+        if !self.context_files.is_empty() {
+            if self.selected_context_file_idx == 0 {
+                self.selected_context_file_idx = self.context_files.len() - 1;
+            } else {
+                self.selected_context_file_idx -= 1;
+            }
         }
+    }
+
+    pub fn calculate_token_breakdown(&self) -> TokenBreakdown {
+        let chat_tokens = self.messages.iter().map(|m| m.content.len() / 4).sum();
+        let file_tokens = self.context_files.iter().map(|f| f.token_count).sum();
+        TokenBreakdown {
+            system_tokens: 1500,
+            chat_history_tokens: chat_tokens,
+            context_files_tokens: file_tokens,
+            completion_tokens: self.total_completion_tokens,
+            max_context_limit: self.max_context_limit,
+        }
+    }
+
+    pub fn cycle_tool_filter(&mut self) {
+        self.tool_filter = match self.tool_filter {
+            ToolFilter::All => ToolFilter::RunningOnly,
+            ToolFilter::RunningOnly => ToolFilter::FailedOnly,
+            ToolFilter::FailedOnly => ToolFilter::All,
+        };
+    }
+
+    pub fn approve_pending(&mut self) -> Option<ApprovalRequest> {
+        self.pending_approval.take()
+    }
+
+    pub fn reject_pending(&mut self) -> Option<ApprovalRequest> {
+        self.pending_approval.take()
     }
 
     pub fn select_file_next(&mut self) {
@@ -325,308 +502,102 @@ impl AgentWorkspaceState {
         }
     }
 
+    pub fn toggle_file_tree_expand(&mut self) {
+        if let Some(file) = self.workspace_files.get(self.selected_file_idx).filter(|f| f.is_dir) {
+            let path = file.path.clone();
+            if self.expanded_dirs.contains(&path) {
+                self.expanded_dirs.remove(&path);
+            } else {
+                self.expanded_dirs.insert(path);
+            }
+            self.scan_workspace_files();
+        }
+    }
+
     pub fn insert_selected_file_to_input(&mut self) {
         if let Some(file) = self.workspace_files.get(self.selected_file_idx) {
-            let ref_str = format!("@{} ", file);
-            for c in ref_str.chars() {
-                self.insert_char(c);
-            }
-            self.is_input_focused = true;
-            self.focus_area = AgentFocusArea::Chat;
+            let insertion = format!("@{} ", file.path);
+            let prefix = &self.input_buffer[..self.cursor_pos];
+            let suffix = &self.input_buffer[self.cursor_pos..];
+            let new_cursor = prefix.len() + insertion.len();
+            self.input_buffer = format!("{}{}{}", prefix, insertion, suffix);
+            self.cursor_pos = new_cursor;
         }
     }
 
-    pub fn select_session_next(&mut self) {
-        if !self.sessions.is_empty() {
-            self.selected_session_idx = (self.selected_session_idx + 1) % self.sessions.len();
+    pub fn scan_workspace_files(&mut self) {
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut nodes = Vec::new();
+        collect_visible_children(&current_dir, 0, &self.expanded_dirs, &mut nodes, None);
+        self.workspace_files = nodes;
+        if self.selected_file_idx >= self.workspace_files.len() && !self.workspace_files.is_empty() {
+            self.selected_file_idx = self.workspace_files.len() - 1;
+        }
+    }
+}
+
+fn collect_visible_children(
+    dir: &Path,
+    depth: usize,
+    expanded_dirs: &HashSet<String>,
+    nodes: &mut Vec<WorkspaceFileNode>,
+    parent_path: Option<String>,
+) {
+    if depth > 5 {
+        return;
+    }
+
+    let entries = match std::fs::read_dir(dir) {
+        Ok(read_dir) => read_dir,
+        Err(_) => return,
+    };
+
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        if name.starts_with('.') || name == "target" || name == "node_modules" {
+            continue;
+        }
+
+        if path.is_dir() {
+            dirs.push((name, path));
+        } else {
+            files.push((name, path));
         }
     }
 
-    pub fn select_session_prev(&mut self) {
-        if !self.sessions.is_empty() {
-            if self.selected_session_idx == 0 {
-                self.selected_session_idx = self.sessions.len() - 1;
-            } else {
-                self.selected_session_idx -= 1;
-            }
+    dirs.sort_by(|a, b| a.0.cmp(&b.0));
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (name, path) in dirs {
+        let path_str = path.to_string_lossy().to_string();
+        let is_expanded = expanded_dirs.contains(&path_str);
+        nodes.push(WorkspaceFileNode {
+            path: path_str.clone(),
+            name,
+            is_dir: true,
+            depth,
+            is_expanded,
+            parent_path: parent_path.clone(),
+        });
+
+        if is_expanded {
+            collect_visible_children(&path, depth + 1, expanded_dirs, nodes, Some(path_str));
         }
     }
 
-    pub fn switch_to_selected_session(&mut self) -> Option<String> {
-        if self.selected_session_idx >= self.sessions.len() {
-            return None;
-        }
-
-        // Save current active session messages
-        if let Some(active_sess) = self.sessions.get_mut(self.active_session_idx) {
-            active_sess.messages = self.messages.clone();
-        }
-
-        // Switch to new session
-        self.active_session_idx = self.selected_session_idx;
-
-        self.sessions.get(self.active_session_idx).map(|s| {
-            self.messages = s.messages.clone();
-            self.scroll_offset = self.messages.len().saturating_sub(1);
-            s.id.clone()
-        })
-    }
-
-    pub fn create_new_session(&mut self) -> String {
-        // Save current active session
-        if let Some(active_sess) = self.sessions.get_mut(self.active_session_idx) {
-            active_sess.messages = self.messages.clone();
-        }
-
-        let num = self.sessions.len() + 1;
-        let new_id = format!("sess-{}", num);
-        let new_title = format!("Session #{}", num);
-        let init_msg = ChatMessage {
-            role: MessageRole::System,
-            sender_name: "System".to_string(),
-            content: format!("Started autonomous agent session [{}].", new_title),
-            timestamp: "Now".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: None,
-        };
-
-        let new_session = ChatSession {
-            id: new_id,
-            title: new_title.clone(),
-            created_at: "Just now".to_string(),
-            messages: vec![init_msg.clone()],
-        };
-
-        self.sessions.push(new_session);
-        self.active_session_idx = self.sessions.len() - 1;
-        self.selected_session_idx = self.active_session_idx;
-        self.messages = vec![init_msg];
-        self.scroll_offset = 0;
-
-        new_title
-    }
-
-    pub fn delete_selected_session(&mut self) -> Option<String> {
-        if self.sessions.len() <= 1 {
-            // Keep at least one session
-            self.messages.clear();
-            let _ = self.create_new_session();
-            if self.sessions.len() > 1 {
-                let removed = self.sessions.remove(0);
-                self.active_session_idx = 0;
-                self.selected_session_idx = 0;
-                return Some(removed.id);
-            }
-            return None;
-        }
-
-        let del_idx = self.selected_session_idx;
-        let removed_session = self.sessions.remove(del_idx);
-
-        if self.active_session_idx == del_idx {
-            self.active_session_idx = self.active_session_idx.min(self.sessions.len() - 1);
-            if let Some(sess) = self.sessions.get(self.active_session_idx) {
-                self.messages = sess.messages.clone();
-                self.scroll_offset = self.messages.len().saturating_sub(1);
-            }
-        } else if self.active_session_idx > del_idx {
-            self.active_session_idx -= 1;
-        }
-
-        if self.selected_session_idx >= self.sessions.len() {
-            self.selected_session_idx = self.sessions.len().saturating_sub(1);
-        }
-
-        Some(removed_session.id)
-    }
-
-    pub fn load_persisted_sessions(&mut self, persisted: Vec<(String, String)>, active_id: &str) {
-        if persisted.is_empty() {
-            return;
-        }
-
-        let mut loaded = Vec::with_capacity(persisted.len());
-        let mut active_index = 0;
-
-        for (idx, (id, title)) in persisted.into_iter().enumerate() {
-            if id == active_id {
-                active_index = idx;
-            }
-            loaded.push(ChatSession {
-                id,
-                title,
-                created_at: "Persisted".to_string(),
-                messages: Vec::new(),
-            });
-        }
-
-        self.sessions = loaded;
-        self.active_session_idx = active_index;
-        self.selected_session_idx = active_index;
-    }
-
-    pub fn load_persisted_messages(
-        &mut self,
-        session_id: &str,
-        raw_msgs: Vec<PersistedMessageDto>,
-    ) {
-        let mut converted: Vec<ChatMessage> = Vec::new();
-
-        for m in raw_msgs {
-            let role = match m.role.as_str() {
-                "user" => MessageRole::User,
-                "assistant" => MessageRole::Assistant,
-                _ => MessageRole::System,
-            };
-
-            let tool_calls = m
-                .tool_calls
-                .and_then(|tc_str| serde_json::from_str::<serde_json::Value>(&tc_str).ok())
-                .and_then(|val| {
-                    val.as_array().map(|arr| {
-                        arr.iter()
-                            .filter_map(|item| {
-                                let name = item.get("name").and_then(|v| v.as_str())?.to_string();
-                                let args = item
-                                    .get("args")
-                                    .map(|v| v.to_string())
-                                    .unwrap_or_else(|| "{}".to_string());
-                                Some(ToolCallInfo {
-                                    id: item
-                                        .get("id")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("call")
-                                        .to_string(),
-                                    name,
-                                    args_summary: args,
-                                    output_summary: None,
-                                    status: ToolExecutionStatus::Success,
-                                    duration_ms: None,
-                                })
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                })
-                .unwrap_or_default();
-
-            let ts_str = if m.created_at > 0 {
-                let secs = if m.created_at > 1_000_000_000_000 {
-                    m.created_at / 1000
-                } else {
-                    m.created_at
-                };
-                let s = secs % 60;
-                let min = (secs / 60) % 60;
-                let h = (secs / 3600) % 24;
-                format!("{:02}:{:02}:{:02}", h, min, s)
-            } else {
-                "Saved".to_string()
-            };
-
-            converted.push(ChatMessage {
-                role,
-                sender_name: if m.role == "assistant" {
-                    self.active_model.clone()
-                } else if m.role == "user" {
-                    "User".to_string()
-                } else {
-                    "System".to_string()
-                },
-                content: m.content.unwrap_or_default(),
-                timestamp: ts_str,
-                tool_calls,
-                reasoning: m.thought,
-            });
-        }
-
-        // Cache into matching session and set active if it matches active session
-        for sess in &mut self.sessions {
-            if sess.id == session_id {
-                sess.messages = converted.clone();
-                break;
-            }
-        }
-
-        if let Some(active_sess) = self.sessions.get(self.active_session_idx)
-            && active_sess.id == session_id
-        {
-            self.messages = converted;
-            self.scroll_to_bottom();
-        }
-    }
-
-    pub fn cycle_focus_next(&mut self) {
-        self.focus_area = match self.focus_area {
-            AgentFocusArea::Sessions => AgentFocusArea::Files,
-            AgentFocusArea::Files => AgentFocusArea::Chat,
-            AgentFocusArea::Chat => AgentFocusArea::Sessions,
-        };
-    }
-
-    pub fn cycle_focus_prev(&mut self) {
-        self.focus_area = match self.focus_area {
-            AgentFocusArea::Sessions => AgentFocusArea::Chat,
-            AgentFocusArea::Files => AgentFocusArea::Sessions,
-            AgentFocusArea::Chat => AgentFocusArea::Files,
-        };
-    }
-
-    pub fn new_session(&mut self) {
-        self.create_new_session();
-    }
-
-    pub fn append_chunk(&mut self, chunk: &str) {
-        self.is_streaming = true;
-        if let Some(last) = self.messages.last_mut()
-            && last.role == MessageRole::Assistant
-        {
-            last.content.push_str(chunk);
-            self.scroll_to_bottom();
-            return;
-        }
-        let msg = ChatMessage {
-            role: MessageRole::Assistant,
-            sender_name: self.active_model.clone(),
-            content: chunk.to_string(),
-            timestamp: "Now".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: None,
-        };
-        self.messages.push(msg);
-        self.scroll_to_bottom();
-    }
-
-    pub fn append_thought(&mut self, thought: &str) {
-        self.is_streaming = true;
-        if let Some(last) = self.messages.last_mut()
-            && last.role == MessageRole::Assistant
-        {
-            if let Some(ref mut r) = last.reasoning {
-                r.push_str(thought);
-            } else {
-                last.reasoning = Some(thought.to_string());
-            }
-            return;
-        }
-        let msg = ChatMessage {
-            role: MessageRole::Assistant,
-            sender_name: self.active_model.clone(),
-            content: String::new(),
-            timestamp: "Now".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: Some(thought.to_string()),
-        };
-        self.messages.push(msg);
-        self.scroll_to_bottom();
-    }
-
-    pub fn finish_turn(&mut self) {
-        self.is_streaming = false;
-        self.scroll_to_bottom();
-    }
-
-    pub fn clear_messages(&mut self) {
-        self.messages.clear();
-        self.scroll_offset = 0;
+    for (name, path) in files {
+        nodes.push(WorkspaceFileNode {
+            path: path.to_string_lossy().to_string(),
+            name,
+            is_dir: false,
+            depth,
+            is_expanded: false,
+            parent_path: parent_path.clone(),
+        });
     }
 }

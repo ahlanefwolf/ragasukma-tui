@@ -113,9 +113,9 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
 fn render_body(frame: &mut Frame, area: Rect, app: &App) {
     match app.active_tab {
         0 => crate::agent_view::render_agent_tab(frame, area, &app.agent),
-        1 => crate::provider_views::render_provider_tab(frame, area, &app.antigravity),
-        2 => crate::provider_views::render_provider_tab(frame, area, &app.codex),
-        3 => crate::provider_views::render_provider_tab(frame, area, &app.claude),
+        1 => crate::provider_view::render_provider_tab(frame, area, &app.antigravity),
+        2 => crate::provider_view::render_provider_tab(frame, area, &app.codex),
+        3 => crate::provider_view::render_provider_tab(frame, area, &app.claude),
         4 => crate::custom_llm_view::render_custom_llm_tab(frame, area, &app.custom_llm),
         _ => {}
     }
@@ -172,24 +172,6 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
             ]
         } else {
             match app.agent.focus_area {
-                crate::agent_view::AgentFocusArea::Sessions => vec![
-                    Span::styled(" [Enter] ", Theme::key_badge()),
-                    Span::raw("Open "),
-                    Span::styled(" [j/k] ", Theme::key_badge()),
-                    Span::raw("Nav "),
-                    Span::styled(" [n] ", Theme::key_badge()),
-                    Span::raw("New "),
-                    Span::styled(" [d] ", Theme::key_badge()),
-                    Span::raw("Del "),
-                    Span::styled(" [f/c] ", Theme::key_badge()),
-                    Span::raw("Panel "),
-                    Span::styled(" [1-5] ", Theme::key_badge()),
-                    Span::raw("Tabs "),
-                    Span::styled(" [?] ", Theme::key_badge()),
-                    Span::raw("Help "),
-                    Span::styled(" [q] ", Theme::key_badge()),
-                    Span::raw("Quit "),
-                ],
                 crate::agent_view::AgentFocusArea::Files => vec![
                     Span::styled(" [Enter] ", Theme::key_badge()),
                     Span::raw("Insert "),
@@ -197,8 +179,8 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
                     Span::raw("Nav "),
                     Span::styled(" [r] ", Theme::key_badge()),
                     Span::raw("Scan "),
-                    Span::styled(" [s/c] ", Theme::key_badge()),
-                    Span::raw("Panel "),
+                    Span::styled(" [c] ", Theme::key_badge()),
+                    Span::raw("Chat "),
                     Span::styled(" [1-5] ", Theme::key_badge()),
                     Span::raw("Tabs "),
                     Span::styled(" [?] ", Theme::key_badge()),
@@ -211,12 +193,30 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
                     Span::raw("Prompt "),
                     Span::styled(" [j/k] ", Theme::key_badge()),
                     Span::raw("Scroll "),
+                    Span::styled(" [f] ", Theme::key_badge()),
+                    Span::raw("Files "),
                     Span::styled(" [x] ", Theme::key_badge()),
                     Span::raw("Tools "),
-                    Span::styled(" [n] ", Theme::key_badge()),
-                    Span::raw("New "),
-                    Span::styled(" [s/f] ", Theme::key_badge()),
-                    Span::raw("Panel "),
+                    Span::styled(" [F] ", Theme::key_badge()),
+                    Span::raw("Filter "),
+                    Span::styled(" [c] ", Theme::key_badge()),
+                    Span::raw("Clear "),
+                    Span::styled(" [1-5] ", Theme::key_badge()),
+                    Span::raw("Tabs "),
+                    Span::styled(" [?] ", Theme::key_badge()),
+                    Span::raw("Help "),
+                    Span::styled(" [q] ", Theme::key_badge()),
+                    Span::raw("Quit "),
+                ],
+                crate::agent_view::AgentFocusArea::Inspector => vec![
+                    Span::styled(" [j/k] ", Theme::key_badge()),
+                    Span::raw("Nav "),
+                    Span::styled(" [d/x] ", Theme::key_badge()),
+                    Span::raw("Remove "),
+                    Span::styled(" [f] ", Theme::key_badge()),
+                    Span::raw("Files "),
+                    Span::styled(" [c] ", Theme::key_badge()),
+                    Span::raw("Chat "),
                     Span::styled(" [1-5] ", Theme::key_badge()),
                     Span::raw("Tabs "),
                     Span::styled(" [?] ", Theme::key_badge()),
@@ -249,16 +249,14 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
             vec![
                 Span::styled(" [j/k] ", Theme::key_badge()),
                 Span::raw("Nav "),
-                Span::styled(" [Space] ", Theme::key_badge()),
+                Span::styled(" [Space/Enter] ", Theme::key_badge()),
                 Span::raw("Toggle "),
-                Span::styled(" [n] ", Theme::key_badge()),
+                Span::styled(" [a/n] ", Theme::key_badge()),
                 Span::raw("Add "),
                 Span::styled(" [e] ", Theme::key_badge()),
                 Span::raw("Edit "),
                 Span::styled(" [d] ", Theme::key_badge()),
                 Span::raw("Del "),
-                Span::styled(" [r] ", Theme::key_badge()),
-                Span::raw("Models "),
                 Span::styled(" [?] ", Theme::key_badge()),
                 Span::raw("Help "),
                 Span::styled(" [q] ", Theme::key_badge()),
@@ -274,12 +272,16 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         ];
 
         if app.active_tab >= 1 && app.active_tab <= 3 {
+            spans.push(Span::styled(" [a] ", Theme::key_badge()));
+            spans.push(Span::raw("Add Acct "));
             spans.push(Span::styled(" [j/k] ", Theme::key_badge()));
             spans.push(Span::raw("Accts "));
-            spans.push(Span::styled(" [Enter] ", Theme::key_badge()));
-            spans.push(Span::raw("Active "));
+            spans.push(Span::styled(" [Enter/Space] ", Theme::key_badge()));
+            spans.push(Span::raw("Toggle/Active "));
             spans.push(Span::styled(" [r] ", Theme::key_badge()));
             spans.push(Span::raw("Refresh "));
+            spans.push(Span::styled(" [d] ", Theme::key_badge()));
+            spans.push(Span::raw("Del "));
         }
 
         spans.push(Span::styled(" [?] ", Theme::key_badge()));
@@ -388,12 +390,24 @@ fn render_help_modal(frame: &mut Frame, area: Rect) {
             Span::styled("📊 Tab 2-4 - Quota Visualizer (Antigravity, Codex, Claude):", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
+            Span::styled("   n / a          : ", Theme::badge_cyan()),
+            Span::raw("Tambah akun baru / Login OAuth (Antigravity & Codex)"),
+        ]),
+        Line::from(vec![
             Span::styled("   j / k          : ", Theme::badge_cyan()),
             Span::raw("Pilih akun berikutnya / sebelumnya"),
         ]),
         Line::from(vec![
             Span::styled("   Enter          : ", Theme::badge_cyan()),
             Span::raw("Set akun terpilih sebagai default aktif"),
+        ]),
+        Line::from(vec![
+            Span::styled("   Space / t      : ", Theme::badge_cyan()),
+            Span::raw("Toggle status Enable/Disable akun"),
+        ]),
+        Line::from(vec![
+            Span::styled("   d              : ", Theme::badge_cyan()),
+            Span::raw("Hapus akun terpilih"),
         ]),
         Line::from(vec![
             Span::styled("   r              : ", Theme::badge_cyan()),

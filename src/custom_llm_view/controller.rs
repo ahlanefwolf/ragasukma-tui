@@ -22,7 +22,9 @@ impl CustomLlmTabState {
         match code {
             KeyCode::Down | KeyCode::Char('j') => Some(Action::FocusNext),
             KeyCode::Up | KeyCode::Char('k') => Some(Action::FocusPrev),
-            KeyCode::Enter => Some(Action::Select),
+            KeyCode::Enter | KeyCode::Char(' ') => Some(Action::CustomLlmToggle),
+            KeyCode::Char('a') | KeyCode::Char('n') => Some(Action::CustomLlmAdd),
+            KeyCode::Char('e') => Some(Action::CustomLlmEdit),
             KeyCode::Char('d') => Some(Action::ConfirmDelete),
             _ => None,
         }

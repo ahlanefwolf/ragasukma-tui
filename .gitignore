@@ -11,6 +11,12 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
+# Runtime Databases & Local Credentials
+assets/antigravity_accounts.json
+assets/*.db
+assets/*.db-shm
+assets/*.db-wal
+
 # Environment & Secret Variables
 .env
 .env.*

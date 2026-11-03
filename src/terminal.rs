@@ -19,6 +19,15 @@ pub fn install_panic_hook() {
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
         let _ = restore();
+        tracing::error!("FATAL PANIC: {:#?}", panic_info);
+        let panic_msg = format!("\n[FATAL PANIC] {:#?}\n", panic_info);
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("ragasukma-tui.log")
+        {
+            let _ = std::io::Write::write_all(&mut file, panic_msg.as_bytes());
+        }
         original_hook(panic_info);
     }));
 }

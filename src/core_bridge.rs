@@ -68,6 +68,13 @@ pub enum CoreBridgeEvent {
         args: String,
     },
     TurnCompleted(String),
+    TurnCancelled {
+        session_id: String,
+    },
+    TurnFailed {
+        session_id: String,
+        error: String,
+    },
     QuotaUpdated {
         provider: String,
         input_tokens: usize,
@@ -75,10 +82,15 @@ pub enum CoreBridgeEvent {
         total_tokens: usize,
         requests: usize,
     },
+    AccountQuotaUpdated {
+        provider: String,
+        account_id: String,
+        quotas: Vec<crate::provider_view::ModelQuotaItem>,
+    },
     Error(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoreBridgeCommand {
     ExecuteTurn {
         prompt: String,
@@ -86,6 +98,10 @@ pub enum CoreBridgeCommand {
     },
     RefreshQuota {
         provider: String,
+    },
+    RefreshAccountQuota {
+        provider: String,
+        account_id: String,
     },
     CreateSession {
         title: String,
@@ -99,6 +115,8 @@ pub enum CoreBridgeCommand {
     LoadHistory {
         session_id: String,
     },
+    CancelTurn,
+    RetryTurn,
 }
 
 pub struct CoreBridge {
@@ -207,9 +225,11 @@ impl CoreBridge {
                                         });
                                     }
                                     AgentSessionEvent::Done { reply } => {
+                                        tracing::info!("Turn completed successfully");
                                         let _ = sub_tx.send(CoreBridgeEvent::TurnCompleted(reply));
                                     }
                                     AgentSessionEvent::Error { message } => {
+                                        tracing::error!("Agent session error: {message}");
                                         let _ = sub_tx.send(CoreBridgeEvent::Error(message));
                                     }
                                     _ => {}
@@ -220,8 +240,46 @@ impl CoreBridge {
                 }
             });
 
+            let mut current_turn_handle: Option<tokio::task::JoinHandle<()>> = None;
+            let mut last_turn_request: Option<(String, Option<String>)> = None;
+
             while let Some(cmd) = cmd_rx.recv().await {
                 match cmd {
+                    CoreBridgeCommand::CancelTurn => {
+                        if let Some(handle) = current_turn_handle.take() {
+                            handle.abort();
+                            let _ = worker_tx.send(CoreBridgeEvent::TurnCancelled {
+                                session_id: active_sid.clone(),
+                            });
+                        }
+                    }
+                    CoreBridgeCommand::RetryTurn => {
+                        if let Some((_prompt, model_override)) = last_turn_request.clone() {
+                            let sid_exec = active_sid.clone();
+                            let exec_tx = worker_tx.clone();
+                            let handle = tokio::spawn(async move {
+                                tracing::info!("Retrying turn for session: {sid_exec}");
+                                match ragasukma_core::agent::executor::execute_session_turn(
+                                    &sid_exec,
+                                    model_override.as_deref(),
+                                )
+                                .await
+                                {
+                                    Ok(reply) => {
+                                        let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Retry turn error: {e:?}");
+                                        let _ = exec_tx.send(CoreBridgeEvent::TurnFailed {
+                                            session_id: sid_exec,
+                                            error: e.to_string(),
+                                        });
+                                    }
+                                }
+                            });
+                            current_turn_handle = Some(handle);
+                        }
+                    }
                     CoreBridgeCommand::CreateSession { title } => {
                         if let Ok(new_sess) = create_session(
                             &worker_project_id,
@@ -291,7 +349,9 @@ impl CoreBridge {
                         let sid_exec = current_turn_sid;
                         let exec_tx = worker_tx.clone();
 
-                        tokio::spawn(async move {
+                        last_turn_request = Some((prompt.clone(), model_override.clone()));
+                        let handle = tokio::spawn(async move {
+                            tracing::info!("Executing session turn for session: {sid_exec}");
                             match ragasukma_core::agent::executor::execute_session_turn(
                                 &sid_exec,
                                 model_override.as_deref(),
@@ -302,10 +362,15 @@ impl CoreBridge {
                                     let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
                                 }
                                 Err(e) => {
-                                    let _ = exec_tx.send(CoreBridgeEvent::Error(e.to_string()));
+                                    tracing::error!("Execute session turn error: {e:?}");
+                                    let _ = exec_tx.send(CoreBridgeEvent::TurnFailed {
+                                        session_id: sid_exec,
+                                        error: e.to_string(),
+                                    });
                                 }
                             }
                         });
+                        current_turn_handle = Some(handle);
                     }
                     CoreBridgeCommand::RefreshQuota { provider } => {
                         let pool_ref = pool_clone.clone();
@@ -326,6 +391,66 @@ impl CoreBridge {
                                 total_tokens: summary.total_tokens,
                                 requests: summary.total_requests,
                             });
+                        });
+                    }
+                    CoreBridgeCommand::RefreshAccountQuota { provider, account_id } => {
+                        let quota_tx = worker_tx.clone();
+                        let prov = provider.clone();
+                        let acc_id = account_id.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let mut quotas = Vec::new();
+                            let mut err_msg = None;
+                            match prov.to_lowercase().as_str() {
+                                p if p.contains("antigravity") => {
+                                    let mut provider = ragasukma_core::llm::providers::antigravity::AntigravityProvider::new();
+                                    match provider.get_account_quota(&acc_id) {
+                                        Ok(res) => {
+                                            quotas = crate::provider_view::antigravity::map_antigravity_quotas(res);
+                                        }
+                                        Err(e) => {
+                                            err_msg = Some(e.to_string());
+                                        }
+                                    }
+                                }
+                                p if p.contains("codex") => {
+                                    let mut provider = ragasukma_core::llm::providers::codex::CodexProvider::new();
+                                    match provider.get_account_quota(&acc_id) {
+                                        Ok(res) => {
+                                            quotas = crate::provider_view::codex::map_codex_quotas(res);
+                                        }
+                                        Err(e) => {
+                                            err_msg = Some(e.to_string());
+                                        }
+                                    }
+                                }
+                                p if p.contains("claude") => {
+                                    let mut provider = ragasukma_core::llm::providers::claude::ClaudeProvider::new();
+                                    match provider.get_account_quota(&acc_id) {
+                                        Ok(res) => {
+                                            quotas = crate::provider_view::claude::map_claude_quotas(res);
+                                        }
+                                        Err(e) => {
+                                            err_msg = Some(e.to_string());
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
+
+                            if !quotas.is_empty() {
+                                tracing::info!("Updated {} quotas for account: {} ({})", quotas.len(), acc_id, prov);
+                                let _ = quota_tx.send(CoreBridgeEvent::AccountQuotaUpdated {
+                                    provider: prov,
+                                    account_id: acc_id,
+                                    quotas,
+                                });
+                            } else if let Some(err) = err_msg {
+                                tracing::warn!("Failed to fetch quota for account {} ({}): {}", acc_id, prov, err);
+                                let _ = quota_tx.send(CoreBridgeEvent::StatusChange(format!(
+                                    "Gagal memuat kuota {}: {}",
+                                    prov, err
+                                )));
+                            }
                         });
                     }
                 }

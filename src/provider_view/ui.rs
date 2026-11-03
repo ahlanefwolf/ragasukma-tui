@@ -27,12 +27,29 @@ pub fn render_provider_tab(frame: &mut Frame, area: Rect, state: &ProviderTabSta
             ),
         ]),
         Line::from(vec![
-            Span::styled(" [a/o] ", Theme::key_badge()),
-            Span::styled("Connect New Account  ", Theme::text_secondary()),
-            Span::styled(" [j/k/Down/Up] ", Theme::key_badge()),
-            Span::styled("Select Account  ", Theme::text_secondary()),
+            Span::styled(" [j/k] ", Theme::key_badge()),
+            Span::styled("Pilih  ", Theme::text_secondary()),
+            Span::styled(" [n/a] ", Theme::key_badge()),
+            Span::styled("+Tambah Akun  ", Theme::text_gold()),
+            Span::styled(" [Space/t] ", Theme::key_badge()),
+            Span::styled("Aktif/Nonaktif  ", Theme::text_secondary()),
             Span::styled(" [Enter] ", Theme::key_badge()),
-            Span::styled("Set Active  ", Theme::text_secondary()),
+            Span::styled("Set Default  ", Theme::text_secondary()),
+            Span::styled(" [d] ", Theme::key_badge()),
+            Span::styled("Hapus  ", Theme::text_secondary()),
+            Span::styled(" [r] ", Theme::key_badge()),
+            Span::styled(
+                if state.is_refreshing {
+                    "Refreshing...  "
+                } else {
+                    "Refresh Quota  "
+                },
+                if state.is_refreshing {
+                    Theme::text_gold()
+                } else {
+                    Theme::text_secondary()
+                },
+            ),
             Span::styled(" [Tab] ", Theme::key_badge()),
             Span::styled("Switch View", Theme::text_secondary()),
         ]),
@@ -61,9 +78,9 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
         .map(|(i, acc)| {
             let is_selected = i == state.selected_account_idx;
             let status_badge = if acc.is_active {
-                Span::styled(" ACTIVE ", Theme::badge_gold())
+                Span::styled(" ● AKTIF ", Theme::status_success().add_modifier(Modifier::BOLD))
             } else {
-                Span::styled(format!(" {} ", acc.status), Theme::badge_cyan())
+                Span::styled(" ○ NONAKTIF ", Theme::text_muted())
             };
 
             let prefix = if is_selected { "▶ " } else { "  " };
@@ -98,13 +115,30 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
         })
         .collect();
 
-    let account_list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Theme::border_gold())
-            .title(format!(" Accounts ({}) ", state.accounts.len())),
-    );
-    frame.render_widget(account_list, main_chunks[0]);
+    let list_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border_gold())
+        .title(format!(" Accounts ({}) ", state.accounts.len()));
+
+    if state.accounts.is_empty() {
+        let empty_msg = Paragraph::new(vec![
+            Line::from(""),
+            Line::from(Span::styled("  Belum ada akun.", Theme::text_muted())),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("  Tekan "),
+                Span::styled("[n]", Theme::key_badge()),
+                Span::raw(" atau "),
+                Span::styled("[a]", Theme::key_badge()),
+            ]),
+            Line::from(Span::styled("  untuk login akun baru (OAuth).", Theme::text_gold())),
+        ])
+        .block(list_block);
+        frame.render_widget(empty_msg, main_chunks[0]);
+    } else {
+        let account_list = List::new(items).block(list_block);
+        frame.render_widget(account_list, main_chunks[0]);
+    }
 
     // Right: Selected Account Quotas & Details
     if let Some(account) = state.selected_account() {
@@ -133,9 +167,9 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                 Span::styled("Status:     ", Theme::text_secondary()),
                 Span::styled(
                     if account.is_active {
-                        "● Active Default Account"
+                        "● Aktif (Siap Digunakan - Tekan [Space/t] utk Nonaktifkan)"
                     } else {
-                        "○ Standby"
+                        "○ Nonaktif (Disimpan - Tekan [Space/t] utk Aktifkan)"
                     },
                     if account.is_active {
                         Theme::status_success()
@@ -166,10 +200,14 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
 
         // Model Quotas List with Ratatui Gauges
         let quota_count = account.quotas.len();
-        let constraints: Vec<Constraint> = (0..quota_count)
-            .map(|_| Constraint::Length(3))
-            .chain(std::iter::once(Constraint::Min(0)))
-            .collect();
+        let constraints: Vec<Constraint> = if quota_count == 0 {
+            vec![Constraint::Length(2), Constraint::Min(0)]
+        } else {
+            (0..quota_count)
+                .map(|_| Constraint::Length(3))
+                .chain(std::iter::once(Constraint::Min(0)))
+                .collect()
+        };
 
         let quota_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -183,48 +221,76 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
             .title(format!(" Rate Limits & Model Quotas ({}) ", quota_count));
         frame.render_widget(quota_box, right_chunks[1]);
 
-        for (i, quota) in account.quotas.iter().enumerate() {
-            if i < quota_chunks.len() - 1 {
-                let sub_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(1), Constraint::Length(1)])
-                    .split(quota_chunks[i]);
+        if account.quotas.is_empty() {
+            let empty_text = vec![
+                Line::from(Span::styled("Belum ada data kuota model.", Theme::text_muted())),
+                Line::from(Span::styled("Tekan [r] untuk memuat/menyegarkan kuota dari server...", Theme::text_gold())),
+            ];
+            let p = Paragraph::new(empty_text);
+            frame.render_widget(p, quota_chunks[0]);
+        } else {
+            for (i, quota) in account.quotas.iter().enumerate() {
+                if i < quota_chunks.len() - 1 {
+                    let sub_chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Length(1), Constraint::Length(1)])
+                        .split(quota_chunks[i]);
 
-                let title_line = Line::from(vec![
-                    Span::styled(
-                        format!("● {}", quota.name),
-                        Theme::text_primary().add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(&quota.detail, Theme::text_muted()),
-                    Span::raw("  "),
-                    Span::styled(
-                        format!("(Reset: {})", quota.reset_in),
-                        Theme::text_gold(),
-                    ),
-                ]);
-                let title_p = Paragraph::new(title_line);
-                frame.render_widget(title_p, sub_chunks[0]);
+                    let title_line = Line::from(vec![
+                        Span::styled(
+                            format!("● {}", quota.name),
+                            Theme::text_primary().add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw("  "),
+                        Span::styled(&quota.detail, Theme::text_muted()),
+                        Span::raw("  "),
+                        Span::styled(
+                            format!("(Reset: {})", quota.reset_in),
+                            Theme::text_gold(),
+                        ),
+                    ]);
+                    let title_p = Paragraph::new(title_line);
+                    frame.render_widget(title_p, sub_chunks[0]);
 
-                let gauge_color = if quota.percentage >= 80 {
-                    Theme::STATUS_SUCCESS
-                } else if quota.percentage >= 40 {
-                    Theme::GOLD_PRIMARY
-                } else {
-                    Theme::STATUS_DANGER
-                };
+                    let gauge_color = if quota.percentage >= 80 {
+                        Theme::STATUS_SUCCESS
+                    } else if quota.percentage >= 40 {
+                        Theme::GOLD_PRIMARY
+                    } else {
+                        Theme::STATUS_DANGER
+                    };
 
-                let gauge = Gauge::default()
-                    .gauge_style(
-                        ratatui::style::Style::default()
-                            .fg(gauge_color)
-                            .bg(Theme::BG_SURFACE_ELEVATED),
-                    )
-                    .percent(quota.percentage)
-                    .label(format!("{}% Available", quota.percentage));
+                    let gauge = Gauge::default()
+                        .gauge_style(
+                            ratatui::style::Style::default()
+                                .fg(gauge_color)
+                                .bg(Theme::BG_SURFACE_ELEVATED),
+                        )
+                        .percent(quota.percentage)
+                        .label(format!("{}% Available", quota.percentage));
 
-                frame.render_widget(gauge, sub_chunks[1]);
+                    frame.render_widget(gauge, sub_chunks[1]);
+                }
             }
         }
+    } else {
+        let empty_box = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Theme::border_subtle())
+            .title(" Informasi Akun & Kuota ");
+        let msg = Paragraph::new(vec![
+            Line::from(""),
+            Line::from(Span::styled("  Tidak ada akun yang dipilih.", Theme::text_muted())),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("  Tekan "),
+                Span::styled("[n]", Theme::key_badge()),
+                Span::raw(" atau "),
+                Span::styled("[a]", Theme::key_badge()),
+                Span::styled(" untuk login & tambah akun baru via OAuth browser.", Theme::text_gold()),
+            ]),
+        ])
+        .block(empty_box);
+        frame.render_widget(msg, main_chunks[1]);
     }
 }

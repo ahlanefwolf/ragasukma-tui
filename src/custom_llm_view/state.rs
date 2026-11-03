@@ -224,7 +224,7 @@ impl CustomLlmTabState {
         }
 
         let act = if is_editing { "Updated" } else { "Saved" };
-        let name = candidate.name.clone();
+        let name = candidate.name;
         self.is_form_open = false;
         self.form_error = None;
         Ok(format!("{act} custom provider '{name}' successfully"))
