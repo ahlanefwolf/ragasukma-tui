@@ -97,10 +97,9 @@ impl AgentWorkspaceState {
             };
         }
 
-        // Global shortcuts visible in footer (q, ?, 1-5) when not typing in an input
+        // Global shortcuts visible in footer (q, 1-5) when not typing in an input
         match code {
             KeyCode::Char('q') => return Some(Action::Quit),
-            KeyCode::Char('?') | KeyCode::F(1) => return Some(Action::ToggleHelp),
             KeyCode::Char('1') => return Some(Action::SwitchTab(0)),
             KeyCode::Char('2') => return Some(Action::SwitchTab(1)),
             KeyCode::Char('3') => return Some(Action::SwitchTab(2)),

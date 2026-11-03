@@ -342,8 +342,6 @@ pub fn get_footer_key_hints(state: &ProviderTabState) -> Vec<Span<'static>> {
             Span::raw("Refresh "),
             Span::styled(" [1-5] ", Theme::key_badge()),
             Span::raw("Tabs "),
-            Span::styled(" [?] ", Theme::key_badge()),
-            Span::raw("Help "),
             Span::styled(" [q] ", Theme::key_badge()),
             Span::raw("Quit"),
         ],
@@ -356,47 +354,8 @@ pub fn get_footer_key_hints(state: &ProviderTabState) -> Vec<Span<'static>> {
             Span::raw("Refresh "),
             Span::styled(" [1-5] ", Theme::key_badge()),
             Span::raw("Tabs "),
-            Span::styled(" [?] ", Theme::key_badge()),
-            Span::raw("Help "),
             Span::styled(" [q] ", Theme::key_badge()),
             Span::raw("Quit"),
         ],
     }
-}
-
-pub fn get_help_lines(provider_name: &str) -> Vec<Line<'static>> {
-    vec![
-        Line::from(vec![
-            Span::styled("   Tab            : ", Theme::badge_cyan()),
-            Span::raw("Switch focus between Accounts and Quotas card"),
-        ]),
-        Line::from(vec![
-            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
-            Span::raw(format!("Navigate {provider_name} accounts or scroll quotas")),
-        ]),
-        Line::from(vec![
-            Span::styled("   Space          : ", Theme::badge_cyan()),
-            Span::raw("Toggle active/inactive status of selected account"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Enter          : ", Theme::badge_cyan()),
-            Span::raw("Set selected account as Default active"),
-        ]),
-        Line::from(vec![
-            Span::styled("   a              : ", Theme::badge_cyan()),
-            Span::raw(format!("Add new {provider_name} account via OAuth")),
-        ]),
-        Line::from(vec![
-            Span::styled("   d              : ", Theme::badge_cyan()),
-            Span::raw("Delete selected account"),
-        ]),
-        Line::from(vec![
-            Span::styled("   r              : ", Theme::badge_cyan()),
-            Span::raw("Refresh model rate limits & quota usage"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Ctrl+↓ / Ctrl+↑: ", Theme::badge_cyan()),
-            Span::raw("Scroll Model Quotas at any time"),
-        ]),
-    ]
 }

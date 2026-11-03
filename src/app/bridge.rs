@@ -71,6 +71,7 @@ impl App {
                 account_id,
                 quotas,
             } => {
+                let model_count = quotas.len();
                 let p = match provider.to_lowercase().as_str() {
                     "antigravity" => &mut self.antigravity,
                     "codex" => &mut self.codex,
@@ -78,7 +79,7 @@ impl App {
                     _ => return,
                 };
                 p.update_account_quotas(&account_id, quotas);
-                self.set_status(format!("Updated quota for {} account", provider));
+                self.set_status(format!("Updated quota for {} ({} models)", provider, model_count));
             }
             CoreBridgeEvent::ProjectsLoaded {
                 projects,

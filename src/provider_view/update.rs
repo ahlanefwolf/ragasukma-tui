@@ -59,16 +59,21 @@ pub fn handle_provider_action(
         }
         Action::RefreshQuota => {
             if let Some(tx) = bridge_cmd_tx {
-                let prov = match active_tab {
-                    1 => "antigravity",
-                    2 => "codex",
-                    3 => "claude",
-                    _ => "",
+                let target = match active_tab {
+                    1 => antigravity.selected_account().map(|a| ("antigravity", a.id.clone(), a.email.clone())),
+                    2 => codex.selected_account().map(|a| ("codex", a.id.clone(), a.email.clone())),
+                    3 => claude.selected_account().map(|a| ("claude", a.id.clone(), a.email.clone())),
+                    _ => None,
                 };
-                if !prov.is_empty() {
-                    let _ = tx.send(CoreBridgeCommand::RefreshQuota {
+
+                if let Some((prov, acc_id, email)) = target {
+                    let _ = tx.send(CoreBridgeCommand::RefreshAccountQuota {
                         provider: prov.to_string(),
+                        account_id: acc_id,
                     });
+                    return Some(Some(format!("Refreshing {} quota for {}...", prov, email)));
+                } else {
+                    return Some(Some("No account selected to refresh quota".to_string()));
                 }
             }
             Some(Some("Refreshing provider model quotas...".to_string()))

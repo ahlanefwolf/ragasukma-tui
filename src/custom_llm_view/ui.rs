@@ -453,60 +453,10 @@ pub fn get_footer_key_hints(state: &CustomLlmTabState) -> Vec<Span<'static>> {
             Span::raw("Toggle Active "),
             Span::styled(" [1-5] ", Theme::key_badge()),
             Span::raw("Tabs "),
-            Span::styled(" [?] ", Theme::key_badge()),
-            Span::raw("Help "),
             Span::styled(" [q] ", Theme::key_badge()),
             Span::raw("Quit "),
         ]
     }
-}
-
-pub fn get_help_lines(state: &CustomLlmTabState) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    if state.is_form_open {
-        lines.push(Line::from(vec![
-            Span::styled("   Tab / ↓        : ", Theme::badge_cyan()),
-            Span::raw("Pindah ke field input berikutnya"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   Shift+Tab / ↑  : ", Theme::badge_cyan()),
-            Span::raw("Pindah ke field input sebelumnya"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   Space          : ", Theme::badge_cyan()),
-            Span::raw("Toggle checkbox enable/disable pada field provider"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   Enter          : ", Theme::badge_cyan()),
-            Span::raw("Simpan konfigurasi custom LLM endpoint"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   Esc            : ", Theme::badge_cyan()),
-            Span::raw("Batal dan tutup form dialog"),
-        ]));
-    } else {
-        lines.push(Line::from(vec![
-            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
-            Span::raw("Pilih provider LLM kustom dari daftar"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   a              : ", Theme::badge_cyan()),
-            Span::raw("Tambah provider LLM kustom baru (OpenAI-compatible)"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   e              : ", Theme::badge_cyan()),
-            Span::raw("Edit konfigurasi model & base URL yang dipilih"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   Space          : ", Theme::badge_cyan()),
-            Span::raw("Aktifkan / nonaktifkan provider yang dipilih"),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("   d              : ", Theme::badge_cyan()),
-            Span::raw("Hapus endpoint custom LLM terpilih"),
-        ]));
-    }
-    lines
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
