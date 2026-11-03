@@ -227,6 +227,46 @@ pub fn handle_agent_action(
                 None
             }
         }
+        Action::AgentPasteClipboard => {
+            match arboard::Clipboard::new() {
+                Ok(mut clipboard) => match clipboard.get_text() {
+                    Ok(text) => {
+                        for ch in text.chars() {
+                            agent.insert_char(ch);
+                        }
+                        Some("Pasted from clipboard".to_string())
+                    }
+                    Err(e) => Some(format!("Clipboard read error: {}", e)),
+                },
+                Err(e) => Some(format!("Clipboard error: {}", e)),
+            }
+        }
+        Action::AgentCopyActive => {
+            let text_to_copy = if !agent.input_buffer.is_empty() {
+                agent.input_buffer.clone()
+            } else if let Some(msg) = agent.messages.last() {
+                msg.content.clone()
+            } else {
+                String::new()
+            };
+
+            if text_to_copy.is_empty() {
+                Some("Nothing to copy".to_string())
+            } else {
+                match arboard::Clipboard::new() {
+                    Ok(mut clipboard) => match clipboard.set_text(text_to_copy) {
+                        Ok(()) => Some("Copied to clipboard".to_string()),
+                        Err(e) => Some(format!("Clipboard write error: {}", e)),
+                    },
+                    Err(e) => Some(format!("Clipboard error: {}", e)),
+                }
+            }
+        }
+        Action::AgentSelectAllInput => {
+            // Selecting all moves cursor to the end
+            agent.cursor_pos = agent.input_buffer.len();
+            Some(format!("Selected all ({} chars)", agent.input_buffer.len()))
+        }
         Action::AgentCancelTurn => {
             if let Some(tx) = bridge_cmd_tx {
                 let _ = tx.send(CoreBridgeCommand::CancelTurn);

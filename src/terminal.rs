@@ -1,8 +1,6 @@
 use color_eyre::Result;
 use crossterm::{
-    cursor,
-    event::{DisableMouseCapture, EnableMouseCapture},
-    execute,
+    cursor, execute,
     terminal::{
         disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
@@ -38,7 +36,7 @@ pub fn init() -> Result<TuiTerminal> {
 
     enable_raw_mode()?;
     let mut out = stdout();
-    execute!(out, EnterAlternateScreen, EnableMouseCapture, cursor::Hide)?;
+    execute!(out, EnterAlternateScreen, cursor::Hide)?;
 
     let backend = CrosstermBackend::new(out);
     let terminal = Terminal::new(backend)?;
@@ -50,7 +48,7 @@ pub fn init() -> Result<TuiTerminal> {
 pub fn restore() -> Result<()> {
     if crossterm::terminal::is_raw_mode_enabled().unwrap_or(false) {
         let mut out = stdout();
-        execute!(out, LeaveAlternateScreen, DisableMouseCapture, cursor::Show)?;
+        execute!(out, LeaveAlternateScreen, cursor::Show)?;
         disable_raw_mode()?;
     }
     Ok(())

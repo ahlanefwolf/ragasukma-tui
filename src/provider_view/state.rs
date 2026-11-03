@@ -1,4 +1,4 @@
-use super::types::{AccountInfo, ModelQuotaItem, ProviderTabState};
+use super::types::{AccountInfo, ModelQuotaItem, ProviderFocusArea, ProviderTabState};
 use super::{antigravity, claude, codex};
 use ragasukma_core::llm::providers::antigravity::provider::AntigravityProvider;
 use ragasukma_core::llm::providers::claude::ClaudeProvider;
@@ -11,6 +11,8 @@ impl ProviderTabState {
             icon: "🌌".to_string(),
             accounts: Vec::new(),
             selected_account_idx: 0,
+            focus_area: ProviderFocusArea::Accounts,
+            quota_scroll_offset: 0,
             last_refreshed: None,
             is_refreshing: false,
         }
@@ -22,6 +24,8 @@ impl ProviderTabState {
             icon: "🤖".to_string(),
             accounts: Vec::new(),
             selected_account_idx: 0,
+            focus_area: ProviderFocusArea::Accounts,
+            quota_scroll_offset: 0,
             last_refreshed: None,
             is_refreshing: false,
         }
@@ -33,6 +37,8 @@ impl ProviderTabState {
             icon: "🎭".to_string(),
             accounts: Vec::new(),
             selected_account_idx: 0,
+            focus_area: ProviderFocusArea::Accounts,
+            quota_scroll_offset: 0,
             last_refreshed: None,
             is_refreshing: false,
         }
@@ -68,6 +74,7 @@ impl ProviderTabState {
     pub fn next_account(&mut self) {
         if !self.accounts.is_empty() {
             self.selected_account_idx = (self.selected_account_idx + 1) % self.accounts.len();
+            self.quota_scroll_offset = 0;
         }
     }
 
@@ -78,7 +85,39 @@ impl ProviderTabState {
             } else {
                 self.selected_account_idx -= 1;
             }
+            self.quota_scroll_offset = 0;
         }
+    }
+
+    pub fn scroll_quota_down(&mut self, max_visible: usize) {
+        let quota_count = self.selected_account().map_or(0, |a| a.quotas.len());
+        if quota_count > max_visible {
+            let max_scroll = quota_count.saturating_sub(max_visible);
+            if self.quota_scroll_offset < max_scroll {
+                self.quota_scroll_offset = (self.quota_scroll_offset + 1).min(max_scroll);
+            }
+        }
+    }
+
+    pub fn scroll_quota_up(&mut self) {
+        if self.quota_scroll_offset > 0 {
+            self.quota_scroll_offset = self.quota_scroll_offset.saturating_sub(1);
+        }
+    }
+
+    pub fn toggle_focus(&mut self) {
+        self.focus_area = match self.focus_area {
+            ProviderFocusArea::Accounts => ProviderFocusArea::Quotas,
+            ProviderFocusArea::Quotas => ProviderFocusArea::Accounts,
+        };
+    }
+
+    pub fn set_focus(&mut self, area: ProviderFocusArea) {
+        self.focus_area = area;
+    }
+
+    pub fn reset_quota_scroll(&mut self) {
+        self.quota_scroll_offset = 0;
     }
 
     pub fn update_account_quotas(&mut self, account_id: &str, quotas: Vec<ModelQuotaItem>) {
@@ -106,6 +145,32 @@ impl ProviderTabState {
                 }
                 return Some(new_status);
             }
+        } else if self.provider_name.contains("Codex") {
+            let mut provider = CodexProvider::new();
+            if let Ok(new_status) = provider.toggle_account_by_id(&acc_id) {
+                if let Some(a) = self.accounts.get_mut(self.selected_account_idx) {
+                    a.is_active = new_status;
+                    a.status = if new_status {
+                        "active".to_string()
+                    } else {
+                        "inactive".to_string()
+                    };
+                }
+                return Some(new_status);
+            }
+        } else if self.provider_name.contains("Claude") {
+            let mut provider = ClaudeProvider::new();
+            if let Ok(new_status) = provider.toggle_account_by_id(&acc_id) {
+                if let Some(a) = self.accounts.get_mut(self.selected_account_idx) {
+                    a.is_active = new_status;
+                    a.status = if new_status {
+                        "active".to_string()
+                    } else {
+                        "inactive".to_string()
+                    };
+                }
+                return Some(new_status);
+            }
         }
         None
     }
@@ -118,6 +183,48 @@ impl ProviderTabState {
 
         if self.provider_name.contains("Antigravity") {
             let mut provider = AntigravityProvider::new();
+            let mut found = false;
+            for a in &mut provider.accounts {
+                if a.id == acc_id {
+                    a.is_active = true;
+                    found = true;
+                }
+            }
+            if found && provider.save_accounts().is_ok() {
+                for (i, a) in self.accounts.iter_mut().enumerate() {
+                    let is_target = i == self.selected_account_idx;
+                    a.is_active = is_target;
+                    a.status = if is_target {
+                        "active".to_string()
+                    } else {
+                        "inactive".to_string()
+                    };
+                }
+                return Some(());
+            }
+        } else if self.provider_name.contains("Codex") {
+            let mut provider = CodexProvider::new();
+            let mut found = false;
+            for a in &mut provider.accounts {
+                if a.id == acc_id {
+                    a.is_active = true;
+                    found = true;
+                }
+            }
+            if found && provider.save_accounts().is_ok() {
+                for (i, a) in self.accounts.iter_mut().enumerate() {
+                    let is_target = i == self.selected_account_idx;
+                    a.is_active = is_target;
+                    a.status = if is_target {
+                        "active".to_string()
+                    } else {
+                        "inactive".to_string()
+                    };
+                }
+                return Some(());
+            }
+        } else if self.provider_name.contains("Claude") {
+            let mut provider = ClaudeProvider::new();
             let mut found = false;
             for a in &mut provider.accounts {
                 if a.id == acc_id {

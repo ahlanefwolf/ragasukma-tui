@@ -47,7 +47,7 @@ fn render_header_banner(frame: &mut Frame, area: Rect) {
         Span::styled("Add Endpoint   ", Theme::text_gold()),
         Span::styled(" [e] ", Theme::key_badge()),
         Span::styled("Edit   ", Theme::text_gold()),
-        Span::styled(" [Space/t] ", Theme::key_badge()),
+        Span::styled(" [Space] ", Theme::key_badge()),
         Span::styled("Toggle Active   ", Theme::text_gold()),
         Span::styled(" [d] ", Theme::key_badge()),
         Span::styled("Delete   ", Theme::status_danger()),

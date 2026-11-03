@@ -58,6 +58,11 @@ impl AgentWorkspaceState {
         if self.is_input_focused {
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 return match code {
+                    KeyCode::Char('v') | KeyCode::Char('V') => Some(Action::AgentPasteClipboard),
+                    KeyCode::Char('c') | KeyCode::Char('C') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                        Some(Action::AgentCopyActive)
+                    }
+                    KeyCode::Char('a') | KeyCode::Char('A') => Some(Action::AgentSelectAllInput),
                     KeyCode::Char('c') => {
                         if self.is_running {
                             Some(Action::AgentCancelTurn)

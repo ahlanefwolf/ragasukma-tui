@@ -1268,7 +1268,7 @@ pub fn render_diff_preview_modal(
         rendered_lines.push(Line::from(Span::styled(&l.content, style)));
     }
 
-    let scroll_info = format!(" Lines {}-{}/{} [↑/↓/PgUp/PgDn] ", start_idx + 1, end_idx, total_lines);
+    let scroll_info = format!(" Lines {}-{}/{} ", start_idx + 1, end_idx, total_lines);
     let diff_widget = Paragraph::new(rendered_lines).block(
         Block::default()
             .borders(Borders::ALL)

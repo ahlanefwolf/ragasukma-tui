@@ -60,22 +60,7 @@ pub fn ensure_assets_exist() {
         "antigravity_accounts.json",
         &assets_dir,
         &config_dir,
-        r#"[
-  {
-    "id": "ag-acc-default-1",
-    "email": "user@gmail.com",
-    "refresh_token": "",
-    "access_token": "",
-    "expires_at": 0,
-    "project_id": "ragasukma-default",
-    "tier_id": "free-tier",
-    "rate_limited_until": 0,
-    "model_rate_limits": {},
-    "consecutive_errors": 0,
-    "is_active": true
-  }
-]
-"#,
+        "[]\n",
     );
 
     // 2. Codex accounts
@@ -83,17 +68,7 @@ pub fn ensure_assets_exist() {
         "codex_accounts.json",
         &assets_dir,
         &config_dir,
-        r#"[
-  {
-    "id": "codex-acc-default-1",
-    "email": "user@openai.com",
-    "api_key": "",
-    "organization": "",
-    "tier": "pay-as-you-go",
-    "is_active": true
-  }
-]
-"#,
+        "[]\n",
     );
 
     // 3. Claude accounts
@@ -101,16 +76,7 @@ pub fn ensure_assets_exist() {
         "claude_accounts.json",
         &assets_dir,
         &config_dir,
-        r#"[
-  {
-    "id": "claude-acc-default-1",
-    "email": "user@anthropic.com",
-    "session_key": "",
-    "tier": "free",
-    "is_active": true
-  }
-]
-"#,
+        "[]\n",
     );
 
     // 4. Custom LLM / API accounts
@@ -118,30 +84,7 @@ pub fn ensure_assets_exist() {
         "api_llm_accounts.json",
         &assets_dir,
         &config_dir,
-        r#"[
-  {
-    "prefix": "groq",
-    "name": "Groq Cloud LPU",
-    "base_url": "https://api.groq.com/openai/v1",
-    "api_key": "",
-    "enabled": false
-  },
-  {
-    "prefix": "deepseek",
-    "name": "DeepSeek API Platform",
-    "base_url": "https://api.deepseek.com/v1",
-    "api_key": "",
-    "enabled": false
-  },
-  {
-    "prefix": "local",
-    "name": "Local Ollama / vLLM",
-    "base_url": "http://localhost:11434/v1",
-    "api_key": "",
-    "enabled": true
-  }
-]
-"#,
+        "[]\n",
     );
 }
 

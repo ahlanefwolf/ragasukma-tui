@@ -20,7 +20,7 @@ pub async fn listen_for_oauth_callback(
     let addr = format!("127.0.0.1:{}", port);
     let listener = TcpListener::bind(&addr)
         .await
-        .map_err(|e| format!("Gagal mendengarkan di {}: {}", addr, e))?;
+        .map_err(|e| format!("Failed to listen on {}: {}", addr, e))?;
 
     let timeout_duration = Duration::from_secs(180);
 
@@ -28,14 +28,14 @@ pub async fn listen_for_oauth_callback(
     let (mut stream, _) = match accept_res {
         Ok(Ok(pair)) => pair,
         Ok(Err(e)) => return Err(format!("Socket accept error: {}", e)),
-        Err(_) => return Err("Waktu otentikasi habis (timeout 3 menit)".to_string()),
+        Err(_) => return Err("Authentication timed out (3 minute limit)".to_string()),
     };
 
     let mut buffer = [0u8; 4096];
     let bytes_read = stream
         .read(&mut buffer)
         .await
-        .map_err(|e| format!("Gagal membaca request dari browser: {}", e))?;
+        .map_err(|e| format!("Failed to read request from browser: {}", e))?;
 
     let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
     let first_line = request_str.lines().next().unwrap_or_default();
@@ -63,9 +63,9 @@ pub async fn listen_for_oauth_callback(
         let html_response = format!(
             "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
             <html><body style='font-family: sans-serif; text-align: center; padding: 50px;'>\
-            <h1 style='color: #ef4444;'>Autentikasi Ditolak</h1>\
+            <h1 style='color: #ef4444;'>Authentication Denied</h1>\
             <p>{}</p>\
-            <p>Anda dapat menutup jendela ini.</p>\
+            <p>You can close this window now.</p>\
             </body></html>",
             fallback
         );
@@ -77,9 +77,9 @@ pub async fn listen_for_oauth_callback(
         Some(c) if !c.is_empty() => c.clone(),
         _ => {
             let html_response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
-                <html><body><h1>Error: OAuth code tidak ditemukan</h1></body></html>";
+                <html><body><h1>Error: OAuth code not found</h1></body></html>";
             let _ = stream.write_all(html_response.as_bytes()).await;
-            return Err("OAuth code tidak ditemukan pada callback request".to_string());
+            return Err("OAuth code not found in callback request".to_string());
         }
     };
 
@@ -87,9 +87,9 @@ pub async fn listen_for_oauth_callback(
         && state != expected_state
     {
         let html_response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
-            <html><body><h1>Error: State OAuth tidak valid (CSRF mismatch)</h1></body></html>";
+            <html><body><h1>Error: Invalid OAuth state (CSRF mismatch)</h1></body></html>";
         let _ = stream.write_all(html_response.as_bytes()).await;
-        return Err("State mismatch: kemungkinan serangan CSRF atau sesi kadaluarsa".to_string());
+        return Err("State mismatch: potential CSRF attack or session expired".to_string());
     }
 
     Ok((
@@ -106,13 +106,13 @@ pub async fn respond_success(mut stream: tokio::net::TcpStream, email: &str) {
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
         <!DOCTYPE html>\
         <html>\
-        <head><title>Ragasukma OAuth - Sukses</title></head>\
+        <head><title>Ragasukma OAuth - Success</title></head>\
         <body style='background: #0f172a; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; text-align: center; padding-top: 80px;'>\
             <div style='background: #1e293b; display: inline-block; padding: 40px 60px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid #334155;'>\
                 <div style='font-size: 54px; margin-bottom: 20px;'>🎉</div>\
-                <h1 style='color: #10b981; margin: 0 0 10px 0;'>Autentikasi Berhasil!</h1>\
-                <p style='color: #94a3b8; font-size: 16px; margin: 0 0 24px 0;'>Akun <b>{}</b> telah terhubung dengan Ragasukma TUI.</p>\
-                <p style='color: #64748b; font-size: 14px;'>Tab ini dapat ditutup dengan aman. Silakan kembali ke terminal Anda.</p>\
+                <h1 style='color: #10b981; margin: 0 0 10px 0;'>Authentication Successful!</h1>\
+                <p style='color: #94a3b8; font-size: 16px; margin: 0 0 24px 0;'>Account <b>{}</b> is now connected to Ragasukma TUI.</p>\
+                <p style='color: #64748b; font-size: 14px;'>You may safely close this tab and return to your terminal.</p>\
             </div>\
             <script>setTimeout(function() {{ window.close(); }}, 3000);</script>\
         </body>\
@@ -130,7 +130,7 @@ pub async fn respond_error(mut stream: tokio::net::TcpStream, err: &str) {
         <head><title>Ragasukma OAuth - Error</title></head>\
         <body style='background: #0f172a; color: #f8fafc; font-family: sans-serif; text-align: center; padding-top: 80px;'>\
             <div style='background: #1e293b; display: inline-block; padding: 40px 60px; border-radius: 12px; border: 1px solid #ef4444;'>\
-                <h1 style='color: #ef4444;'>Gagal Menyelesaikan OAuth</h1>\
+                <h1 style='color: #ef4444;'>Failed to Complete OAuth</h1>\
                 <p style='color: #94a3b8;'>{}</p>\
             </div>\
         </body>\

@@ -9,6 +9,11 @@ impl App {
                 self.set_status(format!("Agent siap (session {})", session_id));
             }
             CoreBridgeEvent::StatusChange(msg) => {
+                if msg.contains("kuota") || msg.contains("quota") {
+                    self.antigravity.is_refreshing = false;
+                    self.codex.is_refreshing = false;
+                    self.claude.is_refreshing = false;
+                }
                 self.set_status(msg);
             }
             CoreBridgeEvent::Delta(delta) => {
@@ -72,9 +77,8 @@ impl App {
                     "claude" => &mut self.claude,
                     _ => return,
                 };
-                if let Some(acc) = p.accounts.iter_mut().find(|a| a.id == account_id) {
-                    acc.quotas = quotas;
-                }
+                p.update_account_quotas(&account_id, quotas);
+                self.set_status(format!("Updated quota for {} account", provider));
             }
             CoreBridgeEvent::ProjectsLoaded {
                 projects,

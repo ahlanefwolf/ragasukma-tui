@@ -148,7 +148,9 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         match app.active_tab {
             0 => crate::agent_view::ui::get_footer_key_hints(&app.agent, area.width),
-            1..=3 => crate::provider_view::ui::get_footer_key_hints(),
+            1 => crate::provider_view::ui::get_footer_key_hints(&app.antigravity),
+            2 => crate::provider_view::ui::get_footer_key_hints(&app.codex),
+            3 => crate::provider_view::ui::get_footer_key_hints(&app.claude),
             4 => crate::custom_llm_view::ui::get_footer_key_hints(&app.custom_llm),
             _ => vec![],
         }

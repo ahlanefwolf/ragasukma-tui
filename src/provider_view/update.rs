@@ -16,24 +16,24 @@ pub fn handle_provider_action(
             let status = match active_tab {
                 1 => {
                     if let Some(status) = antigravity.toggle_selected_account() {
-                        let status_label = if status { "Aktif" } else { "Nonaktif" };
-                        Some(format!("Status akun Antigravity diubah: {status_label}"))
+                        let status_label = if status { "Active" } else { "Inactive" };
+                        Some(format!("Antigravity account status updated: {status_label}"))
                     } else {
                         None
                     }
                 }
                 2 => {
                     if let Some(status) = codex.toggle_selected_account() {
-                        let status_label = if status { "Aktif" } else { "Nonaktif" };
-                        Some(format!("Status akun Codex diubah: {status_label}"))
+                        let status_label = if status { "Active" } else { "Inactive" };
+                        Some(format!("Codex account status updated: {status_label}"))
                     } else {
                         None
                     }
                 }
                 3 => {
                     if let Some(status) = claude.toggle_selected_account() {
-                        let status_label = if status { "Aktif" } else { "Nonaktif" };
-                        Some(format!("Status akun Claude diubah: {status_label}"))
+                        let status_label = if status { "Active" } else { "Inactive" };
+                        Some(format!("Claude account status updated: {status_label}"))
                     } else {
                         None
                     }
@@ -45,13 +45,13 @@ pub fn handle_provider_action(
         Action::SetAccountActive => {
             let status = match active_tab {
                 1 if antigravity.set_selected_account_active().is_some() => {
-                    Some("Akun Antigravity disetel sebagai Default".to_string())
+                    Some("Antigravity account set as Default".to_string())
                 }
                 2 if codex.set_selected_account_active().is_some() => {
-                    Some("Akun Codex disetel sebagai Default".to_string())
+                    Some("Codex account set as Default".to_string())
                 }
                 3 if claude.set_selected_account_active().is_some() => {
-                    Some("Akun Claude disetel sebagai Default".to_string())
+                    Some("Claude account set as Default".to_string())
                 }
                 _ => None,
             };
@@ -71,19 +71,55 @@ pub fn handle_provider_action(
                     });
                 }
             }
-            Some(Some("Menyegarkan kuota model provider...".to_string()))
+            Some(Some("Refreshing provider model quotas...".to_string()))
+        }
+        Action::QuotaScrollDown => {
+            match active_tab {
+                1 => antigravity.scroll_quota_down(5),
+                2 => codex.scroll_quota_down(5),
+                3 => claude.scroll_quota_down(5),
+                _ => {}
+            }
+            Some(None)
+        }
+        Action::QuotaScrollUp => {
+            match active_tab {
+                1 => antigravity.scroll_quota_up(),
+                2 => codex.scroll_quota_up(),
+                3 => claude.scroll_quota_up(),
+                _ => {}
+            }
+            Some(None)
+        }
+        Action::ProviderToggleFocus => {
+            let label = match active_tab {
+                1 => {
+                    antigravity.toggle_focus();
+                    format!("Focus: {:?}", antigravity.focus_area)
+                }
+                2 => {
+                    codex.toggle_focus();
+                    format!("Focus: {:?}", codex.focus_area)
+                }
+                3 => {
+                    claude.toggle_focus();
+                    format!("Focus: {:?}", claude.focus_area)
+                }
+                _ => String::new(),
+            };
+            Some(Some(label))
         }
         Action::ConfirmDelete => {
             let status = match active_tab {
                 1 => antigravity
                     .remove_selected_account()
-                    .map(|name| format!("Akun Antigravity '{}' berhasil dihapus", name)),
+                    .map(|name| format!("Antigravity account '{}' deleted successfully", name)),
                 2 => codex
                     .remove_selected_account()
-                    .map(|name| format!("Akun Codex '{}' berhasil dihapus", name)),
+                    .map(|name| format!("Codex account '{}' deleted successfully", name)),
                 3 => claude
                     .remove_selected_account()
-                    .map(|name| format!("Akun Claude '{}' berhasil dihapus", name)),
+                    .map(|name| format!("Claude account '{}' deleted successfully", name)),
                 _ => None,
             };
             Some(status)
