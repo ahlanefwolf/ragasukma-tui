@@ -311,3 +311,94 @@ pub fn render_diff_preview_modal(frame: &mut Frame, diff: &DiffApprovalState, ar
     let p = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
     frame.render_widget(p, popup_area);
 }
+
+pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceState, area: Rect) {
+    let popup_area = centered_rect(60, 50, area);
+    frame.render_widget(Clear, popup_area);
+
+    let total = state.available_models.len();
+    let sel = state.model_modal.selected_idx;
+    let title = if total > 0 {
+        format!(" 🏷️ Select Model [{}/{}] ", sel + 1, total)
+    } else {
+        " 🏷️ Select Model ".to_string()
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border_focused())
+        .title(Span::styled(title, Theme::header_title()))
+        .title_bottom(Line::from(vec![
+            Span::styled(" [↑/↓/←/→] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Navigate  ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("[Enter] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Select  ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("[Esc] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Cancel", Style::default().fg(Theme::TEXT_MUTED)),
+        ]))
+        .style(Theme::block_base());
+
+    let inner_height = (popup_area.height.saturating_sub(2) as usize).max(1);
+    let offset = if sel >= inner_height {
+        sel.saturating_sub(inner_height - 1)
+    } else {
+        0
+    };
+    let end = (offset + inner_height).min(total);
+
+    let mut items: Vec<ListItem> = Vec::new();
+
+    if total == 0 {
+        items.push(ListItem::new(Line::from(vec![
+            Span::styled(" [No models available] ", Style::default().fg(Theme::TEXT_MUTED)),
+        ])));
+    } else {
+        for (idx, m) in state.available_models[offset..end].iter().enumerate() {
+            let actual_idx = offset + idx;
+            let is_selected = actual_idx == sel;
+            let is_active = m == &state.active_model;
+
+            let line = if is_selected {
+                Line::from(vec![
+                    Span::styled(" ❯ ", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("[◈ {}]", m), Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
+                    if is_active {
+                        Span::styled(" (current)", Style::default().fg(Theme::CYAN_ACCENT))
+                    } else {
+                        Span::raw("")
+                    },
+                ])
+            } else if is_active {
+                Line::from(vec![
+                    Span::raw("   "),
+                    Span::styled(format!("[✓ {}]", m), Style::default().fg(Theme::CYAN_ACCENT)),
+                    Span::styled(" (current)", Style::default().fg(Theme::CYAN_ACCENT)),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::raw("   "),
+                    Span::styled(format!("[○ {}]", m), Style::default().fg(Theme::TEXT_SECONDARY)),
+                ])
+            };
+
+            items.push(ListItem::new(line));
+        }
+    }
+
+    let list = List::new(items).block(block);
+    frame.render_widget(list, popup_area);
+
+    if total > inner_height {
+        let mut scrollbar_state = ScrollbarState::default()
+            .content_length(total)
+            .position(sel);
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼")),
+            popup_area,
+            &mut scrollbar_state,
+        );
+    }
+}

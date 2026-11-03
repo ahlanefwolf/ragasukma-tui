@@ -121,6 +121,12 @@ pub enum Action {
     AgentToggleSidebar,
     AgentFocusPrompt,
     AgentCycleModel,
+    AgentOpenModelModal,
+    AgentCloseModelModal,
+    AgentSelectNextModalModel,
+    AgentSelectPrevModalModel,
+    AgentApplyModalModel,
+    AgentRefreshModels,
 
     // Multi-Folder Workspace Support (1:1 with web agent)
     AgentOpenAddFolderModal,

@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 
 use super::types::{
     AddFolderModalState, AgentFocusArea, AgentSidebarTab, ApprovalRequest, ChatMessage,
-    CreateProjectModalState, FileTagQuery, MessageRole, ProjectItem, ProjectSwitcherModalState,
-    TagItem, TaskSessionItem, TokenBreakdown, ToolFilter, WorkspaceFileNode, WorkspaceFolderItem,
+    CreateProjectModalState, FileTagQuery, MessageRole, ModelSelectorModalState, ProjectItem,
+    ProjectSwitcherModalState, TagItem, TaskSessionItem, TokenBreakdown, ToolFilter,
+    WorkspaceFileNode, WorkspaceFolderItem,
 };
 use crate::core_bridge::PersistedMessageDto;
 
@@ -58,6 +59,7 @@ pub struct AgentWorkspaceState {
     pub active_project_name: String,
     pub project_modal: ProjectSwitcherModalState,
     pub create_project_modal: CreateProjectModalState,
+    pub model_modal: ModelSelectorModalState,
 
     // Phase 6: Responsive Layout & Inspection
     pub is_sidebar_visible: bool,
@@ -67,21 +69,26 @@ pub struct AgentWorkspaceState {
 
 impl Default for AgentWorkspaceState {
     fn default() -> Self {
+        let available_models = crate::agent_view::models::fetch_core_available_models();
+        let active_model = available_models
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "cc:claude-3-5-sonnet-20241022".to_string());
+
         Self {
             messages: Vec::new(),
             input_buffer: String::new(),
             cursor_pos: 0,
             scroll_offset: 0,
+            inspector_scroll_offset: 0,
+            is_sidebar_visible: true,
+            is_inspector_visible: true,
             is_input_focused: false,
             focus_area: AgentFocusArea::Chat,
             is_running: false,
             active_turn_id: None,
-            active_model: "claude-3-5-sonnet-20241022".to_string(),
-            available_models: vec![
-                "claude-3-5-sonnet-20241022".to_string(),
-                "gpt-4o".to_string(),
-                "gemini-1.5-pro".to_string(),
-            ],
+            active_model,
+            available_models,
             expanded_tools: HashSet::new(),
             expanded_tool_idx: None,
             reasoning_expanded: false,
@@ -110,9 +117,7 @@ impl Default for AgentWorkspaceState {
             active_project_name: "No Project".to_string(),
             project_modal: ProjectSwitcherModalState::default(),
             create_project_modal: CreateProjectModalState::default(),
-            is_sidebar_visible: true,
-            is_inspector_visible: true,
-            inspector_scroll_offset: 0,
+            model_modal: ModelSelectorModalState::default(),
         }
     }
 }
@@ -357,6 +362,20 @@ impl AgentWorkspaceState {
         }
     }
 
+    pub fn refresh_available_models(&mut self) -> usize {
+        let fetched = crate::agent_view::models::fetch_core_available_models();
+        let count = fetched.len();
+        if !fetched.is_empty() {
+            if !fetched.contains(&self.active_model)
+                && let Some(first) = fetched.first()
+            {
+                self.active_model = first.clone();
+            }
+            self.available_models = fetched;
+        }
+        count
+    }
+
     pub fn cycle_model(&mut self) {
         if self.available_models.is_empty() {
             return;
@@ -367,6 +386,43 @@ impl AgentWorkspaceState {
         } else {
             self.active_model = self.available_models[0].clone();
         }
+    }
+
+    pub fn open_model_modal(&mut self) {
+        self.model_modal.is_open = true;
+        if let Some(idx) = self.available_models.iter().position(|m| m == &self.active_model) {
+            self.model_modal.selected_idx = idx;
+        } else {
+            self.model_modal.selected_idx = 0;
+        }
+    }
+
+    pub fn close_model_modal(&mut self) {
+        self.model_modal.is_open = false;
+    }
+
+    pub fn select_next_modal_model(&mut self) {
+        if !self.available_models.is_empty() {
+            self.model_modal.selected_idx =
+                (self.model_modal.selected_idx + 1) % self.available_models.len();
+        }
+    }
+
+    pub fn select_prev_modal_model(&mut self) {
+        if !self.available_models.is_empty() {
+            if self.model_modal.selected_idx == 0 {
+                self.model_modal.selected_idx = self.available_models.len() - 1;
+            } else {
+                self.model_modal.selected_idx -= 1;
+            }
+        }
+    }
+
+    pub fn apply_modal_model(&mut self) {
+        if let Some(m) = self.available_models.get(self.model_modal.selected_idx) {
+            self.active_model = m.clone();
+        }
+        self.model_modal.is_open = false;
     }
 
     pub fn start_turn(&mut self) {

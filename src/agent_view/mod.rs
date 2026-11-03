@@ -1,4 +1,5 @@
 pub mod controller;
+pub mod models;
 pub mod state;
 pub mod tool_card;
 pub mod types;

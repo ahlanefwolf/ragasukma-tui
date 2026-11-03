@@ -19,9 +19,6 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     let is_model_focused = state.focus_area == AgentFocusArea::ModelTelemetry;
     let is_tools_focused = state.focus_area == AgentFocusArea::McpTools;
 
-    let breakdown = state.calculate_token_breakdown();
-    let usage_pct = (breakdown.usage_ratio() * 100.0) as usize;
-
     let model_block = Block::default()
         .title(if is_model_focused {
             Span::styled(" 🧠 Model Telemetry [Focused] ", Theme::badge_gold())
@@ -36,16 +33,21 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
         })
         .style(Theme::block_base());
 
+    let breakdown = state.calculate_token_breakdown();
+    let usage_pct = (breakdown.usage_ratio() * 100.0).round() as usize;
+
     let lines_model = vec![
         Line::from(vec![
-            Span::styled("Active Model : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Model: ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
-                &state.active_model,
-                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+                format!("[◈ {}]", state.active_model),
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
-            Span::styled("Token Usage  : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Usage: ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
                 format!(
                     "{} / {} ({}%)",
@@ -63,9 +65,9 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
             ),
         ]),
         Line::from(vec![
-            Span::styled("Remaining    : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Left : ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
-                format!("{} tokens", breakdown.remaining_tokens()),
+                format!("{} tokens remaining", breakdown.remaining_tokens()),
                 Style::default().fg(Theme::TEXT_PRIMARY),
             ),
         ]),

@@ -43,6 +43,21 @@ impl AgentWorkspaceState {
             };
         }
 
+        // Modal: Select Model
+        if self.model_modal.is_open {
+            return match code {
+                KeyCode::Esc => Some(Action::AgentCloseModelModal),
+                KeyCode::Down | KeyCode::Right | KeyCode::Char('j') | KeyCode::Char('l') | KeyCode::Tab => {
+                    Some(Action::AgentSelectNextModalModel)
+                }
+                KeyCode::Up | KeyCode::Left | KeyCode::Char('k') | KeyCode::Char('h') | KeyCode::BackTab => {
+                    Some(Action::AgentSelectPrevModalModel)
+                }
+                KeyCode::Enter => Some(Action::AgentApplyModalModel),
+                _ => None,
+            };
+        }
+
         // Modal: Pending Tool Approval / Diff Review
         if self.pending_approval.is_some() {
             return match code {
@@ -124,7 +139,11 @@ impl AgentWorkspaceState {
             KeyCode::Tab => Some(Action::AgentFocusNextPanel),
             KeyCode::BackTab => Some(Action::AgentFocusPrevPanel),
             KeyCode::Char('b') => Some(Action::AgentToggleSidebar),
-            KeyCode::Char('m') => Some(Action::AgentCycleModel),
+            KeyCode::Char('m') => Some(Action::AgentOpenModelModal),
+            KeyCode::Char('f') if self.focus_area == AgentFocusArea::ModelTelemetry => {
+                Some(Action::AgentRefreshModels)
+            }
+            KeyCode::F(5) => Some(Action::AgentRefreshModels),
             KeyCode::Char('x') => Some(Action::AgentToggleToolExpand),
             KeyCode::Char('s') if matches!(self.focus_area, AgentFocusArea::Tasks | AgentFocusArea::Files) => {
                 Some(Action::AgentSwitchSidebarTab)

@@ -265,6 +265,31 @@ pub fn handle_agent_action(
             let model_name = agent.active_model.clone();
             Some(format!("Selected model: {}", model_name))
         }
+        Action::AgentOpenModelModal => {
+            agent.open_model_modal();
+            Some("Select Model: Use [↑/↓/←/→] or [j/k/h/l] to navigate tags, [Enter] to select, [Esc] to cancel".to_string())
+        }
+        Action::AgentCloseModelModal => {
+            agent.close_model_modal();
+            Some("Model selector closed".to_string())
+        }
+        Action::AgentSelectNextModalModel => {
+            agent.select_next_modal_model();
+            None
+        }
+        Action::AgentSelectPrevModalModel => {
+            agent.select_prev_modal_model();
+            None
+        }
+        Action::AgentApplyModalModel => {
+            agent.apply_modal_model();
+            let model_name = agent.active_model.clone();
+            Some(format!("Active model set to: {}", model_name))
+        }
+        Action::AgentRefreshModels => {
+            let count = agent.refresh_available_models();
+            Some(format!("Refreshed models from core providers ({} available)", count))
+        }
         Action::AgentOpenAddFolderModal => {
             agent.open_add_folder_modal();
             Some("Add folder to workspace (Enter path or press Tab to browse)".to_string())

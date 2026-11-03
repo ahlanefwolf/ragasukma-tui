@@ -142,6 +142,9 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     if state.add_folder_modal.is_open {
         modals::render_add_folder_modal(frame, area, &state.add_folder_modal);
     }
+    if state.model_modal.is_open {
+        modals::render_model_selector_modal(frame, state, area);
+    }
     if let Some(ref tq) = state.tag_query {
         modals::render_tag_query_popup(frame, input_area, tq);
     }
@@ -149,6 +152,18 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
 
 pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span<'static>> {
     let mut hints = Vec::new();
+
+    // 0. Modal: Select Model
+    if state.model_modal.is_open {
+        hints.push(Span::styled(" [🏷️ SELECT MODEL] ", Theme::badge_gold()));
+        hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+        hints.push(Span::raw("Select "));
+        hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+        hints.push(Span::raw("Apply "));
+        hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+        hints.push(Span::raw("Cancel "));
+        return hints;
+    }
 
     // 1. Modal: Add Folder to Workspace
     if state.add_folder_modal.is_open {
@@ -321,8 +336,10 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         AgentFocusArea::ModelTelemetry => {
             hints.push(Span::styled(" [m] ", Theme::key_badge()));
             hints.push(Span::raw("Cycle Model "));
+            hints.push(Span::styled(" [f/F5] ", Theme::key_badge()));
+            hints.push(Span::raw("Fetch/Refresh "));
             hints.push(Span::styled(" [r] ", Theme::key_badge()));
-            hints.push(Span::raw("Toggle Reasoning "));
+            hints.push(Span::raw("Reasoning "));
         }
         AgentFocusArea::McpTools => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));

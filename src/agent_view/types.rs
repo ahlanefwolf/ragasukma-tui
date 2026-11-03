@@ -203,6 +203,12 @@ pub struct ProjectItem {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelSelectorModalState {
+    pub is_open: bool,
+    pub selected_idx: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProjectSwitcherModalState {
     pub is_open: bool,
     pub selected_idx: usize,
