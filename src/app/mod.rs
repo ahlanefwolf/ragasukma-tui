@@ -49,6 +49,7 @@ mod tests {
     #[test]
     fn test_footer_hotkeys_navigation_and_tab_switching() {
         let mut app = App::new(std::path::PathBuf::from("/tmp"));
+        app.agent.is_input_focused = false;
 
         // Test 1-5 jump tab
         for (i, ch) in ['1', '2', '3', '4', '5'].iter().enumerate() {
@@ -181,5 +182,52 @@ mod tests {
         let form_digit = KeyEvent::new(KeyCode::Char('8'), KeyModifiers::NONE);
         let action_form_digit = app.handle_key_event(form_digit).expect("action expected");
         assert_eq!(action_form_digit, Action::FormChar('8'));
+    }
+
+    #[test]
+    fn test_multi_folder_workspace() {
+        let mut app = App::new(std::path::PathBuf::from("."));
+        assert_eq!(app.agent.workspace_folders.len(), 1);
+
+        // Add valid folder (temp_dir)
+        let temp_dir = std::env::temp_dir();
+        let add_res = app.agent.add_workspace_folder(temp_dir.clone());
+        assert!(add_res.is_ok());
+        assert_eq!(app.agent.workspace_folders.len(), 2);
+
+        // Prevent duplicate folder
+        let dup_res = app.agent.add_workspace_folder(temp_dir);
+        assert!(dup_res.is_err());
+
+        // When added, the newly added folder becomes the active one
+        assert_eq!(app.agent.active_folder_idx, 1);
+
+        // Select next folder cycles back to index 0
+        app.agent.select_next_folder();
+        assert_eq!(app.agent.active_folder_idx, 0);
+
+        // Select prev folder cycles back to index 1
+        app.agent.select_prev_folder();
+        assert_eq!(app.agent.active_folder_idx, 1);
+
+        // Modal open & close
+        app.agent.open_add_folder_modal();
+        assert!(app.agent.add_folder_modal.is_open);
+        app.agent.add_folder_modal.input_path = "/nonexistent_folder_xyz_123".to_string();
+        let submit_res = app.agent.submit_add_folder();
+        assert!(submit_res.is_err());
+        assert!(app.agent.add_folder_modal.validation_message.is_some());
+
+        app.agent.close_add_folder_modal();
+        assert!(!app.agent.add_folder_modal.is_open);
+
+        // Remove folder
+        let rem_res = app.agent.remove_workspace_folder(1);
+        assert!(rem_res.is_ok());
+        assert_eq!(app.agent.workspace_folders.len(), 1);
+
+        // Cannot remove the only workspace folder
+        let rem_last_res = app.agent.remove_workspace_folder(0);
+        assert!(rem_last_res.is_err());
     }
 }

@@ -2,8 +2,9 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::types::{
-    AgentFocusArea, ApprovalRequest, ChatMessage, ContextFileItem, FileTagQuery, MessageRole,
-    TokenBreakdown, ToolFilter, WorkspaceFileNode,
+    AddFolderModalState, AgentFocusArea, ApprovalRequest, ChatMessage, ContextFileItem,
+    FileTagQuery, MessageRole, TokenBreakdown, ToolFilter, WorkspaceFileNode,
+    WorkspaceFolderItem,
 };
 use crate::core_bridge::PersistedMessageDto;
 
@@ -24,6 +25,11 @@ pub struct AgentWorkspaceState {
     pub reasoning_expanded: bool,
     pub auto_scroll: bool,
     pub spinner_tick: usize,
+
+    // Multi-Folder Workspace Support (1:1 with web agent)
+    pub workspace_folders: Vec<PathBuf>,
+    pub active_folder_idx: usize,
+    pub add_folder_modal: AddFolderModalState,
 
     // Phase 1: Workspace Files & Tag Autocomplete
     pub workspace_files: Vec<WorkspaceFileNode>,
@@ -49,6 +55,7 @@ pub struct AgentWorkspaceState {
 
 impl Default for AgentWorkspaceState {
     fn default() -> Self {
+        let initial_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self {
             messages: Vec::new(),
             input_buffer: String::new(),
@@ -70,6 +77,9 @@ impl Default for AgentWorkspaceState {
             reasoning_expanded: true,
             auto_scroll: true,
             spinner_tick: 0,
+            workspace_folders: vec![initial_root],
+            active_folder_idx: 0,
+            add_folder_modal: AddFolderModalState::default(),
             workspace_files: Vec::new(),
             selected_file_idx: 0,
             expanded_dirs: HashSet::new(),
@@ -525,10 +535,164 @@ impl AgentWorkspaceState {
         }
     }
 
+    pub fn get_workspace_folders_list(&self) -> Vec<WorkspaceFolderItem> {
+        self.workspace_folders
+            .iter()
+            .map(|p| {
+                let name = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| p.to_string_lossy().to_string());
+                WorkspaceFolderItem {
+                    path: p.clone(),
+                    name,
+                    is_valid: p.is_dir(),
+                }
+            })
+            .collect()
+    }
+
+    pub fn add_workspace_folder(&mut self, path: PathBuf) -> Result<(), String> {
+        let expanded = match path.strip_prefix("~") {
+            Ok(rest) => {
+                if let Some(home) = std::env::var_os("HOME") {
+                    PathBuf::from(home).join(rest)
+                } else {
+                    path.clone()
+                }
+            }
+            Err(_) => path.clone(),
+        };
+
+        if !expanded.is_dir() {
+            return Err(format!("Directory not found: {}", expanded.display()));
+        }
+
+        let canonical = match expanded.canonicalize() {
+            Ok(c) => c,
+            Err(_) => expanded,
+        };
+
+        if self.workspace_folders.iter().any(|f| {
+            if let Ok(c) = f.canonicalize() {
+                c == canonical
+            } else {
+                f == &canonical
+            }
+        }) {
+            return Err("Folder is already in workspace".to_string());
+        }
+
+        let folder_str = canonical.to_string_lossy().to_string();
+        self.expanded_dirs.insert(folder_str);
+        self.workspace_folders.push(canonical);
+        self.active_folder_idx = self.workspace_folders.len() - 1;
+        self.scan_workspace_files();
+        Ok(())
+    }
+
+    pub fn remove_workspace_folder(&mut self, idx: usize) -> Result<(), String> {
+        if self.workspace_folders.len() <= 1 {
+            return Err("Cannot remove the only workspace folder".to_string());
+        }
+        if idx < self.workspace_folders.len() {
+            self.workspace_folders.remove(idx);
+            if self.active_folder_idx >= self.workspace_folders.len() {
+                self.active_folder_idx = self.workspace_folders.len().saturating_sub(1);
+            }
+            self.scan_workspace_files();
+            Ok(())
+        } else {
+            Err("Invalid folder index".to_string())
+        }
+    }
+
+    pub fn select_next_folder(&mut self) {
+        if !self.workspace_folders.is_empty() {
+            self.active_folder_idx = (self.active_folder_idx + 1) % self.workspace_folders.len();
+        }
+    }
+
+    pub fn select_prev_folder(&mut self) {
+        if !self.workspace_folders.is_empty() {
+            if self.active_folder_idx == 0 {
+                self.active_folder_idx = self.workspace_folders.len() - 1;
+            } else {
+                self.active_folder_idx -= 1;
+            }
+        }
+    }
+
+    pub fn open_add_folder_modal(&mut self) {
+        self.add_folder_modal.is_open = true;
+        self.add_folder_modal.input_path.clear();
+        self.add_folder_modal.validation_message = None;
+    }
+
+    pub fn close_add_folder_modal(&mut self) {
+        self.add_folder_modal.is_open = false;
+        self.add_folder_modal.input_path.clear();
+        self.add_folder_modal.validation_message = None;
+    }
+
+    pub fn submit_add_folder(&mut self) -> Result<(), String> {
+        let input = self.add_folder_modal.input_path.trim().to_string();
+        if input.is_empty() {
+            self.add_folder_modal.validation_message =
+                Some((false, "Path cannot be empty".to_string()));
+            return Err("Path cannot be empty".to_string());
+        }
+        let path = PathBuf::from(&input);
+        match self.add_workspace_folder(path) {
+            Ok(()) => {
+                self.close_add_folder_modal();
+                Ok(())
+            }
+            Err(err) => {
+                self.add_folder_modal.validation_message = Some((false, err.clone()));
+                Err(err)
+            }
+        }
+    }
+
     pub fn scan_workspace_files(&mut self) {
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        if self.workspace_folders.is_empty() {
+            let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            self.workspace_folders.push(current_dir);
+        }
+
         let mut nodes = Vec::new();
-        collect_visible_children(&current_dir, 0, &self.expanded_dirs, &mut nodes, None);
+        if self.workspace_folders.len() == 1 {
+            let single_dir = &self.workspace_folders[0];
+            collect_visible_children(single_dir, 0, &self.expanded_dirs, &mut nodes, None);
+        } else {
+            for folder in &self.workspace_folders {
+                let folder_str = folder.to_string_lossy().to_string();
+                let name = folder
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| folder_str.clone());
+                let is_expanded = self.expanded_dirs.contains(&folder_str);
+                nodes.push(WorkspaceFileNode {
+                    path: folder_str.clone(),
+                    name,
+                    is_dir: true,
+                    depth: 0,
+                    is_expanded,
+                    parent_path: None,
+                });
+                if is_expanded {
+                    collect_visible_children(
+                        folder,
+                        1,
+                        &self.expanded_dirs,
+                        &mut nodes,
+                        Some(folder_str),
+                    );
+                }
+            }
+        }
+
         self.workspace_files = nodes;
         if self.selected_file_idx >= self.workspace_files.len() && !self.workspace_files.is_empty() {
             self.selected_file_idx = self.workspace_files.len() - 1;

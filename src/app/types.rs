@@ -120,6 +120,16 @@ pub enum Action {
     AgentFocusPrompt,
     AgentCycleModel,
 
+    // Multi-Folder Workspace Support (1:1 with web agent)
+    AgentOpenAddFolderModal,
+    AgentCloseAddFolderModal,
+    AgentAddFolderChar(char),
+    AgentAddFolderBackspace,
+    AgentSubmitAddFolder,
+    AgentRemoveActiveFolder,
+    AgentNextFolder,
+    AgentPrevFolder,
+
     FormChar(char),
     FormBackspace,
     FormNextField,

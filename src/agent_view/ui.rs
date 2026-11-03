@@ -44,15 +44,62 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     if let Some(ref tq) = state.tag_query {
         render_tag_query_popup(frame, area, tq);
     }
+
+    if state.add_folder_modal.is_open {
+        render_add_folder_modal(frame, area, &state.add_folder_modal);
+    }
 }
 
 fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .constraints([
+            Constraint::Length(4),
+            Constraint::Min(8),
+            Constraint::Percentage(35),
+        ])
         .split(area);
 
     let is_focused = state.focus_area == AgentFocusArea::Files;
+
+    // Header Workspace Folders Bar (1:1 with web agent multi-folder header)
+    let folder_block = Block::default()
+        .title(Span::styled(
+            format!(" 🗂️ Folders [{}] (a: +Folder, d: -Del) ", state.workspace_folders.len()),
+            Theme::badge_gold(),
+        ))
+        .borders(Borders::ALL)
+        .border_style(if is_focused {
+            Theme::border_focused()
+        } else {
+            Theme::border_subtle()
+        })
+        .style(Theme::block_base());
+
+    let mut folder_spans = Vec::new();
+    for (idx, folder) in state.workspace_folders.iter().enumerate() {
+        let is_active = idx == state.active_folder_idx;
+        let name = folder
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| folder.to_string_lossy().to_string());
+
+        if is_active {
+            folder_spans.push(Span::styled(
+                format!(" [{}] ", name),
+                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            folder_spans.push(Span::styled(
+                format!(" {} ", name),
+                Style::default().fg(Theme::TEXT_MUTED),
+            ));
+        }
+    }
+    if folder_spans.is_empty() {
+        folder_spans.push(Span::styled(" (No attached folders) ", Style::default().fg(Theme::TEXT_MUTED)));
+    }
+    frame.render_widget(Paragraph::new(Line::from(folder_spans)).block(folder_block), chunks[0]);
 
     let border_style = if is_focused {
         Theme::border_focused()
@@ -116,7 +163,7 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
         .borders(Borders::ALL)
         .border_style(border_style)
         .style(Theme::block_base());
-    frame.render_widget(List::new(file_items).block(block_files), chunks[0]);
+    frame.render_widget(List::new(file_items).block(block_files), chunks[1]);
 
     // Context Files Pinned
     let context_items: Vec<ListItem> = if state.context_files.is_empty() {
@@ -389,4 +436,80 @@ fn render_tag_query_popup(frame: &mut Frame, area: Rect, tq: &super::types::File
         .style(Theme::block_surface());
 
     frame.render_widget(List::new(items).block(block), popup_area);
+}
+
+fn render_add_folder_modal(
+    frame: &mut Frame,
+    area: Rect,
+    modal_state: &super::types::AddFolderModalState,
+) {
+    let width = 64.min(area.width.saturating_sub(4));
+    let height = 10.min(area.height.saturating_sub(4));
+    let x = (area.width.saturating_sub(width)) / 2;
+    let y = (area.height.saturating_sub(height)) / 2;
+    let popup_area = Rect {
+        x: area.x + x,
+        y: area.y + y,
+        width,
+        height,
+    };
+
+    frame.render_widget(Clear, popup_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(2),
+            Constraint::Length(2),
+        ])
+        .margin(1)
+        .split(popup_area);
+
+    let block = Block::default()
+        .title(Span::styled(
+            " ➕ Tambah Folder ke Workspace (Attached Folders) ",
+            Theme::badge_gold(),
+        ))
+        .borders(Borders::ALL)
+        .border_style(Theme::border_focused())
+        .style(Theme::block_surface());
+    frame.render_widget(block, popup_area);
+
+    let input_block = Block::default()
+        .title(Span::styled(
+            " Path Folder (misal: /path/to/project atau ~/repo) ",
+            Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+        ))
+        .borders(Borders::ALL)
+        .border_style(Theme::border_focused());
+    let input_line = Line::from(vec![
+        Span::styled("📂 ", Style::default().fg(Theme::GOLD_PRIMARY)),
+        Span::styled(&modal_state.input_path, Style::default().fg(Theme::TEXT_PRIMARY)),
+        Span::styled("█", Style::default().fg(Theme::GOLD_PRIMARY)),
+    ]);
+    frame.render_widget(Paragraph::new(input_line).block(input_block), chunks[0]);
+
+    let feedback_line = if let Some((is_valid, ref msg)) = modal_state.validation_message {
+        let style = if is_valid {
+            Style::default().fg(Theme::STATUS_SUCCESS)
+        } else {
+            Style::default().fg(Theme::STATUS_ERROR)
+        };
+        Line::from(vec![Span::styled(format!("⚠️ {}", msg), style)])
+    } else {
+        Line::from(vec![Span::styled(
+            "Ketik path lokal lalu tekan [Enter] untuk menambahkan",
+            Style::default().fg(Theme::TEXT_MUTED),
+        )])
+    };
+    frame.render_widget(Paragraph::new(feedback_line), chunks[1]);
+
+    let footer_line = Line::from(vec![
+        Span::styled(" [Enter] ", Theme::key_badge()),
+        Span::styled("Tambahkan   ", Style::default().fg(Theme::TEXT_SECONDARY)),
+        Span::styled(" [Esc] ", Theme::key_badge()),
+        Span::styled("Batal", Style::default().fg(Theme::TEXT_SECONDARY)),
+    ]);
+    frame.render_widget(Paragraph::new(footer_line), chunks[2]);
 }

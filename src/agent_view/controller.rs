@@ -8,6 +8,17 @@ impl AgentWorkspaceState {
     pub fn handle_key(&self, key: KeyEvent) -> Option<Action> {
         let code = key.code;
 
+        // Modal: Add Folder to Workspace
+        if self.add_folder_modal.is_open {
+            return match code {
+                KeyCode::Esc => Some(Action::AgentCloseAddFolderModal),
+                KeyCode::Enter => Some(Action::AgentSubmitAddFolder),
+                KeyCode::Backspace => Some(Action::AgentAddFolderBackspace),
+                KeyCode::Char(c) => Some(Action::AgentAddFolderChar(c)),
+                _ => None,
+            };
+        }
+
         // When the input textarea is focused
         if self.is_input_focused {
             if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -80,6 +91,18 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
                 AgentFocusArea::Inspector => Some(Action::AgentTogglePinSelectedFile),
             },
+            KeyCode::Char('+') | KeyCode::Char('a') if self.focus_area == AgentFocusArea::Files => {
+                Some(Action::AgentOpenAddFolderModal)
+            }
+            KeyCode::Char('-') | KeyCode::Char('d') if self.focus_area == AgentFocusArea::Files => {
+                Some(Action::AgentRemoveActiveFolder)
+            }
+            KeyCode::Char('[') if self.focus_area == AgentFocusArea::Files => {
+                Some(Action::AgentPrevFolder)
+            }
+            KeyCode::Char(']') if self.focus_area == AgentFocusArea::Files => {
+                Some(Action::AgentNextFolder)
+            }
             KeyCode::Char(' ') if self.focus_area == AgentFocusArea::Files => {
                 Some(Action::AgentInsertSelectedFile)
             }

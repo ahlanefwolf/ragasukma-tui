@@ -388,6 +388,56 @@ impl App {
                 self.set_status(format!("Selected model: {}", model_name));
             }
 
+            // Multi-Folder Workspace Support (1:1 with web agent)
+            Action::AgentOpenAddFolderModal => {
+                self.agent.open_add_folder_modal();
+                self.set_status("Tambah folder ke workspace (Ketik path folder)".to_string());
+            }
+            Action::AgentCloseAddFolderModal => {
+                self.agent.close_add_folder_modal();
+                self.set_status("Batal menambah folder".to_string());
+            }
+            Action::AgentAddFolderChar(c) => {
+                self.agent.add_folder_modal.input_path.push(c);
+            }
+            Action::AgentAddFolderBackspace => {
+                self.agent.add_folder_modal.input_path.pop();
+            }
+            Action::AgentSubmitAddFolder => {
+                match self.agent.submit_add_folder() {
+                    Ok(()) => {
+                        let count = self.agent.workspace_folders.len();
+                        self.set_status(format!("Folder berhasil ditambahkan (Total: {} folder)", count));
+                    }
+                    Err(err) => {
+                        self.set_status(format!("Gagal tambah folder: {}", err));
+                    }
+                }
+            }
+            Action::AgentRemoveActiveFolder => {
+                let idx = self.agent.active_folder_idx;
+                match self.agent.remove_workspace_folder(idx) {
+                    Ok(()) => {
+                        self.set_status("Folder berhasil dilepas dari workspace".to_string());
+                    }
+                    Err(err) => {
+                        self.set_status(format!("Gagal melepas folder: {}", err));
+                    }
+                }
+            }
+            Action::AgentNextFolder => {
+                self.agent.select_next_folder();
+                if let Some(f) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
+                    self.set_status(format!("Aktif folder: {}", f.display()));
+                }
+            }
+            Action::AgentPrevFolder => {
+                self.agent.select_prev_folder();
+                if let Some(f) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
+                    self.set_status(format!("Aktif folder: {}", f.display()));
+                }
+            }
+
             Action::FormChar(c) => self.custom_llm.form_input(c),
             Action::FormBackspace => self.custom_llm.form_backspace(),
             Action::FormNextField => self.custom_llm.form_next_field(),

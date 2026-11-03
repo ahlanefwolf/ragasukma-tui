@@ -129,3 +129,17 @@ impl TokenBreakdown {
         self.usage_ratio() >= 0.60 && !self.is_danger()
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceFolderItem {
+    pub path: std::path::PathBuf,
+    pub name: String,
+    pub is_valid: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AddFolderModalState {
+    pub is_open: bool,
+    pub input_path: String,
+    pub validation_message: Option<(bool, String)>,
+}
