@@ -93,12 +93,51 @@ pub struct WorkspaceFileNode {
     pub parent_path: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagItem {
+    pub path: String,
+    pub name: String,
+    pub is_dir: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct FileTagQuery {
     pub query: String,
-    pub matched_files: Vec<String>,
+    pub matched_items: Vec<TagItem>,
+    pub all_matches: Vec<TagItem>,
     pub selected_idx: usize,
     pub tag_start_idx: usize,
+    pub batch_size: usize,
+}
+
+impl FileTagQuery {
+    pub fn new(query: String, all_matches: Vec<TagItem>, tag_start_idx: usize) -> Self {
+        let batch_size = 20;
+        let initial_count = all_matches.len().min(batch_size);
+        let matched_items = all_matches[..initial_count].to_vec();
+        Self {
+            query,
+            matched_items,
+            all_matches,
+            selected_idx: 0,
+            tag_start_idx,
+            batch_size,
+        }
+    }
+
+    pub fn has_more(&self) -> bool {
+        self.matched_items.len() < self.all_matches.len()
+    }
+
+    pub fn load_next_batch(&mut self) -> bool {
+        if !self.has_more() {
+            return false;
+        }
+        let current_len = self.matched_items.len();
+        let next_len = (current_len + self.batch_size).min(self.all_matches.len());
+        self.matched_items.extend_from_slice(&self.all_matches[current_len..next_len]);
+        true
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

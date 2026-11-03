@@ -258,14 +258,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                         let icon = if f.is_dir {
                             if f.is_expanded { "📂 " } else { "📁 " }
                         } else {
-                            let ext = f.name.rsplit('.').next().unwrap_or("");
-                            match ext {
-                                "rs" => "🦀 ",
-                                "toml" => "📦 ",
-                                "json" => "🏷️ ",
-                                "md" => "📝 ",
-                                _ => "📄 ",
-                            }
+                            "📄 "
                         };
 
                         let cursor_str = if is_cursor { "▶ " } else { "  " };

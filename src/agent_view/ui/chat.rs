@@ -108,13 +108,17 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     frame.render_widget(p, chunks[0]);
 
     // Input Bar Card
-    let input_border = if is_input_focused {
+    let input_border = if state.tag_query.is_some() {
+        Style::default().fg(Theme::CYAN_ACCENT)
+    } else if is_input_focused {
         Theme::border_focused()
     } else {
         Theme::border_subtle()
     };
 
-    let input_title = if is_input_focused {
+    let input_title = if state.tag_query.is_some() {
+        Span::styled(" 🏷️ Tag File Mode (@) ", Theme::badge_cyan())
+    } else if is_input_focused {
         Span::styled(" ✏️ Message Input [Active] ", Theme::badge_gold())
     } else {
         Span::styled(" ✏️ Message Input ", Theme::badge_gray())
@@ -122,9 +126,63 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
 
     let prompt_prefix = Span::styled(
         "❯ ",
-        Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(if state.tag_query.is_some() {
+                Theme::CYAN_ACCENT
+            } else {
+                Theme::GOLD_PRIMARY
+            })
+            .add_modifier(Modifier::BOLD),
     );
-    let input_text = Span::styled(&state.input_buffer, Style::default().fg(Theme::TEXT_PRIMARY));
+
+    let input_line = if state.input_buffer.is_empty() {
+        let placeholder = if is_input_focused {
+            Span::styled(
+                "Type a prompt, or @ to attach file context... (Enter to send)",
+                Style::default().fg(Theme::TEXT_MUTED).add_modifier(Modifier::ITALIC),
+            )
+        } else {
+            Span::styled(
+                "Press [i] or [Enter] to write a message...",
+                Style::default().fg(Theme::TEXT_MUTED),
+            )
+        };
+        Line::from(vec![prompt_prefix, placeholder])
+    } else {
+        // Dynamic syntax highlighting for @file tags in input buffer
+        let mut spans = vec![prompt_prefix];
+        let mut current_idx = 0;
+        let buf = &state.input_buffer;
+
+        while let Some(at_idx) = buf[current_idx..].find('@') {
+            let actual_at = current_idx + at_idx;
+            if actual_at > current_idx {
+                spans.push(Span::styled(
+                    &buf[current_idx..actual_at],
+                    Style::default().fg(Theme::TEXT_PRIMARY),
+                ));
+            }
+            // Find end of token (whitespace or end of string)
+            let rest = &buf[actual_at..];
+            let end_idx = rest.find(|c: char| c.is_whitespace()).unwrap_or(rest.len());
+            spans.push(Span::styled(
+                &buf[actual_at..actual_at + end_idx],
+                Style::default()
+                    .fg(Theme::CYAN_ACCENT)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            current_idx = actual_at + end_idx;
+        }
+
+        if current_idx < buf.len() {
+            spans.push(Span::styled(
+                &buf[current_idx..],
+                Style::default().fg(Theme::TEXT_PRIMARY),
+            ));
+        }
+
+        Line::from(spans)
+    };
 
     let input_block = Block::default()
         .title(input_title)
@@ -132,6 +190,16 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         .border_style(input_border)
         .style(Theme::block_base());
 
-    let input_p = Paragraph::new(Line::from(vec![prompt_prefix, input_text])).block(input_block);
+    let input_p = Paragraph::new(input_line).block(input_block);
     frame.render_widget(input_p, chunks[1]);
+
+    // Position terminal cursor when input is focused for intuitive typing UX
+    if is_input_focused {
+        let prompt_width = 2u16; // "❯ "
+        let cursor_offset = state.input_buffer[..state.cursor_pos].chars().count() as u16;
+        let cursor_x = (chunks[1].x + 1 + prompt_width + cursor_offset)
+            .min(chunks[1].x + chunks[1].width.saturating_sub(2));
+        let cursor_y = chunks[1].y + 1;
+        frame.set_cursor_position((cursor_x, cursor_y));
+    }
 }

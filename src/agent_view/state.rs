@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use super::types::{
     AddFolderModalState, AgentFocusArea, AgentSidebarTab, ApprovalRequest, ChatMessage,
     CreateProjectModalState, FileTagQuery, MessageRole, ProjectItem, ProjectSwitcherModalState,
-    TaskSessionItem, TokenBreakdown, ToolFilter, WorkspaceFileNode, WorkspaceFolderItem,
+    TagItem, TaskSessionItem, TokenBreakdown, ToolFilter, WorkspaceFileNode, WorkspaceFolderItem,
 };
 use crate::core_bridge::PersistedMessageDto;
 
@@ -36,6 +36,7 @@ pub struct AgentWorkspaceState {
     pub selected_file_idx: usize,
     pub expanded_dirs: HashSet<String>,
     pub tag_query: Option<FileTagQuery>,
+    pub all_workspace_tag_items: Vec<TagItem>,
 
     // Phase 3: Tool Execution & Filter
     pub tool_filter: ToolFilter,
@@ -93,6 +94,7 @@ impl Default for AgentWorkspaceState {
             add_folder_modal: AddFolderModalState::default(),
             expanded_dirs: HashSet::new(),
             tag_query: None,
+            all_workspace_tag_items: Vec::new(),
             tool_filter: ToolFilter::All,
             pending_approval: None,
             sidebar_tab: AgentSidebarTab::Tasks,
@@ -372,68 +374,100 @@ impl AgentWorkspaceState {
 
     pub fn check_and_update_tag_query(&mut self) {
         if let Some(at_pos) = self.input_buffer[..self.cursor_pos].rfind('@') {
-            let query = self.input_buffer[at_pos + 1..self.cursor_pos].to_string();
-            let matches: Vec<String> = self
-                .workspace_files
+            let slice_between = &self.input_buffer[at_pos + 1..self.cursor_pos];
+            // If user typed space after '@', tag query autocomplete has ended
+            if slice_between.contains(' ') || slice_between.contains('\t') {
+                self.tag_query = None;
+                return;
+            }
+            let query = slice_between.to_string();
+            let query_lower = query.to_lowercase();
+
+            if self.all_workspace_tag_items.is_empty() && !self.workspace_folders.is_empty() {
+                self.refresh_workspace_tag_items();
+            }
+
+            let mut all_matches: Vec<TagItem> = self
+                .all_workspace_tag_items
                 .iter()
-                .filter(|f| !f.is_dir && f.name.to_lowercase().contains(&query.to_lowercase()))
-                .map(|f| f.path.clone())
-                .take(8)
+                .filter(|item| {
+                    if query_lower.is_empty() {
+                        true
+                    } else {
+                        item.name.to_lowercase().contains(&query_lower)
+                            || item.path.to_lowercase().contains(&query_lower)
+                    }
+                })
+                .cloned()
                 .collect();
 
-            self.tag_query = Some(FileTagQuery {
-                query,
-                matched_files: matches,
-                selected_idx: 0,
-                tag_start_idx: at_pos,
+            // Prioritize items starting with query, then shorter paths
+            all_matches.sort_by(|a, b| {
+                let a_starts = a.name.to_lowercase().starts_with(&query_lower);
+                let b_starts = b.name.to_lowercase().starts_with(&query_lower);
+                match (a_starts, b_starts) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => a.path.len().cmp(&b.path.len()).then_with(|| a.name.cmp(&b.name)),
+                }
             });
+
+            let prev_selected = self.tag_query.as_ref().map(|tq| tq.selected_idx).unwrap_or(0);
+            let mut tq = FileTagQuery::new(query, all_matches, at_pos);
+            if !tq.matched_items.is_empty() {
+                tq.selected_idx = prev_selected.min(tq.matched_items.len() - 1);
+            }
+
+            self.tag_query = Some(tq);
         } else {
             self.tag_query = None;
         }
     }
 
-    pub fn close_tag_query(&mut self) {
-        self.tag_query = None;
-    }
-
     pub fn select_tag_query_next(&mut self) {
-        if let Some(tq) = &mut self.tag_query {
-            let len = tq.matched_files.len();
-            if len > 0 {
-                tq.selected_idx = (tq.selected_idx + 1) % len;
+        if let Some(ref mut tq) = self.tag_query {
+            if tq.matched_items.is_empty() {
+                return;
+            }
+            // Lazy load next batch when scrolling near or at the end
+            if tq.selected_idx + 1 >= tq.matched_items.len() && tq.has_more() {
+                tq.load_next_batch();
+            }
+            if tq.selected_idx + 1 < tq.matched_items.len() {
+                tq.selected_idx += 1;
             }
         }
     }
 
     pub fn select_tag_query_prev(&mut self) {
-        if let Some(tq) = &mut self.tag_query {
-            let len = tq.matched_files.len();
-            if len > 0 {
-                if tq.selected_idx == 0 {
-                    tq.selected_idx = len - 1;
-                } else {
-                    tq.selected_idx -= 1;
-                }
-            }
+        if let Some(ref mut tq) = self.tag_query
+            && tq.selected_idx > 0
+        {
+            tq.selected_idx -= 1;
         }
     }
 
     pub fn apply_selected_tag(&mut self) {
-        let (prefix, insertion, suffix) = match self.tag_query.take() {
-            Some(tq) => match tq.matched_files.get(tq.selected_idx) {
-                Some(path) => {
-                    let prefix = self.input_buffer[..tq.tag_start_idx].to_string();
-                    let suffix = self.input_buffer[self.cursor_pos..].to_string();
-                    let insertion = format!("@{} ", path);
-                    (prefix, insertion, suffix)
-                }
-                None => return,
-            },
-            None => return,
-        };
-        let new_cursor = prefix.len() + insertion.len();
-        self.input_buffer = format!("{}{}{}", prefix, insertion, suffix);
-        self.cursor_pos = new_cursor;
+        if let Some(ref tq) = self.tag_query
+            && !tq.matched_items.is_empty()
+        {
+            let item = &tq.matched_items[tq.selected_idx.min(tq.matched_items.len() - 1)];
+            let tag_insert = format!("@{} ", item.path);
+
+            let start = tq.tag_start_idx;
+            let end = self.cursor_pos;
+            if start <= end && end <= self.input_buffer.len() {
+                let before = &self.input_buffer[..start];
+                let after = &self.input_buffer[end..];
+                self.input_buffer = format!("{}{}{}", before, tag_insert, after);
+                self.cursor_pos = start + tag_insert.len();
+            }
+        }
+        self.tag_query = None;
+    }
+
+    pub fn close_tag_query(&mut self) {
+        self.tag_query = None;
     }
 
     pub fn switch_sidebar_tab(&mut self) {
@@ -715,6 +749,127 @@ impl AgentWorkspaceState {
         if self.selected_file_idx >= self.workspace_files.len() && !self.workspace_files.is_empty() {
             self.selected_file_idx = self.workspace_files.len() - 1;
         }
+        self.refresh_workspace_tag_items();
+    }
+
+    pub fn refresh_workspace_tag_items(&mut self) {
+        if self.workspace_folders.is_empty() {
+            self.all_workspace_tag_items.clear();
+            return;
+        }
+
+        let is_multi_root = self.workspace_folders.len() > 1;
+        let mut items = Vec::new();
+
+        for folder in &self.workspace_folders {
+            let root_name = folder
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| folder.to_string_lossy().to_string());
+
+            if is_multi_root {
+                items.push(TagItem {
+                    path: format!("{}/", root_name),
+                    name: root_name.clone(),
+                    is_dir: true,
+                });
+            }
+
+            collect_recursive_tag_items(
+                folder,
+                folder,
+                1,
+                is_multi_root,
+                &root_name,
+                &mut items,
+            );
+        }
+
+        self.all_workspace_tag_items = items;
+    }
+}
+
+fn collect_recursive_tag_items(
+    root: &Path,
+    current: &Path,
+    depth: usize,
+    is_multi_root: bool,
+    root_name: &str,
+    out: &mut Vec<TagItem>,
+) {
+    if depth > 12 {
+        return;
+    }
+
+    let entries = match std::fs::read_dir(current) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        if name.starts_with('.')
+            || name == "target"
+            || name == "node_modules"
+            || name == ".git"
+            || name == ".cargo"
+        {
+            continue;
+        }
+
+        if path.is_dir() {
+            dirs.push((name, path));
+        } else {
+            files.push((name, path));
+        }
+    }
+
+    dirs.sort_by(|a, b| a.0.cmp(&b.0));
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (name, path) in dirs {
+        let rel_path = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .to_string();
+        let clean_path = if is_multi_root {
+            format!("{}/{}/", root_name, rel_path)
+        } else {
+            format!("{}/", rel_path)
+        };
+
+        out.push(TagItem {
+            path: clean_path,
+            name,
+            is_dir: true,
+        });
+
+        collect_recursive_tag_items(root, &path, depth + 1, is_multi_root, root_name, out);
+    }
+
+    for (name, path) in files {
+        let rel_path = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .to_string();
+        let clean_path = if is_multi_root {
+            format!("{}/{}", root_name, rel_path)
+        } else {
+            rel_path
+        };
+
+        out.push(TagItem {
+            path: clean_path,
+            name,
+            is_dir: false,
+        });
     }
 }
 

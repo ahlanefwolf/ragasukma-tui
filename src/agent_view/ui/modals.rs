@@ -147,51 +147,139 @@ pub fn render_add_folder_modal(frame: &mut Frame, area: Rect, modal: &AddFolderM
     frame.render_widget(p, popup_area);
 }
 
-pub fn render_tag_query_popup(frame: &mut Frame, area: Rect, tq: &FileTagQuery) {
+pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTagQuery) {
+    let loaded = tq.matched_items.len();
+    let total = tq.all_matches.len();
+    let visible_items = if loaded == 0 { 1 } else { loaded.min(7) as u16 };
+    let popup_height = (visible_items + 3).min(anchor_area.y + anchor_area.height);
+    let popup_width = (anchor_area.width.saturating_sub(4)).clamp(38, 72);
+
+    let popup_y = anchor_area.y.saturating_sub(popup_height);
+    let popup_x = anchor_area.x + 2;
+
     let popup_area = Rect {
-        x: area.x + 10,
-        y: area.y + area.height.saturating_sub(12),
-        width: area.width.saturating_sub(20).min(50),
-        height: 8.min(area.height),
+        x: popup_x,
+        y: popup_y,
+        width: popup_width,
+        height: popup_height,
     };
 
     frame.render_widget(Clear, popup_area);
 
     let inner_height = (popup_area.height.saturating_sub(2) as usize).max(1);
-    let total = tq.matched_files.len();
     let sel = tq.selected_idx;
     let offset = if sel >= inner_height {
         sel.saturating_sub(inner_height - 1)
     } else {
         0
     };
-    let end = (offset + inner_height).min(total);
+    let end = (offset + inner_height).min(loaded);
 
-    let items: Vec<ListItem> = tq
-        .matched_files
-        .iter()
-        .enumerate()
-        .skip(offset)
-        .take(end.saturating_sub(offset))
-        .map(|(idx, file)| {
-            let is_sel = idx == sel;
-            let prefix = if is_sel { "▶ " } else { "  " };
-            let style = if is_sel {
-                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Theme::TEXT_PRIMARY)
-            };
-            ListItem::new(Line::from(vec![
-                Span::styled(prefix, Style::default().fg(Theme::GOLD_PRIMARY)),
-                Span::styled(file, style),
-            ]))
-        })
-        .collect();
+    let items: Vec<ListItem> = if total == 0 {
+        vec![ListItem::new(Line::from(vec![
+            Span::styled("  🔍 No items matching ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(
+                format!("\"@{}\"", tq.query),
+                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+            ),
+        ]))]
+    } else {
+        tq.matched_items
+            .iter()
+            .enumerate()
+            .skip(offset)
+            .take(end.saturating_sub(offset))
+            .map(|(idx, item)| {
+                let is_sel = idx == sel;
+                let icon = if item.is_dir { "📁 " } else { "📄 " };
+
+                let clean_p = item.path.trim_end_matches('/');
+                let (dir_prefix, file_name) = match clean_p.rfind('/') {
+                    Some(slash_pos) => (&clean_p[..=slash_pos], &clean_p[slash_pos + 1..]),
+                    None => ("", clean_p),
+                };
+
+                let prefix = if is_sel { " ▸ " } else { "   " };
+                let item_style = if is_sel {
+                    Style::default().bg(Theme::BG_SURFACE_ELEVATED)
+                } else {
+                    Style::default()
+                };
+
+                let name_style = if is_sel {
+                    Style::default()
+                        .fg(Theme::GOLD_PRIMARY)
+                        .add_modifier(Modifier::BOLD)
+                } else if item.is_dir {
+                    Style::default()
+                        .fg(Theme::CYAN_ACCENT)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Theme::TEXT_PRIMARY)
+                };
+
+                let dir_style = Style::default().fg(Theme::TEXT_MUTED);
+
+                ListItem::new(Line::from(vec![
+                    Span::styled(
+                        prefix,
+                        if is_sel {
+                            Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default()
+                        },
+                    ),
+                    Span::raw(icon),
+                    Span::styled(file_name, name_style),
+                    if item.is_dir {
+                        Span::styled("/", Style::default().fg(Theme::CYAN_ACCENT))
+                    } else {
+                        Span::raw("")
+                    },
+                    Span::styled(format!("  ({})", dir_prefix), dir_style),
+                ]))
+                .style(item_style)
+            })
+            .collect()
+    };
+
+    let count_badge = if tq.has_more() {
+        Span::styled(
+            format!("[{}/{} • Scroll ↓ for more] ", loaded, total),
+            Style::default().fg(Theme::CYAN_ACCENT),
+        )
+    } else {
+        Span::styled(
+            format!("[{} found] ", total),
+            Style::default().fg(Theme::TEXT_SECONDARY),
+        )
+    };
+
+    let title_line = Line::from(vec![
+        Span::styled(" 🏷️ Tag Item ", Theme::badge_cyan()),
+        if !tq.query.is_empty() {
+            Span::styled(format!("(@{}) ", tq.query), Theme::badge_gold())
+        } else {
+            Span::raw("")
+        },
+        count_badge,
+    ]);
+
+    let bottom_line = Line::from(vec![
+        Span::styled(" [↑/↓] ", Theme::key_badge()),
+        Span::raw("Scroll "),
+        Span::styled(" [Tab/Enter] ", Theme::key_badge()),
+        Span::raw("Tag "),
+        Span::styled(" [Esc] ", Theme::key_badge()),
+        Span::raw("Close "),
+    ]);
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Theme::border_focused())
-        .title(Span::styled(" @ File Reference ", Theme::badge_cyan()));
+        .border_style(Style::default().fg(Theme::CYAN_ACCENT))
+        .title(title_line)
+        .title_bottom(bottom_line)
+        .style(Theme::block_base());
 
     let list = List::new(items).block(block);
     frame.render_widget(list, popup_area);

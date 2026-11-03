@@ -116,8 +116,15 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     }
 
     // Center Chat Panel
-    chat::render_center_chat(frame, chunks[current_idx], state);
+    let center_chat_area = chunks[current_idx];
+    chat::render_center_chat(frame, center_chat_area, state);
     current_idx += 1;
+
+    let chat_sub_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(6), Constraint::Length(3)])
+        .split(center_chat_area);
+    let input_area = chat_sub_chunks[1];
 
     // Right Inspector Panel
     if state.is_inspector_visible {
@@ -135,15 +142,70 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
         modals::render_add_folder_modal(frame, area, &state.add_folder_modal);
     }
     if let Some(ref tq) = state.tag_query {
-        modals::render_tag_query_popup(frame, area, tq);
+        modals::render_tag_query_popup(frame, input_area, tq);
     }
 }
 
-pub fn get_footer_key_hints(agent: &AgentWorkspaceState, width: u16) -> Vec<Span<'static>> {
+pub fn get_footer_key_hints<'a>(state: &AgentWorkspaceState, width: u16) -> Vec<Span<'a>> {
     let mut hints = Vec::new();
 
-    // Contextual hints based on currently focused card
-    match agent.focus_area {
+    // 1. Modal: Add Folder to Workspace
+    if state.add_folder_modal.is_open {
+        hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+        hints.push(Span::raw("Add Folder "));
+        hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
+        hints.push(Span::raw("Browse Dialog "));
+        hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+        hints.push(Span::raw("Cancel "));
+        return hints;
+    }
+
+    // 2. Modal: Create Project
+    if state.create_project_modal.is_open {
+        hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+        hints.push(Span::raw("Create "));
+        hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+        hints.push(Span::raw("Cancel "));
+        return hints;
+    }
+
+    // 3. Modal: Project Switcher / List Project
+    if state.project_modal.is_open {
+        hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+        hints.push(Span::raw("Select "));
+        hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+        hints.push(Span::raw("Switch Project "));
+        hints.push(Span::styled(" [n] ", Theme::key_badge()));
+        hints.push(Span::raw("New Project "));
+        hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+        hints.push(Span::raw("Close "));
+        return hints;
+    }
+
+    // 4. Modal: Pending Tool Approval / Diff Review
+    if state.pending_approval.is_some() {
+        hints.push(Span::styled(" [y] ", Theme::key_badge()));
+        hints.push(Span::raw("Approve "));
+        hints.push(Span::styled(" [n] ", Theme::key_badge()));
+        hints.push(Span::raw("Reject "));
+        hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+        hints.push(Span::raw("Scroll Diff "));
+        return hints;
+    }
+
+    // 5. Popup: Tag Picker / Tag Query active
+    if state.tag_query.is_some() {
+        hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
+        hints.push(Span::raw("Navigate Tags "));
+        hints.push(Span::styled(" [Enter/Tab] ", Theme::key_badge()));
+        hints.push(Span::raw("Insert Tag "));
+        hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+        hints.push(Span::raw("Close Tag Picker "));
+        return hints;
+    }
+
+    // General focus areas when no modal is open
+    match state.focus_area {
         AgentFocusArea::Tasks => {
             hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
             hints.push(Span::raw("Next Card "));
