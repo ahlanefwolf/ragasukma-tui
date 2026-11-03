@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::agent_view::state::AgentWorkspaceState;
-use crate::agent_view::types::AgentFocusArea;
+use crate::agent_view::types::{AgentFocusArea, AgentSidebarTab};
 use crate::app::Action;
 
 impl AgentWorkspaceState {
@@ -13,8 +13,43 @@ impl AgentWorkspaceState {
             return match code {
                 KeyCode::Esc => Some(Action::AgentCloseAddFolderModal),
                 KeyCode::Enter => Some(Action::AgentSubmitAddFolder),
+                KeyCode::Tab => Some(Action::AgentBrowseFolderDialog),
                 KeyCode::Backspace => Some(Action::AgentAddFolderBackspace),
                 KeyCode::Char(c) => Some(Action::AgentAddFolderChar(c)),
+                _ => None,
+            };
+        }
+
+        // Modal: Project Switcher
+        if self.project_modal.is_open {
+            return match code {
+                KeyCode::Esc => Some(Action::AgentCloseProjectModal),
+                KeyCode::Down | KeyCode::Char('j') => Some(Action::AgentSelectNextProject),
+                KeyCode::Up | KeyCode::Char('k') => Some(Action::AgentSelectPrevProject),
+                KeyCode::Enter => Some(Action::AgentSwitchProject),
+                KeyCode::Char('n') | KeyCode::Char('+') => Some(Action::AgentOpenCreateProjectModal),
+                _ => None,
+            };
+        }
+
+        // Modal: Create Project
+        if self.create_project_modal.is_open {
+            return match code {
+                KeyCode::Esc => Some(Action::AgentCloseCreateProjectModal),
+                KeyCode::Enter => Some(Action::AgentSubmitCreateProject),
+                KeyCode::Backspace => Some(Action::AgentCreateProjectBackspace),
+                KeyCode::Char(c) => Some(Action::AgentCreateProjectChar(c)),
+                _ => None,
+            };
+        }
+
+        // Modal: Pending Tool Approval / Diff Review
+        if self.pending_approval.is_some() {
+            return match code {
+                KeyCode::Char('y') | KeyCode::Enter => Some(Action::AgentApprovePending),
+                KeyCode::Char('n') | KeyCode::Esc => Some(Action::AgentRejectPending),
+                KeyCode::Down | KeyCode::Char('j') => Some(Action::AgentScrollDown),
+                KeyCode::Up | KeyCode::Char('k') => Some(Action::AgentScrollUp),
                 _ => None,
             };
         }
@@ -56,7 +91,13 @@ impl AgentWorkspaceState {
             KeyCode::Char('i') => Some(Action::AgentFocusInput),
             KeyCode::Tab => Some(Action::AgentFocusNextPanel),
             KeyCode::BackTab => Some(Action::AgentFocusPrevPanel),
-            KeyCode::Char('f') => Some(Action::AgentFocusFiles),
+            KeyCode::Char('f') => match self.focus_area {
+                AgentFocusArea::Files => Some(Action::AgentBrowseFolderDialog),
+                _ => Some(Action::AgentFocusFiles),
+            },
+            KeyCode::F(2) if self.focus_area == AgentFocusArea::Files => {
+                Some(Action::AgentBrowseFolderDialog)
+            }
             KeyCode::Char('c') => {
                 if self.focus_area == AgentFocusArea::Chat {
                     Some(Action::AgentClearChat)
@@ -71,31 +112,46 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Files => Some(Action::AgentScanFiles),
                 _ => Some(Action::AgentToggleReasoning),
             },
-            KeyCode::Char('p') => Some(Action::AgentToggleSidebar),
-            KeyCode::Char('t') => Some(Action::AgentCycleToolFilter),
-            KeyCode::Char('y') => Some(Action::AgentApprovePending),
-            KeyCode::Char('n') => Some(Action::AgentRejectPending),
+            KeyCode::Char('t') => match self.focus_area {
+                AgentFocusArea::Files => Some(Action::AgentSwitchSidebarTab),
+                _ => Some(Action::AgentCycleToolFilter),
+            },
+            KeyCode::Char('n') => match self.focus_area {
+                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => {
+                    Some(Action::AgentNewTask)
+                }
+                _ => None,
+            },
 
             KeyCode::Down | KeyCode::Char('j') => match self.focus_area {
+                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => Some(Action::AgentNextTask),
                 AgentFocusArea::Files => Some(Action::AgentSelectFileNext),
                 AgentFocusArea::Chat => Some(Action::AgentScrollDown),
-                AgentFocusArea::Inspector => Some(Action::AgentNextContextFile),
+                AgentFocusArea::Inspector => Some(Action::AgentScrollDown),
             },
             KeyCode::Up | KeyCode::Char('k') => match self.focus_area {
+                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => Some(Action::AgentPrevTask),
                 AgentFocusArea::Files => Some(Action::AgentSelectFilePrev),
                 AgentFocusArea::Chat => Some(Action::AgentScrollUp),
-                AgentFocusArea::Inspector => Some(Action::AgentPrevContextFile),
+                AgentFocusArea::Inspector => Some(Action::AgentScrollUp),
             },
             KeyCode::Enter => match self.focus_area {
                 AgentFocusArea::Files => Some(Action::AgentToggleFileTreeExpand),
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
-                AgentFocusArea::Inspector => Some(Action::AgentTogglePinSelectedFile),
+                AgentFocusArea::Inspector => None,
             },
             KeyCode::Char('+') | KeyCode::Char('a') if self.focus_area == AgentFocusArea::Files => {
                 Some(Action::AgentOpenAddFolderModal)
             }
+            KeyCode::Char('o') | KeyCode::F(3) if self.focus_area == AgentFocusArea::Files => {
+                Some(Action::AgentOpenFolderInFileManager)
+            }
             KeyCode::Char('-') | KeyCode::Char('d') if self.focus_area == AgentFocusArea::Files => {
-                Some(Action::AgentRemoveActiveFolder)
+                if self.sidebar_tab == AgentSidebarTab::Tasks {
+                    Some(Action::AgentDeleteSelectedTask)
+                } else {
+                    Some(Action::AgentRemoveActiveFolder)
+                }
             }
             KeyCode::Char('[') if self.focus_area == AgentFocusArea::Files => {
                 Some(Action::AgentPrevFolder)
@@ -106,9 +162,7 @@ impl AgentWorkspaceState {
             KeyCode::Char(' ') if self.focus_area == AgentFocusArea::Files => {
                 Some(Action::AgentInsertSelectedFile)
             }
-            KeyCode::Char('d') if self.focus_area == AgentFocusArea::Inspector => {
-                Some(Action::AgentRemoveSelectedContextFile)
-            }
+            KeyCode::Char('P') => Some(Action::AgentOpenProjectModal),
             _ => None,
         }
     }

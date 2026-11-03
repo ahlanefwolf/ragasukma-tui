@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::types::{
-    AddFolderModalState, AgentFocusArea, ApprovalRequest, ChatMessage, ContextFileItem,
-    FileTagQuery, MessageRole, TokenBreakdown, ToolFilter, WorkspaceFileNode,
-    WorkspaceFolderItem,
+    AddFolderModalState, AgentFocusArea, AgentSidebarTab, ApprovalRequest, ChatMessage,
+    CreateProjectModalState, FileTagQuery, MessageRole, ProjectItem, ProjectSwitcherModalState,
+    TaskSessionItem, TokenBreakdown, ToolFilter, WorkspaceFileNode, WorkspaceFolderItem,
 };
 use crate::core_bridge::PersistedMessageDto;
 
@@ -41,12 +41,22 @@ pub struct AgentWorkspaceState {
     pub tool_filter: ToolFilter,
     pub pending_approval: Option<ApprovalRequest>,
 
-    // Phase 4: Context Management & Tokens
-    pub context_files: Vec<ContextFileItem>,
-    pub selected_context_file_idx: usize,
+    // Tasks & Sessions (1:1 with ai-voice AgentSidebar)
+    pub sidebar_tab: AgentSidebarTab,
+    pub sessions: Vec<TaskSessionItem>,
+    pub selected_session_idx: usize,
+    pub active_session_id: Option<String>,
     pub total_prompt_tokens: usize,
     pub total_completion_tokens: usize,
     pub max_context_limit: usize,
+
+    // Projects (Database SQLite migrations/0004)
+    pub projects: Vec<ProjectItem>,
+    pub selected_project_idx: usize,
+    pub active_project_id: Option<String>,
+    pub active_project_name: String,
+    pub project_modal: ProjectSwitcherModalState,
+    pub create_project_modal: CreateProjectModalState,
 
     // Phase 6: Responsive Layout & Inspection
     pub is_sidebar_visible: bool,
@@ -55,7 +65,10 @@ pub struct AgentWorkspaceState {
 
 impl Default for AgentWorkspaceState {
     fn default() -> Self {
-        let initial_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut expanded_dirs = HashSet::new();
+        expanded_dirs.insert(current_dir.to_string_lossy().to_string());
+
         Self {
             messages: Vec::new(),
             input_buffer: String::new(),
@@ -70,27 +83,34 @@ impl Default for AgentWorkspaceState {
                 "claude-3-5-sonnet-20241022".to_string(),
                 "gpt-4o".to_string(),
                 "gemini-1.5-pro".to_string(),
-                "deepseek-chat".to_string(),
             ],
             expanded_tools: HashSet::new(),
             expanded_tool_idx: None,
-            reasoning_expanded: true,
+            reasoning_expanded: false,
             auto_scroll: true,
             spinner_tick: 0,
-            workspace_folders: vec![initial_root],
-            active_folder_idx: 0,
-            add_folder_modal: AddFolderModalState::default(),
             workspace_files: Vec::new(),
             selected_file_idx: 0,
-            expanded_dirs: HashSet::new(),
+            workspace_folders: vec![current_dir],
+            active_folder_idx: 0,
+            add_folder_modal: AddFolderModalState::default(),
+            expanded_dirs,
             tag_query: None,
             tool_filter: ToolFilter::All,
             pending_approval: None,
-            context_files: Vec::new(),
-            selected_context_file_idx: 0,
+            sidebar_tab: AgentSidebarTab::Tasks,
+            sessions: Vec::new(),
+            selected_session_idx: 0,
+            active_session_id: None,
             total_prompt_tokens: 0,
             total_completion_tokens: 0,
             max_context_limit: 128_000,
+            projects: Vec::new(),
+            selected_project_idx: 0,
+            active_project_id: None,
+            active_project_name: "Default Workspace".to_string(),
+            project_modal: ProjectSwitcherModalState::default(),
+            create_project_modal: CreateProjectModalState::default(),
             is_sidebar_visible: true,
             is_inspector_visible: true,
         }
@@ -99,7 +119,19 @@ impl Default for AgentWorkspaceState {
 
 impl AgentWorkspaceState {
     pub fn sample() -> Self {
+        let initial_session = TaskSessionItem {
+            id: "task-init-01".to_string(),
+            title: "Task: Initial Workspace Setup".to_string(),
+            status: "ready".to_string(),
+            model: Some("claude-3-5-sonnet-20241022".to_string()),
+            total_tokens_input: 120,
+            total_tokens_output: 450,
+            updated_at: 1700000000,
+            is_running: false,
+        };
         Self {
+            active_session_id: Some(initial_session.id.clone()),
+            sessions: vec![initial_session],
             messages: vec![ChatMessage {
                 role: MessageRole::System,
                 sender_name: "System".to_string(),
@@ -419,62 +451,66 @@ impl AgentWorkspaceState {
         self.cursor_pos = new_cursor;
     }
 
-    pub fn toggle_pin_file(&mut self, path: &str) {
-        if let Some(cf) = self.context_files.iter_mut().find(|f| f.path == path) {
-            cf.is_pinned = !cf.is_pinned;
-        } else {
-            self.context_files.push(ContextFileItem {
-                path: path.to_string(),
-                name: Path::new(path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| path.to_string()),
-                token_count: 50,
-                is_pinned: true,
-                is_readonly: false,
-                is_modified: false,
-            });
+    pub fn switch_sidebar_tab(&mut self) {
+        self.sidebar_tab = match self.sidebar_tab {
+            AgentSidebarTab::Tasks => AgentSidebarTab::Files,
+            AgentSidebarTab::Files => AgentSidebarTab::Tasks,
+        };
+    }
+
+    pub fn next_session(&mut self) {
+        if !self.sessions.is_empty() {
+            self.selected_session_idx = (self.selected_session_idx + 1) % self.sessions.len();
+            self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
         }
     }
 
-    pub fn toggle_pin_selected_file(&mut self) {
-        if let Some(cf) = self.context_files.get_mut(self.selected_context_file_idx) {
-            cf.is_pinned = !cf.is_pinned;
-        }
-    }
-
-    pub fn remove_context_file(&mut self, idx: usize) {
-        if idx < self.context_files.len() {
-            self.context_files.remove(idx);
-            if self.selected_context_file_idx >= self.context_files.len() && !self.context_files.is_empty() {
-                self.selected_context_file_idx = self.context_files.len() - 1;
-            }
-        }
-    }
-
-    pub fn next_context_file(&mut self) {
-        if !self.context_files.is_empty() {
-            self.selected_context_file_idx = (self.selected_context_file_idx + 1) % self.context_files.len();
-        }
-    }
-
-    pub fn prev_context_file(&mut self) {
-        if !self.context_files.is_empty() {
-            if self.selected_context_file_idx == 0 {
-                self.selected_context_file_idx = self.context_files.len() - 1;
+    pub fn prev_session(&mut self) {
+        if !self.sessions.is_empty() {
+            if self.selected_session_idx == 0 {
+                self.selected_session_idx = self.sessions.len() - 1;
             } else {
-                self.selected_context_file_idx -= 1;
+                self.selected_session_idx -= 1;
             }
+            self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
+        }
+    }
+
+    pub fn create_new_task(&mut self, title: Option<String>) {
+        let task_num = self.sessions.len() + 1;
+        let id = format!("task-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+        let new_task = TaskSessionItem {
+            id: id.clone(),
+            title: title.unwrap_or_else(|| format!("Task #{}: New Agent Task", task_num)),
+            status: "ready".to_string(),
+            model: Some(self.active_model.clone()),
+            total_tokens_input: 0,
+            total_tokens_output: 0,
+            updated_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
+            is_running: false,
+        };
+        self.sessions.push(new_task);
+        self.selected_session_idx = self.sessions.len() - 1;
+        self.active_session_id = Some(id);
+    }
+
+    pub fn delete_selected_task(&mut self) {
+        if !self.sessions.is_empty() && self.selected_session_idx < self.sessions.len() {
+            self.sessions.remove(self.selected_session_idx);
+            if self.selected_session_idx >= self.sessions.len() && !self.sessions.is_empty() {
+                self.selected_session_idx = self.sessions.len() - 1;
+            }
+            self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
         }
     }
 
     pub fn calculate_token_breakdown(&self) -> TokenBreakdown {
         let chat_tokens = self.messages.iter().map(|m| m.content.len() / 4).sum();
-        let file_tokens = self.context_files.iter().map(|f| f.token_count).sum();
+        let session_tokens = self.sessions.iter().map(|s| (s.total_tokens_input + s.total_tokens_output) as usize).sum();
         TokenBreakdown {
             system_tokens: 1500,
             chat_history_tokens: chat_tokens,
-            context_files_tokens: file_tokens,
+            session_tokens,
             completion_tokens: self.total_completion_tokens,
             max_context_limit: self.max_context_limit,
         }
@@ -658,38 +694,34 @@ impl AgentWorkspaceState {
     pub fn scan_workspace_files(&mut self) {
         if self.workspace_folders.is_empty() {
             let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            self.expanded_dirs.insert(current_dir.to_string_lossy().to_string());
             self.workspace_folders.push(current_dir);
         }
 
         let mut nodes = Vec::new();
-        if self.workspace_folders.len() == 1 {
-            let single_dir = &self.workspace_folders[0];
-            collect_visible_children(single_dir, 0, &self.expanded_dirs, &mut nodes, None);
-        } else {
-            for folder in &self.workspace_folders {
-                let folder_str = folder.to_string_lossy().to_string();
-                let name = folder
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| folder_str.clone());
-                let is_expanded = self.expanded_dirs.contains(&folder_str);
-                nodes.push(WorkspaceFileNode {
-                    path: folder_str.clone(),
-                    name,
-                    is_dir: true,
-                    depth: 0,
-                    is_expanded,
-                    parent_path: None,
-                });
-                if is_expanded {
-                    collect_visible_children(
-                        folder,
-                        1,
-                        &self.expanded_dirs,
-                        &mut nodes,
-                        Some(folder_str),
-                    );
-                }
+        for folder in &self.workspace_folders {
+            let folder_str = folder.to_string_lossy().to_string();
+            let name = folder
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| folder_str.clone());
+            let is_expanded = self.expanded_dirs.contains(&folder_str);
+            nodes.push(WorkspaceFileNode {
+                path: folder_str.clone(),
+                name,
+                is_dir: true,
+                depth: 0,
+                is_expanded,
+                parent_path: None,
+            });
+            if is_expanded {
+                collect_visible_children(
+                    folder,
+                    1,
+                    &self.expanded_dirs,
+                    &mut nodes,
+                    Some(folder_str),
+                );
             }
         }
 

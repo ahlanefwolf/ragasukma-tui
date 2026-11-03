@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
@@ -48,6 +48,100 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     if state.add_folder_modal.is_open {
         render_add_folder_modal(frame, area, &state.add_folder_modal);
     }
+
+    if state.project_modal.is_open {
+        render_project_switcher_modal(frame, area, state);
+    }
+
+    if state.create_project_modal.is_open {
+        render_create_project_modal(frame, area, &state.create_project_modal);
+    }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
+fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
+    let popup_area = centered_rect(60, 50, area);
+    frame.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border_focused())
+        .title(Span::styled(" 🗂️ Database Projects ", Theme::badge_gold()));
+
+    let items: Vec<ListItem> = state
+        .projects
+        .iter()
+        .enumerate()
+        .map(|(idx, proj)| {
+            let is_sel = idx == state.project_modal.selected_idx;
+            let is_active = state.active_project_id.as_deref() == Some(&proj.id);
+            let prefix = if is_active { "★ " } else { "  " };
+            let style = if is_sel {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let desc = proj.description.as_deref().unwrap_or("No description");
+            ListItem::new(vec![
+                Line::from(vec![
+                    Span::styled(prefix, Style::default().fg(Color::Green)),
+                    Span::styled(&proj.name, style),
+                ]),
+                Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(desc, Style::default().fg(Color::DarkGray)),
+                ]),
+            ])
+        })
+        .collect();
+
+    let list = List::new(items).block(block);
+    frame.render_widget(list, popup_area);
+}
+
+fn render_create_project_modal(
+    frame: &mut Frame,
+    area: Rect,
+    modal: &crate::agent_view::types::CreateProjectModalState,
+) {
+    let popup_area = centered_rect(50, 20, area);
+    frame.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border_focused())
+        .title(Span::styled(" ➕ Create New Project ", Theme::badge_gold()));
+
+    let content = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Project Name: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(&modal.name_input, Style::default().fg(Color::Yellow)),
+            Span::styled("█", Style::default().fg(Color::White)),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(content).block(block);
+    frame.render_widget(paragraph, popup_area);
 }
 
 fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
@@ -55,19 +149,20 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(4),
+            Constraint::Length(3),
             Constraint::Min(8),
-            Constraint::Percentage(35),
         ])
         .split(area);
 
     let is_focused = state.focus_area == AgentFocusArea::Files;
 
-    // Header Workspace Folders Bar (1:1 with web agent multi-folder header)
+    // 1. Header Workspace Folders Bar (1:1 with web agent multi-folder header)
     let folder_block = Block::default()
-        .title(Span::styled(
-            format!(" 🗂️ Folders [{}] (a: +Folder, d: -Del) ", state.workspace_folders.len()),
-            Theme::badge_gold(),
-        ))
+        .title(vec![
+            Span::styled(" 📦 Project: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(&state.active_project_name, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+        ])
         .borders(Borders::ALL)
         .border_style(if is_focused {
             Theme::border_focused()
@@ -97,115 +192,190 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
         }
     }
     if folder_spans.is_empty() {
-        folder_spans.push(Span::styled(" (No attached folders) ", Style::default().fg(Theme::TEXT_MUTED)));
+        folder_spans.push(Span::styled(" (No attached workspaces) ", Style::default().fg(Theme::TEXT_MUTED)));
     }
     frame.render_widget(Paragraph::new(Line::from(folder_spans)).block(folder_block), chunks[0]);
 
+    // 2. Sidebar Tab Switcher (1:1 with AgentSidebar.tsx: Tasks vs Files)
+    let is_tasks_active = state.sidebar_tab == super::types::AgentSidebarTab::Tasks;
+    let tab_spans = vec![
+        Span::raw("  "),
+        if is_tasks_active {
+            Span::styled(
+                format!(" 💬 Tasks ({}) ", state.sessions.len()),
+                Theme::badge_gold(),
+            )
+        } else {
+            Span::styled(
+                format!(" Tasks ({}) ", state.sessions.len()),
+                Style::default().fg(Theme::TEXT_MUTED),
+            )
+        },
+        Span::raw("  |  "),
+        if !is_tasks_active {
+            Span::styled(
+                format!(" 📁 Files ({}) ", state.workspace_files.len()),
+                Theme::badge_gold(),
+            )
+        } else {
+            Span::styled(
+                format!(" Files ({}) ", state.workspace_files.len()),
+                Style::default().fg(Theme::TEXT_MUTED),
+            )
+        },
+    ];
+    let tab_block = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(Theme::border_subtle())
+        .style(Theme::block_base());
+    frame.render_widget(Paragraph::new(Line::from(tab_spans)).block(tab_block), chunks[1]);
+
+    // 3. Tab Content
     let border_style = if is_focused {
         Theme::border_focused()
     } else {
         Theme::border_subtle()
     };
 
-    let title = if is_focused {
-        Span::styled(" 📁 Berkas Workspace [Fokus] ", Theme::badge_gold())
-    } else {
-        Span::styled(" 📁 Berkas Workspace ", Theme::header_title())
-    };
+    match state.sidebar_tab {
+        super::types::AgentSidebarTab::Tasks => {
+            let task_items: Vec<ListItem> = if state.sessions.is_empty() {
+                vec![ListItem::new(Line::from(vec![Span::styled(
+                    " (No tasks created yet) ",
+                    Style::default().fg(Theme::TEXT_MUTED),
+                )]))]
+            } else {
+                state
+                    .sessions
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, s)| {
+                        let is_cursor = idx == state.selected_session_idx && is_focused;
+                        let is_current = state.active_session_id.as_deref() == Some(&s.id);
+                        let cursor_str = if is_cursor { "▶ " } else { "  " };
+                        let marker = if is_current { "● " } else { "○ " };
+                        let marker_color = if s.is_running {
+                            Theme::CYAN_ACCENT
+                        } else if is_current {
+                            Theme::GOLD_PRIMARY
+                        } else {
+                            Theme::TEXT_MUTED
+                        };
 
-    let file_items: Vec<ListItem> = if state.workspace_files.is_empty() {
-        vec![ListItem::new(Line::from(vec![Span::styled(
-            " (Tekan r untuk memuat berkas)",
-            Style::default().fg(Theme::TEXT_MUTED),
-        )]))]
-    } else {
-        state
-            .workspace_files
-            .iter()
-            .enumerate()
-            .map(|(idx, f)| {
-                let is_cursor = idx == state.selected_file_idx && is_focused;
-                let indent = "  ".repeat(f.depth);
-                let icon = if f.is_dir {
-                    if f.is_expanded { "📂 " } else { "📁 " }
-                } else {
-                    let ext = f.name.rsplit('.').next().unwrap_or("");
-                    match ext {
-                        "rs" => "🦀 ",
-                        "toml" => "📦 ",
-                        "json" => "🏷️ ",
-                        "md" => "📝 ",
-                        _ => "📄 ",
-                    }
-                };
+                        let status_tag = if s.is_running { " [Running]" } else { "" };
+                        let total_tokens = s.total_tokens_input + s.total_tokens_output;
+                        let token_tag = if total_tokens > 0 {
+                            format!(" ({} tokens)", total_tokens)
+                        } else {
+                            String::new()
+                        };
 
-                let cursor_str = if is_cursor { "▶ " } else { "  " };
-                let text_style = if is_cursor {
-                    Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
-                } else if f.is_dir {
-                    Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Theme::TEXT_PRIMARY)
-                };
+                        let style = if is_cursor {
+                            Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                        } else if is_current {
+                            Style::default().fg(Theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Theme::TEXT_SECONDARY)
+                        };
 
-                ListItem::new(Line::from(vec![
-                    Span::styled(cursor_str, Style::default().fg(Theme::GOLD_PRIMARY)),
-                    Span::raw(indent),
-                    Span::raw(icon),
-                    Span::styled(&f.name, text_style),
-                ]))
-            })
-            .collect()
-    };
+                        ListItem::new(Line::from(vec![
+                            Span::styled(cursor_str, Style::default().fg(Theme::GOLD_PRIMARY)),
+                            Span::styled(marker, Style::default().fg(marker_color)),
+                            Span::styled(&s.title, style),
+                            Span::styled(status_tag, Style::default().fg(Theme::CYAN_ACCENT)),
+                            Span::styled(token_tag, Style::default().fg(Theme::TEXT_MUTED)),
+                        ]))
+                    })
+                    .collect()
+            };
 
-    let block_files = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(border_style)
-        .style(Theme::block_base());
-    frame.render_widget(List::new(file_items).block(block_files), chunks[1]);
+            let title = if is_focused {
+                Span::styled(
+                    format!(" 💬 Active Tasks [{}] [Focused] ", state.sessions.len()),
+                    Theme::badge_gold(),
+                )
+            } else {
+                Span::styled(
+                    format!(" 💬 Active Tasks [{}] ", state.sessions.len()),
+                    Theme::header_title(),
+                )
+            };
 
-    // Context Files Pinned
-    let context_items: Vec<ListItem> = if state.context_files.is_empty() {
-        vec![ListItem::new(Line::from(vec![Span::styled(
-            " (Belum ada konteks berkas)",
-            Style::default().fg(Theme::TEXT_MUTED),
-        )]))]
-    } else {
-        state
-            .context_files
-            .iter()
-            .enumerate()
-            .map(|(idx, cf)| {
-                let is_cursor = idx == state.selected_context_file_idx && is_focused;
-                let pin_icon = if cf.is_pinned { "📌 " } else { "📎 " };
-                let cursor_str = if is_cursor { "▶ " } else { "  " };
+            let block = Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .style(Theme::block_base());
+            frame.render_widget(List::new(task_items).block(block), chunks[2]);
+        }
+        super::types::AgentSidebarTab::Files => {
+            let file_items: Vec<ListItem> = if state.workspace_files.is_empty() {
+                vec![ListItem::new(Line::from(vec![Span::styled(
+                    " (No files found in workspace) ",
+                    Style::default().fg(Theme::TEXT_MUTED),
+                )]))]
+            } else {
+                state
+                    .workspace_files
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, f)| {
+                        let is_cursor = idx == state.selected_file_idx && is_focused;
+                        let indent = "  ".repeat(f.depth);
+                        let icon = if f.is_dir {
+                            if f.is_expanded { "📂 " } else { "📁 " }
+                        } else {
+                            let ext = f.name.rsplit('.').next().unwrap_or("");
+                            match ext {
+                                "rs" => "🦀 ",
+                                "toml" => "📦 ",
+                                "json" => "🏷️ ",
+                                "md" => "📝 ",
+                                _ => "📄 ",
+                            }
+                        };
 
-                let style = if is_cursor {
-                    Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Theme::TEXT_SECONDARY)
-                };
+                        let cursor_str = if is_cursor { "▶ " } else { "  " };
+                        let text_style = if is_cursor {
+                            Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                        } else if f.is_dir && f.depth == 0 {
+                            Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)
+                        } else if f.is_dir {
+                            Style::default().fg(Theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Theme::TEXT_PRIMARY)
+                        };
 
-                ListItem::new(Line::from(vec![
-                    Span::styled(cursor_str, Style::default().fg(Theme::GOLD_PRIMARY)),
-                    Span::raw(pin_icon),
-                    Span::styled(&cf.name, style),
-                    Span::styled(
-                        format!(" ({}t)", cf.token_count),
-                        Style::default().fg(Theme::TEXT_MUTED),
-                    ),
-                ]))
-            })
-            .collect()
-    };
+                        let display_name = if f.is_dir && !f.name.ends_with('/') {
+                            format!("{}/", f.name)
+                        } else {
+                            f.name.clone()
+                        };
 
-    let block_context = Block::default()
-        .title(Span::styled(" 📌 Konteks Tersemat ", Theme::header_title()))
-        .borders(Borders::ALL)
-        .border_style(Theme::border_subtle())
-        .style(Theme::block_base());
-    frame.render_widget(List::new(context_items).block(block_context), chunks[1]);
+                        ListItem::new(Line::from(vec![
+                            Span::styled(cursor_str, Style::default().fg(Theme::GOLD_PRIMARY)),
+                            Span::raw(indent),
+                            Span::raw(icon),
+                            Span::styled(display_name, text_style),
+                        ]))
+                    })
+                    .collect()
+            };
+
+            let title = if is_focused {
+                Span::styled(" 📁 Workspace Files [Focused] ", Theme::badge_gold())
+            } else {
+                Span::styled(" 📁 Workspace Files ", Theme::header_title())
+            };
+
+            let block = Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .style(Theme::block_base());
+            frame.render_widget(List::new(file_items).block(block), chunks[2]);
+        }
+    }
 }
 
 fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
@@ -219,17 +389,17 @@ fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState
     let mut chat_lines = Vec::new();
     if state.messages.is_empty() {
         chat_lines.push(Line::from(vec![
-            Span::styled("Selamat datang di ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled("Welcome to ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled("Ragasukma AI Agent", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
-            Span::styled("! Ketik pesan Anda di bawah atau gunakan @ untuk menyematkan berkas.", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled("! Type your message below or press @ to attach files.", Style::default().fg(Theme::TEXT_SECONDARY)),
         ]));
     } else {
         for msg in &state.messages {
             let (badge, badge_style) = match msg.role {
-                MessageRole::User => (" Anda ", Theme::badge_info()),
-                MessageRole::Assistant => (" Asisten ", Theme::badge_gold()),
-                MessageRole::System => (" Sistem ", Theme::badge_gray()),
-                MessageRole::Tool => (" Alat ", Theme::badge_cyan()),
+                MessageRole::User => (" You ", Theme::badge_info()),
+                MessageRole::Assistant => (" Assistant ", Theme::badge_gold()),
+                MessageRole::System => (" System ", Theme::badge_gray()),
+                MessageRole::Tool => (" Tool ", Theme::badge_cyan()),
             };
 
             chat_lines.push(Line::from(vec![
@@ -250,10 +420,10 @@ fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState
 
             for tc in &msg.tool_calls {
                 let status_icon = match tc.status {
-                    ToolExecutionStatus::Running => "⏳ Sedang Berjalan",
-                    ToolExecutionStatus::Success => "✓ Selesai",
-                    ToolExecutionStatus::Failed => "✗ Gagal",
-                    ToolExecutionStatus::PendingApproval => "⚠️ Menunggu Persetujuan",
+                    ToolExecutionStatus::Running => "⏳ Running...",
+                    ToolExecutionStatus::Success => "✓ Completed",
+                    ToolExecutionStatus::Failed => "✗ Failed",
+                    ToolExecutionStatus::PendingApproval => "⚠️ Pending Approval",
                 };
                 let status_color = match tc.status {
                     ToolExecutionStatus::Running => Theme::CYAN_ACCENT,
@@ -274,7 +444,7 @@ fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState
     }
 
     let chat_block = Block::default()
-        .title(Span::styled(" 💬 Percakapan Agent ", Theme::header_title()))
+        .title(Span::styled(" 💬 Agent Conversation ", Theme::header_title()))
         .borders(Borders::ALL)
         .border_style(if is_chat_focused && !state.is_input_focused {
             Theme::border_focused()
@@ -297,9 +467,9 @@ fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState
     };
 
     let input_title = if state.is_input_focused {
-        Span::styled(" Masukkan Pesan (Enter: kirim, @: panggil berkas, Esc: lepas) ", Theme::badge_gold())
+        Span::styled(" Message Input (Active) ", Theme::badge_gold())
     } else {
-        Span::styled(" Masukkan Pesan (Tekan i / Enter untuk mengetik) ", Theme::badge_gray())
+        Span::styled(" Message Input ", Theme::badge_gray())
     };
 
     let prompt_prefix = Span::styled("❯ ", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD));
@@ -328,7 +498,7 @@ fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let usage_pct = (breakdown.usage_ratio() * 100.0) as usize;
 
     let model_block = Block::default()
-        .title(Span::styled(" 🧠 Telemetri Model ", Theme::header_title()))
+        .title(Span::styled(" 🧠 Model Telemetry ", Theme::header_title()))
         .borders(Borders::ALL)
         .border_style(if is_focused {
             Theme::border_focused()
@@ -339,11 +509,11 @@ fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
 
     let lines_model = vec![
         Line::from(vec![
-            Span::styled("Model Aktif : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Active Model : ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(&state.active_model, Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
-            Span::styled("Penggunaan  : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Token Usage  : ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
                 format!("{} / {} ({}%)", breakdown.total_used(), breakdown.max_context_limit, usage_pct),
                 Style::default().fg(if breakdown.is_danger() {
@@ -356,9 +526,9 @@ fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
             ),
         ]),
         Line::from(vec![
-            Span::styled("Sisa Kuota  : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Remaining    : ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
-                format!("{} token", breakdown.remaining_tokens()),
+                format!("{} tokens", breakdown.remaining_tokens()),
                 Style::default().fg(Theme::TEXT_PRIMARY),
             ),
         ]),
@@ -366,7 +536,7 @@ fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     frame.render_widget(Paragraph::new(lines_model).block(model_block), chunks[0]);
 
     let block_tools = Block::default()
-        .title(Span::styled(" 🛠️ Status Alat MCP ", Theme::header_title()))
+        .title(Span::styled(" 🛠️ MCP Tool Status ", Theme::header_title()))
         .borders(Borders::ALL)
         .border_style(Theme::border_subtle())
         .style(Theme::block_base());
@@ -430,7 +600,7 @@ fn render_tag_query_popup(frame: &mut Frame, area: Rect, tq: &super::types::File
         .collect();
 
     let block = Block::default()
-        .title(Span::styled(" @ Sertakan Berkas (↑/↓: pilih, Enter: sisip, Esc: batal) ", Theme::badge_gold()))
+        .title(Span::styled(" @ Attach File to Prompt ", Theme::badge_gold()))
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
         .style(Theme::block_surface());
@@ -443,8 +613,8 @@ fn render_add_folder_modal(
     area: Rect,
     modal_state: &super::types::AddFolderModalState,
 ) {
-    let width = 64.min(area.width.saturating_sub(4));
-    let height = 10.min(area.height.saturating_sub(4));
+    let width = 68.min(area.width.saturating_sub(4));
+    let height = 7.min(area.height.saturating_sub(4));
     let x = (area.width.saturating_sub(width)) / 2;
     let y = (area.height.saturating_sub(height)) / 2;
     let popup_area = Rect {
@@ -461,14 +631,13 @@ fn render_add_folder_modal(
         .constraints([
             Constraint::Length(3),
             Constraint::Length(2),
-            Constraint::Length(2),
         ])
         .margin(1)
         .split(popup_area);
 
     let block = Block::default()
         .title(Span::styled(
-            " ➕ Tambah Folder ke Workspace (Attached Folders) ",
+            " ➕ Add Folder to Workspace ",
             Theme::badge_gold(),
         ))
         .borders(Borders::ALL)
@@ -478,7 +647,7 @@ fn render_add_folder_modal(
 
     let input_block = Block::default()
         .title(Span::styled(
-            " Path Folder (misal: /path/to/project atau ~/repo) ",
+            " Folder Path (e.g., /path/to/project or ~/repo) ",
             Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
@@ -499,17 +668,9 @@ fn render_add_folder_modal(
         Line::from(vec![Span::styled(format!("⚠️ {}", msg), style)])
     } else {
         Line::from(vec![Span::styled(
-            "Ketik path lokal lalu tekan [Enter] untuk menambahkan",
+            "Enter path to attached workspace directory",
             Style::default().fg(Theme::TEXT_MUTED),
         )])
     };
     frame.render_widget(Paragraph::new(feedback_line), chunks[1]);
-
-    let footer_line = Line::from(vec![
-        Span::styled(" [Enter] ", Theme::key_badge()),
-        Span::styled("Tambahkan   ", Style::default().fg(Theme::TEXT_SECONDARY)),
-        Span::styled(" [Esc] ", Theme::key_badge()),
-        Span::styled("Batal", Style::default().fg(Theme::TEXT_SECONDARY)),
-    ]);
-    frame.render_widget(Paragraph::new(footer_line), chunks[2]);
 }

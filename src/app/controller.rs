@@ -56,19 +56,9 @@ impl App {
             };
         }
 
-        // 4. Dedicated conflict-free tab switching (available when not typing)
-        match code {
-            KeyCode::Char('[') => return Some(Action::PrevTab),
-            KeyCode::Char(']') => return Some(Action::NextTab),
-            KeyCode::Char('1') | KeyCode::F(1) => return Some(Action::SwitchTab(0)),
-            KeyCode::Char('2') | KeyCode::F(2) => return Some(Action::SwitchTab(1)),
-            KeyCode::Char('3') | KeyCode::F(3) => return Some(Action::SwitchTab(2)),
-            KeyCode::Char('4') | KeyCode::F(4) => return Some(Action::SwitchTab(3)),
-            KeyCode::Char('5') | KeyCode::F(5) => return Some(Action::SwitchTab(4)),
-            _ => {}
-        }
-
-        // 5. Delegate to the active tab view controller first
+        // 4. Delegate to the active tab view controller first.
+        // If the active view handles this key (e.g. tree navigation, panel toggling, folder switching),
+        // let the view have priority.
         let view_action = match self.active_tab {
             0 => self.agent.handle_key(key),
             1 => self.antigravity.handle_key(key),
@@ -82,17 +72,19 @@ impl App {
             return view_action;
         }
 
-        // 6. Global navigation fallback when not handled by active view
-        if let KeyCode::Char(c @ '1'..='5') = code {
-            let tab_idx = (c as usize) - ('1' as usize);
-            return Some(Action::SwitchTab(tab_idx));
-        }
-
+        // 5. Global fallback shortcuts (when unhandled by active view)
         match code {
+            KeyCode::Char('1') => Some(Action::SwitchTab(0)),
+            KeyCode::Char('2') => Some(Action::SwitchTab(1)),
+            KeyCode::Char('3') => Some(Action::SwitchTab(2)),
+            KeyCode::Char('4') => Some(Action::SwitchTab(3)),
+            KeyCode::Char('5') => Some(Action::SwitchTab(4)),
+            KeyCode::Char('[') => Some(Action::PrevTab),
+            KeyCode::Char(']') => Some(Action::NextTab),
             KeyCode::Tab => Some(Action::NextTab),
             KeyCode::BackTab => Some(Action::PrevTab),
             KeyCode::Char('q') => Some(Action::Quit),
-            KeyCode::Char('?') => Some(Action::ToggleHelp),
+            KeyCode::Char('?') | KeyCode::F(1) => Some(Action::ToggleHelp),
             _ => None,
         }
     }

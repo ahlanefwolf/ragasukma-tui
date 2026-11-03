@@ -76,6 +76,59 @@ impl App {
                     acc.quotas = quotas;
                 }
             }
+            CoreBridgeEvent::ProjectsLoaded {
+                projects,
+                active_id,
+                active_name,
+            } => {
+                self.agent.projects = projects
+                    .into_iter()
+                    .map(|p| crate::agent_view::types::ProjectItem {
+                        id: p.id,
+                        name: p.name,
+                        description: p.description,
+                    })
+                    .collect();
+                self.agent.active_project_id = Some(active_id);
+                self.agent.active_project_name = active_name;
+            }
+            CoreBridgeEvent::ProjectCreated { project } => {
+                let item = crate::agent_view::types::ProjectItem {
+                    id: project.id,
+                    name: project.name,
+                    description: project.description,
+                };
+                self.agent.projects.push(item);
+            }
+            CoreBridgeEvent::ProjectSwitched {
+                project_id,
+                project_name,
+            } => {
+                self.agent.active_project_id = Some(project_id);
+                self.agent.active_project_name = project_name;
+            }
+            CoreBridgeEvent::ProjectDeleted { id } => {
+                self.agent.projects.retain(|p| p.id != id);
+            }
+            CoreBridgeEvent::SessionsLoaded {
+                sessions,
+                active_id,
+            } => {
+                self.agent.sessions = sessions
+                    .into_iter()
+                    .map(|(sid, title)| crate::agent_view::types::TaskSessionItem {
+                        id: sid,
+                        title,
+                        status: "ready".to_string(),
+                        model: None,
+                        total_tokens_input: 0,
+                        total_tokens_output: 0,
+                        updated_at: 0,
+                        is_running: false,
+                    })
+                    .collect();
+                self.agent.active_session_id = Some(active_id);
+            }
             CoreBridgeEvent::Error(err) => {
                 tracing::error!("Core bridge error received: {err}");
                 self.error_modal = Some(err);

@@ -2,8 +2,8 @@ use anyhow::Result;
 use ragasukma_core::agent::events::get_session_sender;
 use ragasukma_core::agent::models::{AgentSessionEvent, Message};
 use ragasukma_core::agent::repository::{
-    create_message, create_project, create_session, delete_session, list_messages, list_projects,
-    list_sessions,
+    create_message, create_project, create_session, delete_project, delete_session, get_project,
+    list_messages, list_projects, list_sessions,
 };
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
@@ -18,6 +18,13 @@ pub struct PersistedMessageDto {
     pub thought: Option<String>,
     pub tool_calls: Option<String>,
     pub created_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectDto {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
 }
 
 impl From<Message> for PersistedMessageDto {
@@ -39,6 +46,21 @@ pub enum CoreBridgeEvent {
     Connected {
         project_id: String,
         session_id: String,
+    },
+    ProjectsLoaded {
+        projects: Vec<ProjectDto>,
+        active_id: String,
+        active_name: String,
+    },
+    ProjectCreated {
+        project: ProjectDto,
+    },
+    ProjectSwitched {
+        project_id: String,
+        project_name: String,
+    },
+    ProjectDeleted {
+        id: String,
     },
     SessionsLoaded {
         sessions: Vec<(String, String)>,
@@ -103,6 +125,16 @@ pub enum CoreBridgeCommand {
         provider: String,
         account_id: String,
     },
+    CreateProject {
+        name: String,
+        description: Option<String>,
+    },
+    SwitchProject {
+        project_id: String,
+    },
+    DeleteProject {
+        project_id: String,
+    },
     CreateSession {
         title: String,
     },
@@ -130,9 +162,9 @@ impl CoreBridge {
         db_pool: SqlitePool,
         event_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
     ) -> Result<Self> {
-        let projects = list_projects().await.unwrap_or_default();
-        let project = if let Some(first) = projects.into_iter().next() {
-            first
+        let initial_projects = list_projects().await.unwrap_or_default();
+        let project = if let Some(first) = initial_projects.first() {
+            first.clone()
         } else {
             create_project("Default Workspace", "TUI Interactive Workspace", None, None).await?
         };
@@ -161,6 +193,23 @@ impl CoreBridge {
             session_id: sid.clone(),
         });
 
+        // Emit initial project list
+        let all_projects = list_projects().await.unwrap_or_default();
+        let project_dtos = all_projects
+            .into_iter()
+            .map(|p| ProjectDto {
+                id: p.id,
+                name: p.name,
+                description: Some(p.description),
+            })
+            .collect::<Vec<_>>();
+
+        let _ = event_tx.send(CoreBridgeEvent::ProjectsLoaded {
+            projects: project_dtos,
+            active_id: pid.clone(),
+            active_name: project.name.clone(),
+        });
+
         // Emit initial session list and history
         let all_sessions = list_sessions(&pid).await.unwrap_or_default();
         let sessions_summary = all_sessions
@@ -182,7 +231,7 @@ impl CoreBridge {
         }
 
         let current_sid = Arc::new(Mutex::new(sid.clone()));
-        let worker_project_id = pid.clone();
+        let mut worker_project_id = pid.clone();
         let worker_tx = event_tx.clone();
         let current_sid_clone = Arc::clone(&current_sid);
 
@@ -278,6 +327,124 @@ impl CoreBridge {
                                 }
                             });
                             current_turn_handle = Some(handle);
+                        }
+                    }
+                    CoreBridgeCommand::CreateProject { name, description } => {
+                        match create_project(&name, description.as_deref().unwrap_or(""), None, None).await {
+                            Ok(new_proj) => {
+                                let dto = ProjectDto {
+                                    id: new_proj.id.clone(),
+                                    name: new_proj.name.clone(),
+                                    description: Some(new_proj.description.clone()),
+                                };
+                                let _ = worker_tx.send(CoreBridgeEvent::ProjectCreated { project: dto });
+                                
+                                // Auto switch to newly created project
+                                worker_project_id = new_proj.id.clone();
+                                let new_sess = match create_session(
+                                    &worker_project_id,
+                                    "Default Session",
+                                    None,
+                                    None,
+                                    None,
+                                ).await {
+                                    Ok(s) => s,
+                                    Err(_) => continue,
+                                };
+                                active_sid = new_sess.id.clone();
+                                if let Ok(mut guard) = current_sid_clone.lock() {
+                                    *guard = active_sid.clone();
+                                }
+                                let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
+                                    project_id: worker_project_id.clone(),
+                                    project_name: new_proj.name.clone(),
+                                });
+                                let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
+                                    sessions: vec![(new_sess.id.clone(), new_sess.title)],
+                                    active_id: new_sess.id,
+                                });
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to create project: {e}");
+                            }
+                        }
+                    }
+                    CoreBridgeCommand::SwitchProject { project_id } => {
+                        worker_project_id = project_id.clone();
+                        let project_name = get_project(&project_id)
+                            .await
+                            .ok()
+                            .flatten()
+                            .map(|p| p.name)
+                            .unwrap_or_else(|| "Workspace".to_string());
+                        
+                        let sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
+                        let active_session = if let Some(first) = sessions.first() {
+                            first.clone()
+                        } else {
+                            match create_session(
+                                &worker_project_id,
+                                "Default Session",
+                                None,
+                                None,
+                                None,
+                            ).await {
+                                Ok(s) => s,
+                                Err(_) => continue,
+                            }
+                        };
+                        active_sid = active_session.id.clone();
+                        if let Ok(mut guard) = current_sid_clone.lock() {
+                            *guard = active_sid.clone();
+                        }
+                        let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
+                            project_id: worker_project_id.clone(),
+                            project_name,
+                        });
+                        let sessions_summary = if sessions.is_empty() {
+                            vec![(active_session.id.clone(), active_session.title)]
+                        } else {
+                            sessions.into_iter().map(|s| (s.id, s.title)).collect()
+                        };
+                        let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
+                            sessions: sessions_summary,
+                            active_id: active_sid.clone(),
+                        });
+                        if let Ok(msgs) = list_messages(&active_sid).await {
+                            let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
+                            let _ = worker_tx.send(CoreBridgeEvent::HistoryLoaded {
+                                session_id: active_sid.clone(),
+                                messages: dtos,
+                            });
+                        }
+                    }
+                    CoreBridgeCommand::DeleteProject { project_id } => {
+                        let _ = delete_project(&project_id).await;
+                        let _ = worker_tx.send(CoreBridgeEvent::ProjectDeleted {
+                            id: project_id.clone(),
+                        });
+                        if worker_project_id == project_id {
+                            // If deleted current project, switch to first available project
+                            let rem_projects = list_projects().await.unwrap_or_default();
+                            if let Some(first) = rem_projects.first() {
+                                worker_project_id = first.id.clone();
+                                let sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
+                                let first_sess = sessions.first().cloned();
+                                if let Some(fs) = first_sess {
+                                    active_sid = fs.id.clone();
+                                    if let Ok(mut guard) = current_sid_clone.lock() {
+                                        *guard = active_sid.clone();
+                                    }
+                                    let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
+                                        project_id: worker_project_id.clone(),
+                                        project_name: first.name.clone(),
+                                    });
+                                    let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
+                                        sessions: sessions.into_iter().map(|s| (s.id, s.title)).collect(),
+                                        active_id: active_sid.clone(),
+                                    });
+                                }
+                            }
                         }
                     }
                     CoreBridgeCommand::CreateSession { title } => {
@@ -479,6 +646,31 @@ impl CoreBridge {
                 session_id: session_id.to_string(),
             })
             .map_err(|e| anyhow::anyhow!("Gagal switch session: {}", e))
+    }
+
+    pub fn create_project(&self, name: &str, description: Option<String>) -> Result<()> {
+        self.cmd_tx
+            .send(CoreBridgeCommand::CreateProject {
+                name: name.to_string(),
+                description,
+            })
+            .map_err(|e| anyhow::anyhow!("Gagal membuat project baru: {}", e))
+    }
+
+    pub fn switch_project(&self, project_id: &str) -> Result<()> {
+        self.cmd_tx
+            .send(CoreBridgeCommand::SwitchProject {
+                project_id: project_id.to_string(),
+            })
+            .map_err(|e| anyhow::anyhow!("Gagal switch project: {}", e))
+    }
+
+    pub fn delete_project(&self, project_id: &str) -> Result<()> {
+        self.cmd_tx
+            .send(CoreBridgeCommand::DeleteProject {
+                project_id: project_id.to_string(),
+            })
+            .map_err(|e| anyhow::anyhow!("Gagal menghapus project: {}", e))
     }
 
     pub fn create_session(&self, title: &str) -> Result<()> {

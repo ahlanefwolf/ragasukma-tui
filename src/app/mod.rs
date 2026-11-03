@@ -115,23 +115,29 @@ mod tests {
     }
 
     #[test]
-    fn test_context_manager_and_token_gauge() {
+    fn test_task_sessions_and_token_gauge() {
         let mut app = App::new(std::path::PathBuf::from("."));
         let breakdown = app.agent.calculate_token_breakdown();
-        assert!(breakdown.total_used() > 0);
         assert!(breakdown.remaining_tokens() <= breakdown.max_context_limit);
         assert!(!breakdown.is_danger());
 
-        // Test pin file
-        let initial_count = app.agent.context_files.len();
-        app.agent.toggle_pin_file("test/file.rs");
-        assert_eq!(app.agent.context_files.len(), initial_count + 1);
-        assert!(app.agent.context_files.iter().any(|f| f.path == "test/file.rs" && f.is_pinned));
+        // Test create new task session
+        let initial_count = app.agent.sessions.len();
+        app.agent.create_new_task(Some("Refactor Agent View".to_string()));
+        assert_eq!(app.agent.sessions.len(), initial_count + 1);
+        assert_eq!(
+            app.agent.sessions.last().map(|s| s.title.as_str()),
+            Some("Refactor Agent View")
+        );
 
-        // Test remove file
-        let idx = app.agent.context_files.len() - 1;
-        app.agent.remove_context_file(idx);
-        assert_eq!(app.agent.context_files.len(), initial_count);
+        // Test switch sidebar tab
+        assert_eq!(app.agent.sidebar_tab, crate::agent_view::types::AgentSidebarTab::Tasks);
+        app.agent.switch_sidebar_tab();
+        assert_eq!(app.agent.sidebar_tab, crate::agent_view::types::AgentSidebarTab::Files);
+
+        // Test delete task session
+        app.agent.delete_selected_task();
+        assert_eq!(app.agent.sessions.len(), initial_count);
     }
 
     #[test]

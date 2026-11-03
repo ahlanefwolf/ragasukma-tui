@@ -105,11 +105,12 @@ pub enum Action {
     AgentCycleToolFilter,
     AgentToggleToolCard(usize),
 
-    // Phase 4 Multi-File Context Manager & Token Gauge
-    AgentTogglePinSelectedFile,
-    AgentRemoveSelectedContextFile,
-    AgentNextContextFile,
-    AgentPrevContextFile,
+    // Phase 4 Tasks & Sessions (1:1 with ai-voice AgentSidebar)
+    AgentSwitchSidebarTab,
+    AgentNewTask,
+    AgentDeleteSelectedTask,
+    AgentNextTask,
+    AgentPrevTask,
 
     // Phase 5 Async Engine Integration & Turn Cancellation
     AgentCancelTurn,
@@ -129,6 +130,20 @@ pub enum Action {
     AgentRemoveActiveFolder,
     AgentNextFolder,
     AgentPrevFolder,
+    AgentBrowseFolderDialog,
+    AgentOpenFolderInFileManager,
+
+    // Phase 7 Projects (Database SQLite migrations/0004)
+    AgentOpenProjectModal,
+    AgentCloseProjectModal,
+    AgentSelectNextProject,
+    AgentSelectPrevProject,
+    AgentSwitchProject,
+    AgentOpenCreateProjectModal,
+    AgentCloseCreateProjectModal,
+    AgentCreateProjectChar(char),
+    AgentCreateProjectBackspace,
+    AgentSubmitCreateProject,
 
     FormChar(char),
     FormBackspace,

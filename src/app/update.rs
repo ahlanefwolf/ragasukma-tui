@@ -339,21 +339,34 @@ impl App {
                 self.agent.toggle_tool_card(idx);
             }
 
-            // Phase 4 Multi-File Context Manager & Token Gauge
-            Action::AgentTogglePinSelectedFile => {
-                self.agent.toggle_pin_selected_file();
-                self.set_status("Toggled context file pin".to_string());
+            // Phase 4 Tasks & Sessions (1:1 with ai-voice AgentSidebar)
+            Action::AgentSwitchSidebarTab => {
+                self.agent.switch_sidebar_tab();
+                let tab_name = match self.agent.sidebar_tab {
+                    crate::agent_view::types::AgentSidebarTab::Tasks => "Tasks",
+                    crate::agent_view::types::AgentSidebarTab::Files => "Files",
+                };
+                self.set_status(format!("Sidebar tab switched to {}", tab_name));
             }
-            Action::AgentRemoveSelectedContextFile => {
-                let idx = self.agent.selected_context_file_idx;
-                self.agent.remove_context_file(idx);
-                self.set_status("Removed context file from prompt".to_string());
+            Action::AgentNewTask => {
+                self.agent.create_new_task(None);
+                self.set_status("Created new agent task session".to_string());
             }
-            Action::AgentNextContextFile => {
-                self.agent.next_context_file();
+            Action::AgentDeleteSelectedTask => {
+                self.agent.delete_selected_task();
+                self.set_status("Deleted agent task session".to_string());
             }
-            Action::AgentPrevContextFile => {
-                self.agent.prev_context_file();
+            Action::AgentNextTask => {
+                self.agent.next_session();
+                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
+                    self.set_status(format!("Selected task: {}", s.title));
+                }
+            }
+            Action::AgentPrevTask => {
+                self.agent.prev_session();
+                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
+                    self.set_status(format!("Selected task: {}", s.title));
+                }
             }
             Action::AgentCancelTurn => {
                 if let Some(tx) = &self.bridge_cmd_tx {
@@ -391,11 +404,11 @@ impl App {
             // Multi-Folder Workspace Support (1:1 with web agent)
             Action::AgentOpenAddFolderModal => {
                 self.agent.open_add_folder_modal();
-                self.set_status("Tambah folder ke workspace (Ketik path folder)".to_string());
+                self.set_status("Add folder to workspace (Enter path or press Tab to browse)".to_string());
             }
             Action::AgentCloseAddFolderModal => {
                 self.agent.close_add_folder_modal();
-                self.set_status("Batal menambah folder".to_string());
+                self.set_status("Cancelled adding folder".to_string());
             }
             Action::AgentAddFolderChar(c) => {
                 self.agent.add_folder_modal.input_path.push(c);
@@ -407,10 +420,10 @@ impl App {
                 match self.agent.submit_add_folder() {
                     Ok(()) => {
                         let count = self.agent.workspace_folders.len();
-                        self.set_status(format!("Folder berhasil ditambahkan (Total: {} folder)", count));
+                        self.set_status(format!("Folder attached successfully (Total: {} folders)", count));
                     }
                     Err(err) => {
-                        self.set_status(format!("Gagal tambah folder: {}", err));
+                        self.set_status(format!("Failed to attach folder: {}", err));
                     }
                 }
             }
@@ -418,24 +431,135 @@ impl App {
                 let idx = self.agent.active_folder_idx;
                 match self.agent.remove_workspace_folder(idx) {
                     Ok(()) => {
-                        self.set_status("Folder berhasil dilepas dari workspace".to_string());
+                        self.set_status("Folder detached from workspace".to_string());
                     }
                     Err(err) => {
-                        self.set_status(format!("Gagal melepas folder: {}", err));
+                        self.set_status(format!("Failed to detach folder: {}", err));
                     }
                 }
             }
             Action::AgentNextFolder => {
                 self.agent.select_next_folder();
                 if let Some(f) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
-                    self.set_status(format!("Aktif folder: {}", f.display()));
+                    self.set_status(format!("Active folder: {}", f.display()));
                 }
             }
             Action::AgentPrevFolder => {
                 self.agent.select_prev_folder();
                 if let Some(f) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
-                    self.set_status(format!("Aktif folder: {}", f.display()));
+                    self.set_status(format!("Active folder: {}", f.display()));
                 }
+            }
+            Action::AgentBrowseFolderDialog => {
+                let initial = if !self.agent.add_folder_modal.input_path.trim().is_empty() {
+                    Some(self.agent.add_folder_modal.input_path.as_str())
+                } else {
+                    self.agent
+                        .workspace_folders
+                        .get(self.agent.active_folder_idx)
+                        .and_then(|p| p.to_str())
+                };
+
+                match ragasukma_core::agent::tools::pick_folder_dialog(initial) {
+                    Ok(Some(selected_path)) => {
+                        if self.agent.add_folder_modal.is_open {
+                            self.agent.add_folder_modal.input_path = selected_path;
+                            let _ = self.agent.submit_add_folder();
+                            self.set_status("Folder attached from file manager dialog".to_string());
+                        } else {
+                            match self.agent.add_workspace_folder(std::path::PathBuf::from(selected_path)) {
+                                Ok(()) => {
+                                    self.set_status("Folder attached from file manager dialog".to_string());
+                                }
+                                Err(err) => {
+                                    self.set_status(format!("Failed to attach folder: {}", err));
+                                }
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        self.set_status("Folder selection cancelled".to_string());
+                    }
+                    Err(err) => {
+                        self.set_status(format!("File manager dialog error: {}", err));
+                    }
+                }
+            }
+            Action::AgentOpenFolderInFileManager => {
+                if let Some(folder) = self.agent.workspace_folders.get(self.agent.active_folder_idx) {
+                    match ragasukma_core::agent::tools::open_path_in_file_manager(&folder.to_string_lossy()) {
+                        Ok(()) => {
+                            self.set_status(format!("Opened file manager for {}", folder.display()));
+                        }
+                        Err(err) => {
+                            self.set_status(format!("Failed to open file manager: {}", err));
+                        }
+                    }
+                }
+            }
+
+            Action::AgentOpenProjectModal => {
+                self.agent.project_modal.is_open = true;
+                self.set_status("Project Switcher dibuka. Pilih project atau tekan 'n' untuk buat baru.".to_string());
+            }
+            Action::AgentCloseProjectModal => {
+                self.agent.project_modal.is_open = false;
+            }
+            Action::AgentSelectNextProject => {
+                if !self.agent.projects.is_empty() {
+                    self.agent.project_modal.selected_idx =
+                        (self.agent.project_modal.selected_idx + 1) % self.agent.projects.len();
+                }
+            }
+            Action::AgentSelectPrevProject => {
+                if !self.agent.projects.is_empty() {
+                    if self.agent.project_modal.selected_idx == 0 {
+                        self.agent.project_modal.selected_idx = self.agent.projects.len() - 1;
+                    } else {
+                        self.agent.project_modal.selected_idx -= 1;
+                    }
+                }
+            }
+            Action::AgentSwitchProject => {
+                if let Some(target) = self.agent.projects.get(self.agent.project_modal.selected_idx) {
+                    let target_id = target.id.clone();
+                    let target_name = target.name.clone();
+                    self.agent.project_modal.is_open = false;
+                    if let Some(tx) = &self.bridge_cmd_tx {
+                        let _ = tx.send(CoreBridgeCommand::SwitchProject {
+                            project_id: target_id,
+                        });
+                        self.set_status(format!("Beralih ke project: {}", target_name));
+                    }
+                }
+            }
+            Action::AgentOpenCreateProjectModal => {
+                self.agent.project_modal.is_open = false;
+                self.agent.create_project_modal.is_open = true;
+                self.agent.create_project_modal.name_input.clear();
+                self.set_status("Buat Project Baru".to_string());
+            }
+            Action::AgentCloseCreateProjectModal => {
+                self.agent.create_project_modal.is_open = false;
+            }
+            Action::AgentCreateProjectChar(c) => {
+                self.agent.create_project_modal.name_input.push(c);
+            }
+            Action::AgentCreateProjectBackspace => {
+                self.agent.create_project_modal.name_input.pop();
+            }
+            Action::AgentSubmitCreateProject => {
+                let name = self.agent.create_project_modal.name_input.trim().to_string();
+                if !name.is_empty()
+                    && let Some(tx) = &self.bridge_cmd_tx
+                {
+                    let _ = tx.send(CoreBridgeCommand::CreateProject {
+                        name: name.clone(),
+                        description: None,
+                    });
+                    self.set_status(format!("Project '{}' dibuat", name));
+                }
+                self.agent.create_project_modal.is_open = false;
             }
 
             Action::FormChar(c) => self.custom_llm.form_input(c),

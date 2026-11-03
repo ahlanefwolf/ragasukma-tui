@@ -62,6 +62,24 @@ pub enum AgentFocusArea {
     Inspector,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentSidebarTab {
+    Tasks,
+    Files,
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskSessionItem {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub model: Option<String>,
+    pub total_tokens_input: i64,
+    pub total_tokens_output: i64,
+    pub updated_at: i64,
+    pub is_running: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct WorkspaceFileNode {
     pub path: String,
@@ -80,29 +98,18 @@ pub struct FileTagQuery {
     pub tag_start_idx: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct ContextFileItem {
-    pub path: String,
-    pub name: String,
-    pub token_count: usize,
-    pub is_pinned: bool,
-    pub is_readonly: bool,
-    pub is_modified: bool,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct TokenBreakdown {
     pub system_tokens: usize,
     pub chat_history_tokens: usize,
-    pub context_files_tokens: usize,
+    pub session_tokens: usize,
     pub completion_tokens: usize,
     pub max_context_limit: usize,
 }
 
 impl TokenBreakdown {
-    #[must_use]
     pub fn total_used(&self) -> usize {
-        self.system_tokens + self.chat_history_tokens + self.context_files_tokens + self.completion_tokens
+        self.system_tokens + self.chat_history_tokens + self.session_tokens + self.completion_tokens
     }
 
     #[must_use]
@@ -142,4 +149,27 @@ pub struct AddFolderModalState {
     pub is_open: bool,
     pub input_path: String,
     pub validation_message: Option<(bool, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectItem {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProjectSwitcherModalState {
+    pub is_open: bool,
+    pub selected_idx: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CreateProjectModalState {
+    pub is_open: bool,
+    pub name_input: String,
+    pub description_input: String,
+    pub cursor_pos: usize,
+    pub active_field: usize, // 0: Name, 1: Description
+    pub error_message: Option<String>,
 }

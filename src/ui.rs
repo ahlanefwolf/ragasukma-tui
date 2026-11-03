@@ -42,7 +42,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     }
 
     if app.show_help {
-        render_help_modal(frame, size);
+        render_help_modal(frame, app, size);
     }
 }
 
@@ -146,7 +146,34 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::raw("Close Help "),
         ]
     } else if app.active_tab == 0 {
-        if app.agent.is_input_focused {
+        if app.agent.project_modal.is_open {
+            vec![
+                Span::styled(" [Enter] ", Theme::key_badge()),
+                Span::raw("Switch "),
+                Span::styled(" [j/k] ", Theme::key_badge()),
+                Span::raw("Nav "),
+                Span::styled(" [n] ", Theme::key_badge()),
+                Span::raw("New Project "),
+                Span::styled(" [Esc] ", Theme::key_badge()),
+                Span::raw("Close "),
+            ]
+        } else if app.agent.create_project_modal.is_open {
+            vec![
+                Span::styled(" [Enter] ", Theme::key_badge()),
+                Span::raw("Create "),
+                Span::styled(" [Esc] ", Theme::key_badge()),
+                Span::raw("Cancel "),
+            ]
+        } else if app.agent.add_folder_modal.is_open {
+            vec![
+                Span::styled(" [Enter] ", Theme::key_badge()),
+                Span::raw("Add "),
+                Span::styled(" [Tab/F2] ", Theme::key_badge()),
+                Span::raw("Browse OS "),
+                Span::styled(" [Esc] ", Theme::key_badge()),
+                Span::raw("Cancel "),
+            ]
+        } else if app.agent.is_input_focused {
             vec![
                 Span::styled(" [Enter] ", Theme::key_badge()),
                 Span::raw("Send "),
@@ -172,51 +199,98 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
             ]
         } else {
             match app.agent.focus_area {
-                crate::agent_view::AgentFocusArea::Files => vec![
-                    Span::styled(" [Enter] ", Theme::key_badge()),
-                    Span::raw("Insert "),
-                    Span::styled(" [j/k] ", Theme::key_badge()),
-                    Span::raw("Nav "),
-                    Span::styled(" [r] ", Theme::key_badge()),
-                    Span::raw("Scan "),
-                    Span::styled(" [c] ", Theme::key_badge()),
-                    Span::raw("Chat "),
-                    Span::styled(" [1-5] ", Theme::key_badge()),
-                    Span::raw("Tabs "),
-                    Span::styled(" [?] ", Theme::key_badge()),
-                    Span::raw("Help "),
-                    Span::styled(" [q] ", Theme::key_badge()),
-                    Span::raw("Quit "),
-                ],
-                crate::agent_view::AgentFocusArea::Chat => vec![
-                    Span::styled(" [i/Enter] ", Theme::key_badge()),
-                    Span::raw("Prompt "),
-                    Span::styled(" [j/k] ", Theme::key_badge()),
-                    Span::raw("Scroll "),
-                    Span::styled(" [f] ", Theme::key_badge()),
-                    Span::raw("Files "),
-                    Span::styled(" [x] ", Theme::key_badge()),
-                    Span::raw("Tools "),
-                    Span::styled(" [F] ", Theme::key_badge()),
-                    Span::raw("Filter "),
-                    Span::styled(" [c] ", Theme::key_badge()),
-                    Span::raw("Clear "),
-                    Span::styled(" [1-5] ", Theme::key_badge()),
-                    Span::raw("Tabs "),
-                    Span::styled(" [?] ", Theme::key_badge()),
-                    Span::raw("Help "),
-                    Span::styled(" [q] ", Theme::key_badge()),
-                    Span::raw("Quit "),
-                ],
+                crate::agent_view::AgentFocusArea::Files => match app.agent.sidebar_tab {
+                    crate::agent_view::types::AgentSidebarTab::Tasks => vec![
+                        Span::styled(" [P] ", Theme::key_badge()),
+                        Span::raw("Project "),
+                        Span::styled(" [t] ", Theme::key_badge()),
+                        Span::raw("Files "),
+                        Span::styled(" [n] ", Theme::key_badge()),
+                        Span::raw("New Task "),
+                        Span::styled(" [j/k] ", Theme::key_badge()),
+                        Span::raw("Select "),
+                        Span::styled(" [d] ", Theme::key_badge()),
+                        Span::raw("Del "),
+                        Span::styled(" [Tab] ", Theme::key_badge()),
+                        Span::raw("Focus "),
+                        Span::styled(" [1-5] ", Theme::key_badge()),
+                        Span::raw("Tabs "),
+                        Span::styled(" [?] ", Theme::key_badge()),
+                        Span::raw("Help "),
+                        Span::styled(" [q] ", Theme::key_badge()),
+                        Span::raw("Quit "),
+                    ],
+                    crate::agent_view::types::AgentSidebarTab::Files => vec![
+                        Span::styled(" [P] ", Theme::key_badge()),
+                        Span::raw("Project "),
+                        Span::styled(" [t] ", Theme::key_badge()),
+                        Span::raw("Tasks "),
+                        Span::styled(" [j/k] ", Theme::key_badge()),
+                        Span::raw("Tree "),
+                        Span::styled(" [Enter] ", Theme::key_badge()),
+                        Span::raw("Expand "),
+                        Span::styled(" [Space] ", Theme::key_badge()),
+                        Span::raw("@Mention "),
+                        Span::styled(" [a] ", Theme::key_badge()),
+                        Span::raw("Add Dir "),
+                        Span::styled(" [f/F2] ", Theme::key_badge()),
+                        Span::raw("Browse OS "),
+                        Span::styled(" [o] ", Theme::key_badge()),
+                        Span::raw("Open Mgr "),
+                        Span::styled(" [d] ", Theme::key_badge()),
+                        Span::raw("Remove "),
+                        Span::styled(" [Tab] ", Theme::key_badge()),
+                        Span::raw("Focus "),
+                        Span::styled(" [1-5] ", Theme::key_badge()),
+                        Span::raw("Tabs "),
+                        Span::styled(" [?] ", Theme::key_badge()),
+                        Span::raw("Help "),
+                        Span::styled(" [q] ", Theme::key_badge()),
+                        Span::raw("Quit "),
+                    ],
+                },
+                crate::agent_view::AgentFocusArea::Chat => {
+                    if app.agent.is_input_focused {
+                        vec![
+                            Span::styled(" [Enter] ", Theme::key_badge()),
+                            Span::raw("Send "),
+                            Span::styled(" [@] ", Theme::key_badge()),
+                            Span::raw("Attach File "),
+                            Span::styled(" [Esc] ", Theme::key_badge()),
+                            Span::raw("Unfocus "),
+                            Span::styled(" [?] ", Theme::key_badge()),
+                            Span::raw("Help "),
+                        ]
+                    } else {
+                        vec![
+                            Span::styled(" [i/Enter] ", Theme::key_badge()),
+                            Span::raw("Type "),
+                            Span::styled(" [j/k] ", Theme::key_badge()),
+                            Span::raw("Scroll "),
+                            Span::styled(" [x] ", Theme::key_badge()),
+                            Span::raw("Cards "),
+                            Span::styled(" [t] ", Theme::key_badge()),
+                            Span::raw("Filter "),
+                            Span::styled(" [c] ", Theme::key_badge()),
+                            Span::raw("Clear "),
+                            Span::styled(" [Tab] ", Theme::key_badge()),
+                            Span::raw("Focus "),
+                            Span::styled(" [1-5] ", Theme::key_badge()),
+                            Span::raw("Tabs "),
+                            Span::styled(" [?] ", Theme::key_badge()),
+                            Span::raw("Help "),
+                            Span::styled(" [q] ", Theme::key_badge()),
+                            Span::raw("Quit "),
+                        ]
+                    }
+                }
                 crate::agent_view::AgentFocusArea::Inspector => vec![
                     Span::styled(" [j/k] ", Theme::key_badge()),
-                    Span::raw("Nav "),
-                    Span::styled(" [d/x] ", Theme::key_badge()),
-                    Span::raw("Remove "),
-                    Span::styled(" [f] ", Theme::key_badge()),
-                    Span::raw("Files "),
-                    Span::styled(" [c] ", Theme::key_badge()),
-                    Span::raw("Chat "),
+                    Span::raw("Scroll "),
+                    Span::styled(" [t] ", Theme::key_badge()),
+                    Span::raw("Filter "),
+                    Span::styled(" [Tab] ", Theme::key_badge()),
+                    Span::raw("Focus "),
                     Span::styled(" [1-5] ", Theme::key_badge()),
                     Span::raw("Tabs "),
                     Span::styled(" [?] ", Theme::key_badge()),
@@ -298,150 +372,293 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     );
 }
 
-fn render_help_modal(frame: &mut Frame, area: Rect) {
-    let popup_area = centered_rect(75, 75, area);
+fn render_help_modal(frame: &mut Frame, app: &App, area: Rect) {
+    let popup_area = centered_rect(80, 80, area);
 
     frame.render_widget(Clear, popup_area);
 
+    let (tab_name, panel_name) = match app.active_tab {
+        0 => {
+            let panel = if app.agent.pending_approval.is_some() {
+                "Diff Review Modal"
+            } else if app.agent.add_folder_modal.is_open {
+                "Add Folder Modal"
+            } else if app.agent.tag_query.is_some() {
+                "Attach File Suggestion Popup"
+            } else {
+                match app.agent.focus_area {
+                    crate::agent_view::types::AgentFocusArea::Files => match app.agent.sidebar_tab {
+                        crate::agent_view::types::AgentSidebarTab::Tasks => "Sidebar › Tasks",
+                        crate::agent_view::types::AgentSidebarTab::Files => "Sidebar › Files",
+                    },
+                    crate::agent_view::types::AgentFocusArea::Chat => {
+                        if app.agent.is_input_focused {
+                            "Chat › Message Input (Typing)"
+                        } else {
+                            "Chat › Message History"
+                        }
+                    }
+                    crate::agent_view::types::AgentFocusArea::Inspector => "Inspector › System & Tokens",
+                }
+            };
+            ("Tab 1: Agent Workspace", panel)
+        }
+        1 => ("Tab 2: Antigravity Accounts", "Account List"),
+        2 => ("Tab 3: Codex Accounts", "Account List"),
+        3 => ("Tab 4: Claude Accounts", "Account List"),
+        4 => ("Tab 5: Custom LLM Providers", "Provider List"),
+        _ => ("Help", "General"),
+    };
+
+    let title = format!(" ❓ Help & Shortcuts — {} [{}] ", tab_name, panel_name);
     let help_card = Block::default()
-        .title(Span::styled(" ❓ Keyboard Shortcuts & Help Cheatsheet ", Theme::header_title()))
+        .title(Span::styled(title, Theme::header_title()))
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
         .style(Theme::block_base());
 
-    let help_text = vec![
+    let mut help_text = vec![
         Line::from(vec![
-            Span::styled("⚡ Global Navigation:", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
-        ]),
-        Line::from(vec![
-            Span::styled("   1 - 5          : ", Theme::badge_cyan()),
-            Span::raw("Langsung lompat ke Tab 1 (Agent), 2 (Antigravity), 3 (Codex), 4 (Claude), 5 (Custom LLM)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Tab / l / →    : ", Theme::badge_cyan()),
-            Span::raw("Pindah ke Tab berikutnya"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Shift+Tab/h/←  : ", Theme::badge_cyan()),
-            Span::raw("Pindah ke Tab sebelumnya"),
-        ]),
-        Line::from(vec![
-            Span::styled("   ? / F1         : ", Theme::badge_cyan()),
-            Span::raw("Buka / Tutup jendela bantuan ini"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Esc / q        : ", Theme::badge_cyan()),
-            Span::raw("Tutup popup / Keluar dari aplikasi"),
-        ]),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("🤖 Tab 1 - Agent Workspace:", Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)),
-        ]),
-        Line::from(vec![
-            Span::styled("   i / Enter      : ", Theme::badge_cyan()),
-            Span::raw("Fokus ke input prompt (ketik pertanyaan/instruksi)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Enter          : ", Theme::badge_cyan()),
-            Span::raw("Kirim prompt saat sedang mengetik"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Esc            : ", Theme::badge_cyan()),
-            Span::raw("Keluar dari fokus prompt (kembali ke mode navigasi)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   f / s / w      : ", Theme::badge_cyan()),
-            Span::raw("Fokus cepat ke File Tree (f), Sessions (s), atau Chat (w)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   [ / ] or h / l : ", Theme::badge_cyan()),
-            Span::raw("Pindah fokus panel (Sessions <-> Files <-> Chat)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   j / k          : ", Theme::badge_cyan()),
-            Span::raw("Navigasi item / scroll di panel yang sedang aktif"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Enter          : ", Theme::badge_cyan()),
-            Span::raw("Sessions: muat sesi | Files: insert @file ke prompt | Chat: tulis prompt"),
-        ]),
-        Line::from(vec![
-            Span::styled("   n              : ", Theme::badge_cyan()),
-            Span::raw("Mulai sesi chat baru"),
-        ]),
-        Line::from(vec![
-            Span::styled("   d              : ", Theme::badge_cyan()),
-            Span::raw("Hapus sesi terpilih (saat di panel Sessions)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   r              : ", Theme::badge_cyan()),
-            Span::raw("Rescan workspace files (saat di panel Files)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   x              : ", Theme::badge_cyan()),
-            Span::raw("Toggle rincian input argumen & output pada Tool Call cards"),
-        ]),
-        Line::from(vec![
-            Span::styled("   c              : ", Theme::badge_cyan()),
-            Span::raw("Bersihkan riwayat percakapan sesi aktif"),
-        ]),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("📊 Tab 2-4 - Quota Visualizer (Antigravity, Codex, Claude):", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
-        ]),
-        Line::from(vec![
-            Span::styled("   n / a          : ", Theme::badge_cyan()),
-            Span::raw("Tambah akun baru / Login OAuth (Antigravity & Codex)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   j / k          : ", Theme::badge_cyan()),
-            Span::raw("Pilih akun berikutnya / sebelumnya"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Enter          : ", Theme::badge_cyan()),
-            Span::raw("Set akun terpilih sebagai default aktif"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Space / t      : ", Theme::badge_cyan()),
-            Span::raw("Toggle status Enable/Disable akun"),
-        ]),
-        Line::from(vec![
-            Span::styled("   d              : ", Theme::badge_cyan()),
-            Span::raw("Hapus akun terpilih"),
-        ]),
-        Line::from(vec![
-            Span::styled("   r              : ", Theme::badge_cyan()),
-            Span::raw("Refresh kuota dan model limits akun"),
-        ]),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("🛠️ Tab 5 - Custom LLM Provider Manager:", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
-        ]),
-        Line::from(vec![
-            Span::styled("   j / k          : ", Theme::badge_cyan()),
-            Span::raw("Navigasi akun custom provider"),
-        ]),
-        Line::from(vec![
-            Span::styled("   Space          : ", Theme::badge_cyan()),
-            Span::raw("Toggle Enable / Disable provider terpilih"),
-        ]),
-        Line::from(vec![
-            Span::styled("   n              : ", Theme::badge_cyan()),
-            Span::raw("Buka modal tambah provider baru"),
-        ]),
-        Line::from(vec![
-            Span::styled("   e              : ", Theme::badge_cyan()),
-            Span::raw("Edit konfigurasi provider terpilih"),
-        ]),
-        Line::from(vec![
-            Span::styled("   d              : ", Theme::badge_cyan()),
-            Span::raw("Hapus provider terpilih (dengan dialog konfirmasi)"),
-        ]),
-        Line::from(vec![
-            Span::styled("   r              : ", Theme::badge_cyan()),
-            Span::raw("Buka modal daftar model yang tersedia"),
+            Span::styled(
+                format!("🎯 Active Context ({}) Shortcuts:", panel_name),
+                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+            ),
         ]),
     ];
+
+    if app.active_tab == 0 {
+        if app.agent.pending_approval.is_some() {
+            help_text.push(Line::from(vec![
+                Span::styled("   y              : ", Theme::badge_cyan()),
+                Span::raw("Approve pending tool diff / changes"),
+            ]));
+            help_text.push(Line::from(vec![
+                Span::styled("   n / Esc        : ", Theme::badge_cyan()),
+                Span::raw("Reject pending tool diff"),
+            ]));
+            help_text.push(Line::from(vec![
+                Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                Span::raw("Scroll diff view up / down"),
+            ]));
+        } else if app.agent.add_folder_modal.is_open {
+            help_text.push(Line::from(vec![
+                Span::styled("   Enter          : ", Theme::badge_cyan()),
+                Span::raw("Confirm and attach typed folder path to workspace"),
+            ]));
+            help_text.push(Line::from(vec![
+                Span::styled("   Esc            : ", Theme::badge_cyan()),
+                Span::raw("Cancel and close modal"),
+            ]));
+        } else if app.agent.tag_query.is_some() {
+            help_text.push(Line::from(vec![
+                Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                Span::raw("Navigate file suggestions"),
+            ]));
+            help_text.push(Line::from(vec![
+                Span::styled("   Enter          : ", Theme::badge_cyan()),
+                Span::raw("Insert selected @file mention into prompt"),
+            ]));
+            help_text.push(Line::from(vec![
+                Span::styled("   Esc            : ", Theme::badge_cyan()),
+                Span::raw("Dismiss file suggestion popup"),
+            ]));
+        } else {
+            match app.agent.focus_area {
+                crate::agent_view::types::AgentFocusArea::Files => match app.agent.sidebar_tab {
+                    crate::agent_view::types::AgentSidebarTab::Tasks => {
+                        help_text.push(Line::from(vec![
+                            Span::styled("   t              : ", Theme::badge_cyan()),
+                            Span::raw("Switch sidebar tab to Files view"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   n              : ", Theme::badge_cyan()),
+                            Span::raw("Create a new task / chat session"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                            Span::raw("Select next / previous task session"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   d              : ", Theme::badge_cyan()),
+                            Span::raw("Delete selected task session"),
+                        ]));
+                    }
+                    crate::agent_view::types::AgentSidebarTab::Files => {
+                        help_text.push(Line::from(vec![
+                            Span::styled("   t              : ", Theme::badge_cyan()),
+                            Span::raw("Switch sidebar tab to Tasks view"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                            Span::raw("Navigate directory tree items"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   Enter          : ", Theme::badge_cyan()),
+                            Span::raw("Expand or collapse folder"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   Space          : ", Theme::badge_cyan()),
+                            Span::raw("Insert selected file as @mention into chat prompt"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   r              : ", Theme::badge_cyan()),
+                            Span::raw("Rescan and reload workspace files"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   a / +          : ", Theme::badge_cyan()),
+                            Span::raw("Attach new folder to workspace"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   f / F2         : ", Theme::badge_cyan()),
+                            Span::raw("Browse folder using native OS file picker"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   o / F3         : ", Theme::badge_cyan()),
+                            Span::raw("Open active folder in OS file manager (GUI)"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   [ / ]          : ", Theme::badge_cyan()),
+                            Span::raw("Switch active workspace folder"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   d / -          : ", Theme::badge_cyan()),
+                            Span::raw("Remove active folder from workspace"),
+                        ]));
+                    }
+                },
+                crate::agent_view::types::AgentFocusArea::Chat => {
+                    if app.agent.is_input_focused {
+                        help_text.push(Line::from(vec![
+                            Span::styled("   Enter          : ", Theme::badge_cyan()),
+                            Span::raw("Send prompt instruction to agent"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   @              : ", Theme::badge_cyan()),
+                            Span::raw("Open file suggestion popup to mention file"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   Ctrl+U         : ", Theme::badge_cyan()),
+                            Span::raw("Clear input prompt"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   Esc            : ", Theme::badge_cyan()),
+                            Span::raw("Exit input mode (return to navigation)"),
+                        ]));
+                    } else {
+                        help_text.push(Line::from(vec![
+                            Span::styled("   i / Enter      : ", Theme::badge_cyan()),
+                            Span::raw("Focus prompt input to type instructions"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                            Span::raw("Scroll chat message history"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   x              : ", Theme::badge_cyan()),
+                            Span::raw("Toggle tool call argument & output cards"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   t              : ", Theme::badge_cyan()),
+                            Span::raw("Cycle tool call filters (All, Tools Only, Text Only)"),
+                        ]));
+                        help_text.push(Line::from(vec![
+                            Span::styled("   c              : ", Theme::badge_cyan()),
+                            Span::raw("Clear chat message history for active task"),
+                        ]));
+                    }
+                }
+                crate::agent_view::types::AgentFocusArea::Inspector => {
+                    help_text.push(Line::from(vec![
+                        Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+                        Span::raw("Scroll token analytics and status logs"),
+                    ]));
+                    help_text.push(Line::from(vec![
+                        Span::styled("   t              : ", Theme::badge_cyan()),
+                        Span::raw("Cycle tool call filter mode"),
+                    ]));
+                }
+            }
+        }
+    } else if app.active_tab >= 1 && app.active_tab <= 3 {
+        help_text.push(Line::from(vec![
+            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+            Span::raw("Navigate account list"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   Enter          : ", Theme::badge_cyan()),
+            Span::raw("Set selected account as active default"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   Space / t      : ", Theme::badge_cyan()),
+            Span::raw("Toggle account enable / disable state"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   n / a          : ", Theme::badge_cyan()),
+            Span::raw("Add new account / OAuth login"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   d              : ", Theme::badge_cyan()),
+            Span::raw("Delete selected account"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   r              : ", Theme::badge_cyan()),
+            Span::raw("Refresh account quotas and model limits"),
+        ]));
+    } else if app.active_tab == 4 {
+        help_text.push(Line::from(vec![
+            Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
+            Span::raw("Navigate custom LLM providers"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   Space          : ", Theme::badge_cyan()),
+            Span::raw("Toggle provider enable / disable state"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   n              : ", Theme::badge_cyan()),
+            Span::raw("Add a new custom provider"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   e              : ", Theme::badge_cyan()),
+            Span::raw("Edit selected provider configuration"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   d              : ", Theme::badge_cyan()),
+            Span::raw("Delete selected provider"),
+        ]));
+        help_text.push(Line::from(vec![
+            Span::styled("   r              : ", Theme::badge_cyan()),
+            Span::raw("Open available models list"),
+        ]));
+    }
+
+    // Section 2: Global Navigation Controls
+    help_text.push(Line::raw(""));
+    help_text.push(Line::from(vec![
+        Span::styled(
+            "⚡ Global Navigation & App Controls:",
+            Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD),
+        ),
+    ]));
+    help_text.push(Line::from(vec![
+        Span::styled("   1 - 5          : ", Theme::badge_cyan()),
+        Span::raw("Switch tabs (1: Agent, 2: Antigravity, 3: Codex, 4: Claude, 5: Custom LLM)"),
+    ]));
+    help_text.push(Line::from(vec![
+        Span::styled("   Tab            : ", Theme::badge_cyan()),
+        Span::raw("Cycle panel focus forward (Sidebar → Chat → Inspector)"),
+    ]));
+    help_text.push(Line::from(vec![
+        Span::styled("   Shift+Tab      : ", Theme::badge_cyan()),
+        Span::raw("Cycle panel focus backward"),
+    ]));
+    help_text.push(Line::from(vec![
+        Span::styled("   ? / F1         : ", Theme::badge_cyan()),
+        Span::raw("Open / Close this reactive help cheatsheet"),
+    ]));
+    help_text.push(Line::from(vec![
+        Span::styled("   q / Esc        : ", Theme::badge_cyan()),
+        Span::raw("Close popup modal or quit application"),
+    ]));
 
     let help_widget = Paragraph::new(help_text)
         .block(help_card)
