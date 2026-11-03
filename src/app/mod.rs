@@ -234,6 +234,6 @@ mod tests {
 
         // Cannot remove the only workspace folder
         let rem_last_res = app.agent.remove_workspace_folder(0);
-        assert!(rem_last_res.is_err());
+        assert!(rem_last_res.is_err(), "Expected removing the only workspace folder to fail");
     }
 }

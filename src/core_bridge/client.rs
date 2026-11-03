@@ -1,7 +1,5 @@
 use anyhow::Result;
-use ragasukma_core::agent::repository::{
-    create_project, create_session, list_messages, list_projects, list_sessions,
-};
+use ragasukma_core::agent::repository::{list_messages, list_projects, list_sessions};
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -21,30 +19,24 @@ impl CoreBridge {
         event_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
     ) -> Result<Self> {
         let initial_projects = list_projects().await.unwrap_or_default();
-        let project = if let Some(first) = initial_projects.first() {
-            first.clone()
-        } else {
-            create_project("Default Workspace", "TUI Interactive Workspace", None, None).await?
+        let project = initial_projects.first().cloned();
+        let (project_id, project_name) = match &project {
+            Some(p) => (p.id.clone(), p.name.clone()),
+            None => (String::new(), "No Project".to_string()),
         };
 
-        let existing_sessions = list_sessions(&project.id).await.unwrap_or_default();
-        let session = if let Some(first) = existing_sessions.first() {
-            first.clone()
+        let existing_sessions = if !project_id.is_empty() {
+            list_sessions(&project_id).await.unwrap_or_default()
         } else {
-            create_session(
-                &project.id,
-                "TUI Interactive Session",
-                None,
-                None,
-                None,
-            )
-            .await?
+            Vec::new()
         };
+        let session = existing_sessions.first().cloned();
+        let session_id = session.as_ref().map(|s| s.id.clone()).unwrap_or_default();
 
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<CoreBridgeCommand>();
 
-        let sid = session.id.clone();
-        let pid = project.id.clone();
+        let sid = session_id.clone();
+        let pid = project_id.clone();
 
         let _ = event_tx.send(CoreBridgeEvent::Connected {
             project_id: pid.clone(),
@@ -59,17 +51,22 @@ impl CoreBridge {
                 id: p.id,
                 name: p.name,
                 description: Some(p.description),
+                root_path: p.root_path,
             })
             .collect::<Vec<_>>();
 
         let _ = event_tx.send(CoreBridgeEvent::ProjectsLoaded {
             projects: project_dtos,
             active_id: pid.clone(),
-            active_name: project.name.clone(),
+            active_name: project_name,
         });
 
         // Emit initial session list and history
-        let all_sessions = list_sessions(&pid).await.unwrap_or_default();
+        let all_sessions = if !pid.is_empty() {
+            list_sessions(&pid).await.unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let sessions_summary = all_sessions
             .into_iter()
             .map(|s| (s.id, s.title))
@@ -98,14 +95,14 @@ impl CoreBridge {
             worker_tx,
             current_sid_clone,
             worker_project_id,
-            sid,
+            sid.clone(),
             db_pool,
         );
 
         Ok(Self {
             cmd_tx,
             project_id: pid,
-            session_id: session.id,
+            session_id: sid,
         })
     }
 
@@ -126,13 +123,32 @@ impl CoreBridge {
             .map_err(|e| anyhow::anyhow!("Gagal switch session: {}", e))
     }
 
-    pub fn create_project(&self, name: &str, description: Option<String>) -> Result<()> {
+    pub fn create_project(
+        &self,
+        name: &str,
+        description: Option<String>,
+        root_path: Option<String>,
+    ) -> Result<()> {
         self.cmd_tx
             .send(CoreBridgeCommand::CreateProject {
                 name: name.to_string(),
                 description,
+                root_path,
             })
             .map_err(|e| anyhow::anyhow!("Gagal membuat project baru: {}", e))
+    }
+
+    pub fn update_project_folders(
+        &self,
+        project_id: &str,
+        folders: Vec<String>,
+    ) -> Result<()> {
+        self.cmd_tx
+            .send(CoreBridgeCommand::UpdateProjectFolders {
+                project_id: project_id.to_string(),
+                folders,
+            })
+            .map_err(|e| anyhow::anyhow!("Gagal update project folders: {}", e))
     }
 
     pub fn switch_project(&self, project_id: &str) -> Result<()> {

@@ -58,7 +58,13 @@ impl AgentWorkspaceState {
         if self.is_input_focused {
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 return match code {
-                    KeyCode::Char('c') => Some(Action::Quit),
+                    KeyCode::Char('c') => {
+                        if self.is_running {
+                            Some(Action::AgentCancelTurn)
+                        } else {
+                            Some(Action::Quit)
+                        }
+                    }
                     KeyCode::Char('u') => Some(Action::AgentClearInput),
                     _ => None,
                 };
@@ -86,7 +92,33 @@ impl AgentWorkspaceState {
             };
         }
 
-        // When browsing panels
+        // Global shortcuts visible in footer (q, ?, 1-5) when not typing in an input
+        match code {
+            KeyCode::Char('q') => return Some(Action::Quit),
+            KeyCode::Char('?') | KeyCode::F(1) => return Some(Action::ToggleHelp),
+            KeyCode::Char('1') => return Some(Action::SwitchTab(0)),
+            KeyCode::Char('2') => return Some(Action::SwitchTab(1)),
+            KeyCode::Char('3') => return Some(Action::SwitchTab(2)),
+            KeyCode::Char('4') => return Some(Action::SwitchTab(3)),
+            KeyCode::Char('5') => return Some(Action::SwitchTab(4)),
+            _ => {}
+        }
+
+        // Control shortcuts
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            return match code {
+                KeyCode::Char('c') => {
+                    if self.is_running {
+                        Some(Action::AgentCancelTurn)
+                    } else {
+                        Some(Action::Quit)
+                    }
+                }
+                _ => None,
+            };
+        }
+
+        // When browsing panels (Chat, Files, Inspector)
         match code {
             KeyCode::Char('i') => Some(Action::AgentFocusInput),
             KeyCode::Tab => Some(Action::AgentFocusNextPanel),

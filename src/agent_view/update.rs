@@ -279,6 +279,34 @@ pub fn handle_agent_action(
             match agent.submit_add_folder() {
                 Ok(()) => {
                     let count = agent.workspace_folders.len();
+                    if let Some(tx) = bridge_cmd_tx {
+                        let folders: Vec<String> = agent
+                            .workspace_folders
+                            .iter()
+                            .map(|f| f.to_string_lossy().to_string())
+                            .collect();
+
+                        if let Some(active_pid) = &agent.active_project_id {
+                            let _ = tx.send(CoreBridgeCommand::UpdateProjectFolders {
+                                project_id: active_pid.clone(),
+                                folders,
+                            });
+                        } else {
+                            let first_folder_name = agent
+                                .workspace_folders
+                                .first()
+                                .and_then(|p| p.file_name())
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| "Workspace".to_string());
+
+                            let root_path_json = serde_json::to_string(&folders).ok();
+                            let _ = tx.send(CoreBridgeCommand::CreateProject {
+                                name: first_folder_name,
+                                description: Some("Workspace project".to_string()),
+                                root_path: root_path_json,
+                            });
+                        }
+                    }
                     Some(format!("Folder attached successfully (Total: {} folders)", count))
                 }
                 Err(err) => {
@@ -290,6 +318,17 @@ pub fn handle_agent_action(
             let idx = agent.active_folder_idx;
             match agent.remove_workspace_folder(idx) {
                 Ok(()) => {
+                    if let (Some(active_pid), Some(tx)) = (&agent.active_project_id, bridge_cmd_tx) {
+                        let folders: Vec<String> = agent
+                            .workspace_folders
+                            .iter()
+                            .map(|f| f.to_string_lossy().to_string())
+                            .collect();
+                        let _ = tx.send(CoreBridgeCommand::UpdateProjectFolders {
+                            project_id: active_pid.clone(),
+                            folders,
+                        });
+                    }
                     Some("Folder detached from workspace".to_string())
                 }
                 Err(err) => {
@@ -323,19 +362,46 @@ pub fn handle_agent_action(
 
             match ragasukma_core::agent::tools::pick_folder_dialog(initial) {
                 Ok(Some(selected_path)) => {
-                    if agent.add_folder_modal.is_open {
+                    let result = if agent.add_folder_modal.is_open {
                         agent.add_folder_modal.input_path = selected_path;
-                        let _ = agent.submit_add_folder();
-                        Some("Folder attached from file manager dialog".to_string())
+                        agent.submit_add_folder()
                     } else {
-                        match agent.add_workspace_folder(std::path::PathBuf::from(selected_path)) {
-                            Ok(()) => {
-                                Some("Folder attached from file manager dialog".to_string())
+                        agent.add_workspace_folder(std::path::PathBuf::from(selected_path))
+                    };
+
+                    match result {
+                        Ok(()) => {
+                            if let Some(tx) = bridge_cmd_tx {
+                                let folders: Vec<String> = agent
+                                    .workspace_folders
+                                    .iter()
+                                    .map(|f| f.to_string_lossy().to_string())
+                                    .collect();
+
+                                if let Some(active_pid) = &agent.active_project_id {
+                                    let _ = tx.send(CoreBridgeCommand::UpdateProjectFolders {
+                                        project_id: active_pid.clone(),
+                                        folders,
+                                    });
+                                } else {
+                                    let first_folder_name = agent
+                                        .workspace_folders
+                                        .first()
+                                        .and_then(|p| p.file_name())
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| "Workspace".to_string());
+
+                                    let root_path_json = serde_json::to_string(&folders).ok();
+                                    let _ = tx.send(CoreBridgeCommand::CreateProject {
+                                        name: first_folder_name,
+                                        description: Some("Workspace project".to_string()),
+                                        root_path: root_path_json,
+                                    });
+                                }
                             }
-                            Err(err) => {
-                                Some(format!("Failed to attach folder: {}", err))
-                            }
+                            Some("Folder attached from file manager dialog".to_string())
                         }
+                        Err(err) => Some(format!("Failed to attach folder: {}", err)),
                     }
                 }
                 Ok(None) => {
@@ -424,9 +490,23 @@ pub fn handle_agent_action(
             let name = agent.create_project_modal.name_input.trim().to_string();
             let res = if !name.is_empty() {
                 if let Some(tx) = bridge_cmd_tx {
+                    let initial_folders: Vec<String> = if let Some(f) = agent.workspace_folders.get(agent.active_folder_idx) {
+                        vec![f.to_string_lossy().to_string()]
+                    } else if let Ok(cwd) = std::env::current_dir() {
+                        vec![cwd.to_string_lossy().to_string()]
+                    } else {
+                        Vec::new()
+                    };
+                    let root_path = if initial_folders.is_empty() {
+                        None
+                    } else {
+                        serde_json::to_string(&initial_folders).ok()
+                    };
+
                     let _ = tx.send(CoreBridgeCommand::CreateProject {
                         name: name.clone(),
                         description: None,
+                        root_path,
                     });
                 }
                 Some(format!("Project '{}' dibuat", name))

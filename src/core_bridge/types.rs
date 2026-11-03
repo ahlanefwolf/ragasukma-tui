@@ -16,6 +16,7 @@ pub struct ProjectDto {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
+    pub root_path: Option<String>,
 }
 
 impl From<Message> for PersistedMessageDto {
@@ -49,6 +50,7 @@ pub enum CoreBridgeEvent {
     ProjectSwitched {
         project_id: String,
         project_name: String,
+        root_path: Option<String>,
     },
     ProjectDeleted {
         id: String,
@@ -119,6 +121,11 @@ pub enum CoreBridgeCommand {
     CreateProject {
         name: String,
         description: Option<String>,
+        root_path: Option<String>,
+    },
+    UpdateProjectFolders {
+        project_id: String,
+        folders: Vec<String>,
     },
     SwitchProject {
         project_id: String,

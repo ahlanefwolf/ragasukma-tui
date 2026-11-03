@@ -81,31 +81,96 @@ impl App {
                 active_id,
                 active_name,
             } => {
+                let initial_root = projects
+                    .iter()
+                    .find(|p| p.id == active_id)
+                    .and_then(|p| p.root_path.clone());
+
                 self.agent.projects = projects
                     .into_iter()
                     .map(|p| crate::agent_view::types::ProjectItem {
                         id: p.id,
                         name: p.name,
                         description: p.description,
+                        root_path: p.root_path,
                     })
                     .collect();
-                self.agent.active_project_id = Some(active_id);
-                self.agent.active_project_name = active_name;
+                if !active_id.is_empty() {
+                    self.agent.active_project_id = Some(active_id);
+                    self.agent.active_project_name = active_name;
+                } else {
+                    self.agent.active_project_id = None;
+                    self.agent.active_project_name = "No Project".to_string();
+                }
+
+                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(initial_root.as_deref());
+                let folders: Vec<std::path::PathBuf> = parsed
+                    .into_iter()
+                    .map(std::path::PathBuf::from)
+                    .filter(|p| p.exists())
+                    .collect();
+
+                if !folders.is_empty() {
+                    self.agent.workspace_folders = folders;
+                    self.agent.active_folder_idx = 0;
+                    self.agent.scan_workspace_files();
+                } else if !self.agent.workspace_folders.is_empty()
+                    && let (Some(pid), Some(tx)) = (&self.agent.active_project_id, &self.bridge_cmd_tx)
+                {
+                    let current_paths: Vec<String> = self
+                        .agent
+                        .workspace_folders
+                        .iter()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect();
+                    let _ = tx.send(CoreBridgeCommand::UpdateProjectFolders {
+                        project_id: pid.clone(),
+                        folders: current_paths,
+                    });
+                }
             }
             CoreBridgeEvent::ProjectCreated { project } => {
+                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(project.root_path.as_deref());
+                let folders: Vec<std::path::PathBuf> = parsed
+                    .into_iter()
+                    .map(std::path::PathBuf::from)
+                    .filter(|p| p.exists())
+                    .collect();
+
+                self.agent.active_project_id = Some(project.id.clone());
+                self.agent.active_project_name = project.name.clone();
+                if !folders.is_empty() {
+                    self.agent.workspace_folders = folders;
+                    self.agent.active_folder_idx = 0;
+                    self.agent.scan_workspace_files();
+                }
+
                 let item = crate::agent_view::types::ProjectItem {
-                    id: project.id,
-                    name: project.name,
-                    description: project.description,
+                    id: project.id.clone(),
+                    name: project.name.clone(),
+                    description: project.description.clone(),
+                    root_path: project.root_path,
                 };
                 self.agent.projects.push(item);
             }
             CoreBridgeEvent::ProjectSwitched {
                 project_id,
                 project_name,
+                root_path,
             } => {
                 self.agent.active_project_id = Some(project_id);
                 self.agent.active_project_name = project_name;
+
+                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(root_path.as_deref());
+                let folders: Vec<std::path::PathBuf> = parsed
+                    .into_iter()
+                    .map(std::path::PathBuf::from)
+                    .filter(|p| p.exists())
+                    .collect();
+
+                self.agent.workspace_folders = folders;
+                self.agent.active_folder_idx = 0;
+                self.agent.scan_workspace_files();
             }
             CoreBridgeEvent::ProjectDeleted { id } => {
                 self.agent.projects.retain(|p| p.id != id);

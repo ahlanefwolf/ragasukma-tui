@@ -116,39 +116,54 @@ pub fn spawn_core_bridge_worker(
                         current_turn_handle = Some(handle);
                     }
                 }
-                CoreBridgeCommand::CreateProject { name, description } => {
-                    match create_project(&name, description.as_deref().unwrap_or(""), None, None).await {
+                CoreBridgeCommand::CreateProject {
+                    name,
+                    description,
+                    root_path,
+                } => {
+                    // Normalize & init git/gitignore for folders like ai-voice
+                    if let Some(ref path_str) = root_path {
+                        let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(Some(path_str));
+                        for folder in &parsed {
+                            let p = std::path::Path::new(folder);
+                            if p.is_dir() {
+                                let _ = ragasukma_core::agent::tools::ensure_git_and_gitignore(p);
+                            }
+                        }
+                    }
+
+                    match create_project(
+                    &name,
+                    description.as_deref().unwrap_or(""),
+                    root_path.as_deref(),
+                    None,
+                )
+                .await
+                    {
                         Ok(new_proj) => {
                             let dto = ProjectDto {
                                 id: new_proj.id.clone(),
                                 name: new_proj.name.clone(),
                                 description: Some(new_proj.description.clone()),
+                                root_path: new_proj.root_path.clone(),
                             };
-                            let _ = worker_tx.send(CoreBridgeEvent::ProjectCreated { project: dto });
+                            let _ =
+                                worker_tx.send(CoreBridgeEvent::ProjectCreated { project: dto });
 
                             // Auto switch to newly created project
                             worker_project_id = new_proj.id.clone();
-                            let new_sess = match create_session(
-                                &worker_project_id,
-                                "Default Session",
-                                None,
-                                None,
-                                None,
-                            ).await {
-                                Ok(s) => s,
-                                Err(_) => continue,
-                            };
-                            active_sid = new_sess.id.clone();
+                            active_sid = String::new();
                             if let Ok(mut guard) = current_sid_clone.lock() {
                                 *guard = active_sid.clone();
                             }
                             let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
                                 project_id: worker_project_id.clone(),
                                 project_name: new_proj.name.clone(),
+                                root_path: new_proj.root_path.clone(),
                             });
                             let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
-                                sessions: vec![(new_sess.id.clone(), new_sess.title)],
-                                active_id: new_sess.id,
+                                sessions: Vec::new(),
+                                active_id: String::new(),
                             });
                         }
                         Err(e) => {
@@ -156,48 +171,83 @@ pub fn spawn_core_bridge_worker(
                         }
                     }
                 }
+                CoreBridgeCommand::UpdateProjectFolders {
+                    project_id,
+                    folders,
+                } => {
+                    let mut valid_folders: Vec<String> = Vec::new();
+                    for f in &folders {
+                        let p = std::path::Path::new(f);
+                        if p.is_dir() {
+                            let _ = ragasukma_core::agent::tools::ensure_git_and_gitignore(p);
+                            let canonical = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+                            valid_folders.push(canonical.to_string_lossy().to_string());
+                        }
+                    }
+
+                    let root_path_json = if valid_folders.is_empty() {
+                        None
+                    } else {
+                        serde_json::to_string(&valid_folders).ok()
+                    };
+                    if let Ok(Some(proj)) = get_project(&project_id).await {
+                        if let Err(e) = ragasukma_core::agent::repository::update_project(
+                            &proj.id,
+                            &proj.name,
+                            &proj.description,
+                            root_path_json.as_deref(),
+                            proj.custom_instructions.as_deref(),
+                        )
+                        .await
+                        {
+                            tracing::error!("Failed to update project folders: {e}");
+                        } else if let Ok(projects) = list_projects().await {
+                            let active_name = proj.name;
+                            let project_dtos: Vec<ProjectDto> = projects
+                                .into_iter()
+                                .map(|p| ProjectDto {
+                                    id: p.id,
+                                    name: p.name,
+                                    description: Some(p.description),
+                                    root_path: p.root_path,
+                                })
+                                .collect();
+                            let _ = worker_tx.send(CoreBridgeEvent::ProjectsLoaded {
+                                projects: project_dtos,
+                                active_id: project_id.clone(),
+                                active_name,
+                            });
+                        }
+                    }
+                }
                 CoreBridgeCommand::SwitchProject { project_id } => {
                     worker_project_id = project_id.clone();
-                    let project_name = get_project(&project_id)
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|p| p.name)
+                    let proj = get_project(&project_id).await.ok().flatten();
+                    let project_name = proj
+                        .as_ref()
+                        .map(|p| p.name.clone())
                         .unwrap_or_else(|| "Workspace".to_string());
+                    let project_root_path = proj.and_then(|p| p.root_path);
 
                     let sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
-                    let active_session = if let Some(first) = sessions.first() {
-                        first.clone()
-                    } else {
-                        match create_session(
-                            &worker_project_id,
-                            "Default Session",
-                            None,
-                            None,
-                            None,
-                        ).await {
-                            Ok(s) => s,
-                            Err(_) => continue,
-                        }
-                    };
-                    active_sid = active_session.id.clone();
+                    let active_session = sessions.first().cloned();
+                    active_sid = active_session.as_ref().map(|s| s.id.clone()).unwrap_or_default();
                     if let Ok(mut guard) = current_sid_clone.lock() {
                         *guard = active_sid.clone();
                     }
                     let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
                         project_id: worker_project_id.clone(),
                         project_name,
+                        root_path: project_root_path,
                     });
-                    let sessions_summary = if sessions.is_empty() {
-                        vec![(active_session.id.clone(), active_session.title)]
-                    } else {
-                        sessions.into_iter().map(|s| (s.id, s.title)).collect()
-                    };
+                    let sessions_summary = sessions.into_iter().map(|s| (s.id, s.title)).collect();
                     let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
                         sessions: sessions_summary,
                         active_id: active_sid.clone(),
                     });
-                    if let Ok(msgs) = list_messages(&active_sid).await {
+                    if !active_sid.is_empty()
+                        && let Ok(msgs) = list_messages(&active_sid).await
+                    {
                         let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
                         let _ = worker_tx.send(CoreBridgeEvent::HistoryLoaded {
                             session_id: active_sid.clone(),
@@ -225,6 +275,7 @@ pub fn spawn_core_bridge_worker(
                                 let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
                                     project_id: worker_project_id.clone(),
                                     project_name: first.name.clone(),
+                                    root_path: first.root_path.clone(),
                                 });
                                 let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
                                     sessions: sessions.into_iter().map(|s| (s.id, s.title)).collect(),

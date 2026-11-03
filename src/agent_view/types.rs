@@ -156,6 +156,7 @@ pub struct ProjectItem {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
+    pub root_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

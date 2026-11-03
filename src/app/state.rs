@@ -43,8 +43,14 @@ pub(crate) fn current_time_str() -> String {
 }
 
 impl App {
-    pub fn new(_root_dir: std::path::PathBuf) -> Self {
-        let agent = AgentWorkspaceState::sample();
+    pub fn new(root_dir: std::path::PathBuf) -> Self {
+        let mut agent = AgentWorkspaceState::sample();
+        if root_dir.exists() {
+            let canonical = root_dir.canonicalize().unwrap_or(root_dir);
+            agent.workspace_folders = vec![canonical];
+            agent.active_folder_idx = 0;
+            agent.scan_workspace_files();
+        }
         let antigravity = crate::provider_view::antigravity::load_antigravity_tab();
         let codex = crate::provider_view::codex::load_codex_tab();
         let claude = crate::provider_view::claude::load_claude_tab();

@@ -66,10 +66,6 @@ pub struct AgentWorkspaceState {
 
 impl Default for AgentWorkspaceState {
     fn default() -> Self {
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let mut expanded_dirs = HashSet::new();
-        expanded_dirs.insert(current_dir.to_string_lossy().to_string());
-
         Self {
             messages: Vec::new(),
             input_buffer: String::new(),
@@ -92,10 +88,10 @@ impl Default for AgentWorkspaceState {
             spinner_tick: 0,
             workspace_files: Vec::new(),
             selected_file_idx: 0,
-            workspace_folders: vec![current_dir],
+            workspace_folders: Vec::new(),
             active_folder_idx: 0,
             add_folder_modal: AddFolderModalState::default(),
-            expanded_dirs,
+            expanded_dirs: HashSet::new(),
             tag_query: None,
             tool_filter: ToolFilter::All,
             pending_approval: None,
@@ -109,7 +105,7 @@ impl Default for AgentWorkspaceState {
             projects: Vec::new(),
             selected_project_idx: 0,
             active_project_id: None,
-            active_project_name: "Default Workspace".to_string(),
+            active_project_name: "No Project".to_string(),
             project_modal: ProjectSwitcherModalState::default(),
             create_project_modal: CreateProjectModalState::default(),
             is_sidebar_visible: true,
@@ -121,29 +117,7 @@ impl Default for AgentWorkspaceState {
 
 impl AgentWorkspaceState {
     pub fn sample() -> Self {
-        let initial_session = TaskSessionItem {
-            id: "task-init-01".to_string(),
-            title: "Task: Initial Workspace Setup".to_string(),
-            status: "ready".to_string(),
-            model: Some("claude-3-5-sonnet-20241022".to_string()),
-            total_tokens_input: 120,
-            total_tokens_output: 450,
-            updated_at: 1700000000,
-            is_running: false,
-        };
-        Self {
-            active_session_id: Some(initial_session.id.clone()),
-            sessions: vec![initial_session],
-            messages: vec![ChatMessage {
-                role: MessageRole::System,
-                sender_name: "System".to_string(),
-                content: "Ragasukma Agent ready. Tech Gold & Dark Slate theme active.".to_string(),
-                timestamp: "09:00".to_string(),
-                tool_calls: Vec::new(),
-                reasoning: None,
-            }],
-            ..Default::default()
-        }
+        Self::default()
     }
 
     pub fn set_messages_from_persisted(&mut self, list: Vec<PersistedMessageDto>) {
@@ -634,7 +608,8 @@ impl AgentWorkspaceState {
             return Err("Cannot remove the only workspace folder".to_string());
         }
         if idx < self.workspace_folders.len() {
-            self.workspace_folders.remove(idx);
+            let removed = self.workspace_folders.remove(idx);
+            self.expanded_dirs.remove(&removed.to_string_lossy().to_string());
             if self.active_folder_idx >= self.workspace_folders.len() {
                 self.active_folder_idx = self.workspace_folders.len().saturating_sub(1);
             }
@@ -695,9 +670,9 @@ impl AgentWorkspaceState {
 
     pub fn scan_workspace_files(&mut self) {
         if self.workspace_folders.is_empty() {
-            let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            self.expanded_dirs.insert(current_dir.to_string_lossy().to_string());
-            self.workspace_folders.push(current_dir);
+            self.workspace_files.clear();
+            self.selected_file_idx = 0;
+            return;
         }
 
         let mut nodes = Vec::new();
