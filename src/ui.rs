@@ -233,22 +233,31 @@ fn render_error_modal(frame: &mut Frame, err_msg: &str, area: Rect) {
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let px = percent_x.min(100);
+    let py = percent_y.min(100);
+    let vertical_margin = (100 - py) / 2;
+    let horizontal_margin = (100 - px) / 2;
+
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(vertical_margin),
+            Constraint::Percentage(py),
+            Constraint::Percentage(100 - py - vertical_margin),
         ])
         .split(r);
 
-    Layout::default()
+    let target_row = popup_layout.get(1).copied().unwrap_or(r);
+
+    let horizontal_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(horizontal_margin),
+            Constraint::Percentage(px),
+            Constraint::Percentage(100 - px - horizontal_margin),
         ])
-        .split(popup_layout[1])[1]
+        .split(target_row);
+
+    horizontal_layout.get(1).copied().unwrap_or(target_row)
 }
 

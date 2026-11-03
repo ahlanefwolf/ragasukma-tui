@@ -237,7 +237,15 @@ impl App {
         }
     }
 
-    pub fn request_selected_account_quota(&self) {
+    pub fn request_selected_account_quota(&mut self) {
+        self.request_selected_account_quota_internal(false);
+    }
+
+    pub fn force_refresh_selected_account_quota(&mut self) {
+        self.request_selected_account_quota_internal(true);
+    }
+
+    fn request_selected_account_quota_internal(&mut self, force: bool) {
         let (provider, account_id) = match self.active_tab {
             1 => ("antigravity", self.antigravity.selected_account().map(|a| a.id.clone())),
             2 => ("codex", self.codex.selected_account().map(|a| a.id.clone())),
@@ -246,6 +254,20 @@ impl App {
         };
 
         if let (Some(tx), Some(acc_id)) = (&self.bridge_cmd_tx, account_id) {
+            let cache_key = (provider.to_string(), acc_id.clone());
+            let now = std::time::Instant::now();
+
+            if !force
+                && self
+                    .quota_last_fetched
+                    .get(&cache_key)
+                    .is_some_and(|last| now.duration_since(*last).as_secs() < 60)
+            {
+                // Data kuota masih segar dalam batas TTL (60 detik), abaikan fetch redundant
+                return;
+            }
+
+            self.quota_last_fetched.insert(cache_key, now);
             let _ = tx.send(CoreBridgeCommand::RefreshAccountQuota {
                 provider: provider.to_string(),
                 account_id: acc_id,

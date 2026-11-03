@@ -39,7 +39,7 @@ impl App {
                 self.set_status(status);
             }
             if matches!(action, Action::RefreshQuota) {
-                self.request_selected_account_quota();
+                self.force_refresh_selected_account_quota();
             }
             return;
         }

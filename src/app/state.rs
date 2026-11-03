@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -28,6 +29,7 @@ pub struct App {
     pub diff_modal: Option<DiffApprovalState>,
     pub error_modal: Option<String>,
     pub needs_clear: bool,
+    pub quota_last_fetched: HashMap<(String, String), Instant>,
     pub bridge_cmd_tx: Option<UnboundedSender<CoreBridgeCommand>>,
     pub event_tx: Option<UnboundedSender<AppEvent>>,
 }
@@ -72,6 +74,7 @@ impl App {
             diff_modal: None,
             error_modal: None,
             needs_clear: false,
+            quota_last_fetched: HashMap::new(),
             bridge_cmd_tx: None,
             event_tx: None,
         }
