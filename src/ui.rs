@@ -11,8 +11,8 @@ use ratatui::{
 pub fn draw(frame: &mut Frame, app: &App) {
     let size = frame.area();
 
-    // Fill background with canvas color
-    let bg_block = Block::default().style(Style::default().bg(Theme::BG_CANVAS));
+    // Render base frame without hardcoded background
+    let bg_block = Block::default();
     frame.render_widget(bg_block, size);
 
     // Main layout: Header (3), Body (Min 0), Footer (2)
@@ -821,9 +821,9 @@ fn render_diff_preview_modal(
     // 3. Footer Action Buttons
     let footer_text = vec![
         Line::from(vec![
-            Span::styled(" [Y / Enter] ", Style::default().fg(Theme::TEXT_PRIMARY).bg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
+            Span::styled(" [Y / Enter] ", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
             Span::raw(" Approve & Apply Patch    "),
-            Span::styled(" [N / Esc] ", Style::default().fg(Theme::TEXT_PRIMARY).bg(Theme::STATUS_DANGER).add_modifier(Modifier::BOLD)),
+            Span::styled(" [N / Esc] ", Style::default().fg(Theme::STATUS_DANGER).add_modifier(Modifier::BOLD)),
             Span::raw(" Reject Patch"),
         ]),
     ];

@@ -61,6 +61,7 @@ pub struct AgentWorkspaceState {
     // Phase 6: Responsive Layout & Inspection
     pub is_sidebar_visible: bool,
     pub is_inspector_visible: bool,
+    pub inspector_scroll_offset: usize,
 }
 
 impl Default for AgentWorkspaceState {
@@ -113,6 +114,7 @@ impl Default for AgentWorkspaceState {
             create_project_modal: CreateProjectModalState::default(),
             is_sidebar_visible: true,
             is_inspector_visible: true,
+            inspector_scroll_offset: 0,
         }
     }
 }

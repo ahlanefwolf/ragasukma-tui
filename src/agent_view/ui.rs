@@ -2,7 +2,10 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{
+        Block, Borders, Clear, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, Wrap,
+    },
     Frame,
 };
 
@@ -82,17 +85,35 @@ fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &AgentWor
     let popup_area = centered_rect(60, 50, area);
     frame.render_widget(Clear, popup_area);
 
+    let total = state.projects.len();
+    let sel = state.project_modal.selected_idx;
+    let title = if total > 0 {
+        format!(" 🗂️ Database Projects [{}/{}] ", sel + 1, total)
+    } else {
+        " 🗂️ Database Projects ".to_string()
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
-        .title(Span::styled(" 🗂️ Database Projects ", Theme::badge_gold()));
+        .title(Span::styled(title, Theme::badge_gold()));
+
+    let inner_height = ((popup_area.height.saturating_sub(2)) as usize / 2).max(1);
+    let offset = if sel >= inner_height {
+        sel.saturating_sub(inner_height - 1)
+    } else {
+        0
+    };
+    let end = (offset + inner_height).min(total);
 
     let items: Vec<ListItem> = state
         .projects
         .iter()
         .enumerate()
+        .skip(offset)
+        .take(end.saturating_sub(offset))
         .map(|(idx, proj)| {
-            let is_sel = idx == state.project_modal.selected_idx;
+            let is_sel = idx == sel;
             let is_active = state.active_project_id.as_deref() == Some(&proj.id);
             let prefix = if is_active { "★ " } else { "  " };
             let style = if is_sel {
@@ -116,6 +137,20 @@ fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &AgentWor
 
     let list = List::new(items).block(block);
     frame.render_widget(list, popup_area);
+
+    if total > inner_height {
+        let mut scrollbar_state = ScrollbarState::default()
+            .content_length(total)
+            .position(sel);
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼")),
+            popup_area,
+            &mut scrollbar_state,
+        );
+    }
 }
 
 fn render_create_project_modal(
@@ -239,6 +274,16 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
 
     match state.sidebar_tab {
         super::types::AgentSidebarTab::Tasks => {
+            let total = state.sessions.len();
+            let sel = state.selected_session_idx;
+            let inner_height = (chunks[2].height.saturating_sub(2) as usize).max(1);
+            let offset = if sel >= inner_height {
+                sel.saturating_sub(inner_height - 1)
+            } else {
+                0
+            };
+            let end = (offset + inner_height).min(total);
+
             let task_items: Vec<ListItem> = if state.sessions.is_empty() {
                 vec![ListItem::new(Line::from(vec![Span::styled(
                     " (No tasks created yet) ",
@@ -249,8 +294,10 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
                     .sessions
                     .iter()
                     .enumerate()
+                    .skip(offset)
+                    .take(end.saturating_sub(offset))
                     .map(|(idx, s)| {
-                        let is_cursor = idx == state.selected_session_idx && is_focused;
+                        let is_cursor = idx == sel && is_focused;
                         let is_current = state.active_session_id.as_deref() == Some(&s.id);
                         let cursor_str = if is_cursor { "▶ " } else { "  " };
                         let marker = if is_current { "● " } else { "○ " };
@@ -289,16 +336,16 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
                     .collect()
             };
 
-            let title = if is_focused {
-                Span::styled(
-                    format!(" 💬 Active Tasks [{}] [Focused] ", state.sessions.len()),
-                    Theme::badge_gold(),
-                )
+            let title_str = if total > 0 {
+                format!(" 💬 Active Tasks [{}/{}] ", sel + 1, total)
             } else {
-                Span::styled(
-                    format!(" 💬 Active Tasks [{}] ", state.sessions.len()),
-                    Theme::header_title(),
-                )
+                " 💬 Active Tasks [0] ".to_string()
+            };
+
+            let title = if is_focused {
+                Span::styled(format!("{} [Focused] ", title_str.trim_end()), Theme::badge_gold())
+            } else {
+                Span::styled(title_str, Theme::header_title())
             };
 
             let block = Block::default()
@@ -307,8 +354,32 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
                 .border_style(border_style)
                 .style(Theme::block_base());
             frame.render_widget(List::new(task_items).block(block), chunks[2]);
+
+            if total > inner_height {
+                let mut scrollbar_state = ScrollbarState::default()
+                    .content_length(total)
+                    .position(sel);
+                frame.render_stateful_widget(
+                    Scrollbar::default()
+                        .orientation(ScrollbarOrientation::VerticalRight)
+                        .begin_symbol(Some("▲"))
+                        .end_symbol(Some("▼")),
+                    chunks[2],
+                    &mut scrollbar_state,
+                );
+            }
         }
         super::types::AgentSidebarTab::Files => {
+            let total = state.workspace_files.len();
+            let sel = state.selected_file_idx;
+            let inner_height = (chunks[2].height.saturating_sub(2) as usize).max(1);
+            let offset = if sel >= inner_height {
+                sel.saturating_sub(inner_height - 1)
+            } else {
+                0
+            };
+            let end = (offset + inner_height).min(total);
+
             let file_items: Vec<ListItem> = if state.workspace_files.is_empty() {
                 vec![ListItem::new(Line::from(vec![Span::styled(
                     " (No files found in workspace) ",
@@ -319,8 +390,10 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
                     .workspace_files
                     .iter()
                     .enumerate()
+                    .skip(offset)
+                    .take(end.saturating_sub(offset))
                     .map(|(idx, f)| {
-                        let is_cursor = idx == state.selected_file_idx && is_focused;
+                        let is_cursor = idx == sel && is_focused;
                         let indent = "  ".repeat(f.depth);
                         let icon = if f.is_dir {
                             if f.is_expanded { "📂 " } else { "📁 " }
@@ -362,10 +435,16 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
                     .collect()
             };
 
-            let title = if is_focused {
-                Span::styled(" 📁 Workspace Files [Focused] ", Theme::badge_gold())
+            let title_str = if total > 0 {
+                format!(" 📁 Workspace Files [{}/{}] ", sel + 1, total)
             } else {
-                Span::styled(" 📁 Workspace Files ", Theme::header_title())
+                " 📁 Workspace Files [0] ".to_string()
+            };
+
+            let title = if is_focused {
+                Span::styled(format!("{} [Focused] ", title_str.trim_end()), Theme::badge_gold())
+            } else {
+                Span::styled(title_str, Theme::header_title())
             };
 
             let block = Block::default()
@@ -374,6 +453,20 @@ fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceStat
                 .border_style(border_style)
                 .style(Theme::block_base());
             frame.render_widget(List::new(file_items).block(block), chunks[2]);
+
+            if total > inner_height {
+                let mut scrollbar_state = ScrollbarState::default()
+                    .content_length(total)
+                    .position(sel);
+                frame.render_stateful_widget(
+                    Scrollbar::default()
+                        .orientation(ScrollbarOrientation::VerticalRight)
+                        .begin_symbol(Some("▲"))
+                        .end_symbol(Some("▼")),
+                    chunks[2],
+                    &mut scrollbar_state,
+                );
+            }
         }
     }
 }
@@ -535,13 +628,26 @@ fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     ];
     frame.render_widget(Paragraph::new(lines_model).block(model_block), chunks[0]);
 
+    let is_focused = state.focus_area == AgentFocusArea::Inspector;
     let block_tools = Block::default()
-        .title(Span::styled(" 🛠️ MCP Tool Status ", Theme::header_title()))
+        .title(if is_focused {
+            Span::styled(" 🛠️ MCP Tool Status [Focused] ", Theme::badge_gold())
+        } else {
+            Span::styled(" 🛠️ MCP Tool Status ", Theme::header_title())
+        })
         .borders(Borders::ALL)
-        .border_style(Theme::border_subtle())
+        .border_style(if is_focused {
+            Theme::border_focused()
+        } else {
+            Theme::border_subtle()
+        })
         .style(Theme::block_base());
 
-    let tools_lines = vec![
+    let tools_lines: Vec<Line> = vec![
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("workspace_list_dir", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
         Line::from(vec![
             Span::styled("● ", Theme::status_success()),
             Span::styled("workspace_read_file", Style::default().fg(Theme::TEXT_PRIMARY)),
@@ -566,8 +672,45 @@ fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
             Span::styled("● ", Theme::status_success()),
             Span::styled("quota_fetch_all", Style::default().fg(Theme::TEXT_PRIMARY)),
         ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("db_query_execute", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("git_status_check", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("git_diff_inspect", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
     ];
-    frame.render_widget(Paragraph::new(tools_lines).block(block_tools), chunks[1]);
+
+    let total_tools = tools_lines.len();
+    let inner_height = chunks[1].height.saturating_sub(2) as usize;
+    let max_scroll = total_tools.saturating_sub(inner_height);
+    let scroll_y = state.inspector_scroll_offset.min(max_scroll);
+
+    frame.render_widget(
+        Paragraph::new(tools_lines)
+            .scroll((scroll_y as u16, 0))
+            .block(block_tools),
+        chunks[1],
+    );
+
+    if total_tools > inner_height {
+        let mut scrollbar_state = ScrollbarState::default()
+            .content_length(total_tools)
+            .position(scroll_y);
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼")),
+            chunks[1],
+            &mut scrollbar_state,
+        );
+    }
 }
 
 fn render_tag_query_popup(frame: &mut Frame, area: Rect, tq: &super::types::FileTagQuery) {
@@ -580,12 +723,24 @@ fn render_tag_query_popup(frame: &mut Frame, area: Rect, tq: &super::types::File
 
     frame.render_widget(Clear, popup_area);
 
+    let inner_height = (popup_area.height.saturating_sub(2) as usize).max(1);
+    let total = tq.matched_files.len();
+    let sel = tq.selected_idx;
+    let offset = if sel >= inner_height {
+        sel.saturating_sub(inner_height - 1)
+    } else {
+        0
+    };
+    let end = (offset + inner_height).min(total);
+
     let items: Vec<ListItem> = tq
         .matched_files
         .iter()
         .enumerate()
+        .skip(offset)
+        .take(end.saturating_sub(offset))
         .map(|(idx, file)| {
-            let is_sel = idx == tq.selected_idx;
+            let is_sel = idx == sel;
             let prefix = if is_sel { "▶ " } else { "  " };
             let style = if is_sel {
                 Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
@@ -599,13 +754,33 @@ fn render_tag_query_popup(frame: &mut Frame, area: Rect, tq: &super::types::File
         })
         .collect();
 
+    let title_str = if total > 0 {
+        format!(" @ Attach File [{}/{}] ", sel + 1, total)
+    } else {
+        " @ Attach File to Prompt ".to_string()
+    };
+
     let block = Block::default()
-        .title(Span::styled(" @ Attach File to Prompt ", Theme::badge_gold()))
+        .title(Span::styled(title_str, Theme::badge_gold()))
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
         .style(Theme::block_surface());
 
     frame.render_widget(List::new(items).block(block), popup_area);
+
+    if total > inner_height {
+        let mut scrollbar_state = ScrollbarState::default()
+            .content_length(total)
+            .position(sel);
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼")),
+            popup_area,
+            &mut scrollbar_state,
+        );
+    }
 }
 
 fn render_add_folder_modal(

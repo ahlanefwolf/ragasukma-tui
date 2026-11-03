@@ -109,6 +109,7 @@ pub enum Action {
     AgentSwitchSidebarTab,
     AgentNewTask,
     AgentDeleteSelectedTask,
+    AgentSwitchTask,
     AgentNextTask,
     AgentPrevTask,
 

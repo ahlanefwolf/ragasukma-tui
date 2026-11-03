@@ -11,8 +11,8 @@ impl Theme {
     pub const BG_CANVAS: Color = Color::Rgb(15, 18, 24); // #0f1218 --gi-bg-canvas
     pub const BG_SURFACE: Color = Color::Rgb(24, 29, 38); // #181d26 --gi-bg-surface
     pub const BG_SURFACE_ELEVATED: Color = Color::Rgb(34, 41, 54); // #222936 --gi-bg-surface-elevated
-    pub const BORDER_SUBTLE: Color = Color::Rgb(51, 60, 77); // #333c4d --gi-border-subtle
-    pub const BORDER_GOLD: Color = Color::Rgb(158, 128, 70); // #9e8046 --gi-border-gold
+    pub const BORDER_SUBTLE: Color = Color::Rgb(112, 95, 65); // Warm neutral muted gold/bronze (inactive border)
+    pub const BORDER_GOLD: Color = Color::Rgb(190, 155, 85); // Brighter active gold border
 
     // -------------------------------------------------------------
     // Typography Colors
@@ -47,14 +47,12 @@ impl Theme {
     // -------------------------------------------------------------
     #[must_use]
     pub fn block_base() -> Style {
-        Style::default().bg(Self::BG_SURFACE).fg(Self::TEXT_PRIMARY)
+        Style::default().fg(Self::TEXT_PRIMARY)
     }
 
     #[must_use]
     pub fn card_base() -> Style {
-        Style::default()
-            .bg(Self::BG_SURFACE_ELEVATED)
-            .fg(Self::TEXT_PRIMARY)
+        Style::default().fg(Self::TEXT_PRIMARY)
     }
 
     #[must_use]
@@ -82,31 +80,26 @@ impl Theme {
     #[must_use]
     pub fn tab_active() -> Style {
         Style::default()
-            .bg(Self::GOLD_PRIMARY)
-            .fg(Self::GOLD_FOREGROUND)
-            .add_modifier(Modifier::BOLD)
+            .fg(Self::GOLD_PRIMARY)
+            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
     }
 
     #[must_use]
     pub fn tab_inactive() -> Style {
-        Style::default()
-            .bg(Self::BG_SURFACE)
-            .fg(Self::TEXT_SECONDARY)
+        Style::default().fg(Self::TEXT_SECONDARY)
     }
 
     #[must_use]
     pub fn badge_gold() -> Style {
         Style::default()
-            .bg(Self::GOLD_PRIMARY)
-            .fg(Self::GOLD_FOREGROUND)
+            .fg(Self::GOLD_PRIMARY)
             .add_modifier(Modifier::BOLD)
     }
 
     #[must_use]
     pub fn badge_cyan() -> Style {
         Style::default()
-            .bg(Self::CYAN_ACCENT)
-            .fg(Self::GOLD_FOREGROUND)
+            .fg(Self::CYAN_ACCENT)
             .add_modifier(Modifier::BOLD)
     }
 
@@ -118,20 +111,18 @@ impl Theme {
     #[must_use]
     pub fn badge_gray() -> Style {
         Style::default()
-            .bg(Self::BG_SURFACE_ELEVATED)
             .fg(Self::TEXT_SECONDARY)
             .add_modifier(Modifier::BOLD)
     }
 
     #[must_use]
     pub fn block_surface() -> Style {
-        Style::default().bg(Self::BG_SURFACE_ELEVATED).fg(Self::TEXT_PRIMARY)
+        Style::default().fg(Self::TEXT_PRIMARY)
     }
 
     #[must_use]
     pub fn key_badge() -> Style {
         Style::default()
-            .bg(Self::BG_SURFACE_ELEVATED)
             .fg(Self::CYAN_ACCENT)
             .add_modifier(Modifier::BOLD)
     }
@@ -202,7 +193,6 @@ impl Theme {
     #[must_use]
     pub fn list_item_selected() -> Style {
         Style::default()
-            .bg(Self::BG_SURFACE_ELEVATED)
             .fg(Self::GOLD_PRIMARY)
             .add_modifier(Modifier::BOLD)
     }

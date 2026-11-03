@@ -349,22 +349,56 @@ impl App {
                 self.set_status(format!("Sidebar tab switched to {}", tab_name));
             }
             Action::AgentNewTask => {
-                self.agent.create_new_task(None);
-                self.set_status("Created new agent task session".to_string());
+                let default_title = format!("Task #{}", self.agent.sessions.len() + 1);
+                if let Some(tx) = &self.bridge_cmd_tx {
+                    let _ = tx.send(CoreBridgeCommand::CreateSession {
+                        title: default_title,
+                    });
+                } else {
+                    self.agent.create_new_task(None);
+                }
+                self.set_status("Creating new agent task session...".to_string());
             }
             Action::AgentDeleteSelectedTask => {
-                self.agent.delete_selected_task();
-                self.set_status("Deleted agent task session".to_string());
+                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
+                    let sid = s.id.clone();
+                    if let Some(tx) = &self.bridge_cmd_tx {
+                        let _ = tx.send(CoreBridgeCommand::DeleteSession { session_id: sid });
+                    } else {
+                        self.agent.delete_selected_task();
+                    }
+                    self.set_status("Deleting task session...".to_string());
+                }
+            }
+            Action::AgentSwitchTask => {
+                if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
+                    let sid = s.id.clone();
+                    self.agent.active_session_id = Some(sid.clone());
+                    if let Some(tx) = &self.bridge_cmd_tx {
+                        let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
+                    }
+                    self.set_status(format!("Switched to task: {}", s.title));
+                }
             }
             Action::AgentNextTask => {
                 self.agent.next_session();
                 if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
+                    let sid = s.id.clone();
+                    self.agent.active_session_id = Some(sid.clone());
+                    if let Some(tx) = &self.bridge_cmd_tx {
+                        let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
+                    }
                     self.set_status(format!("Selected task: {}", s.title));
                 }
             }
             Action::AgentPrevTask => {
                 self.agent.prev_session();
                 if let Some(s) = self.agent.sessions.get(self.agent.selected_session_idx) {
+                    let sid = s.id.clone();
+                    self.agent.active_session_id = Some(sid.clone());
+                    if let Some(tx) = &self.bridge_cmd_tx {
+                        let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
+                    }
                     self.set_status(format!("Selected task: {}", s.title));
                 }
             }

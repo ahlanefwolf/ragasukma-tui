@@ -136,6 +136,9 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Inspector => Some(Action::AgentScrollUp),
             },
             KeyCode::Enter => match self.focus_area {
+                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => {
+                    Some(Action::AgentSwitchTask)
+                }
                 AgentFocusArea::Files => Some(Action::AgentToggleFileTreeExpand),
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
                 AgentFocusArea::Inspector => None,

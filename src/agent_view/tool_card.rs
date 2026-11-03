@@ -46,8 +46,7 @@ pub fn render_tool_card(
         Span::styled(
             status_badge,
             Style::default()
-                .fg(Color::Black)
-                .bg(status_color)
+                .fg(status_color)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -260,11 +259,11 @@ pub fn render_approval_modal(
 
     // Action button hints
     let actions_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [y] Approve ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(" [y] Approve ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         Span::raw("  "),
-        Span::styled(" [n] Reject ", Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(" [n] Reject ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
         Span::raw("  "),
-        Span::styled(" [Esc] Dismiss ", Style::default().fg(Theme::TEXT_PRIMARY).bg(Color::DarkGray)),
+        Span::styled(" [Esc] Dismiss ", Style::default().fg(Theme::TEXT_MUTED)),
     ]));
     frame.render_widget(actions_p, chunks[2]);
 }

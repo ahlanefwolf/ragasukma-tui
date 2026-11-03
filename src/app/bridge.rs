@@ -133,7 +133,35 @@ impl App {
                 tracing::error!("Core bridge error received: {err}");
                 self.error_modal = Some(err);
             }
-            _ => {}
+            CoreBridgeEvent::HistoryLoaded { session_id, messages } => {
+                self.agent.active_session_id = Some(session_id.clone());
+                self.agent.set_messages_from_persisted(messages);
+                self.set_status(format!("Loaded conversation history for session: {}", session_id));
+            }
+            CoreBridgeEvent::SessionCreated { id, title } => {
+                let session_item = crate::agent_view::types::TaskSessionItem {
+                    id: id.clone(),
+                    title: title.clone(),
+                    status: "ready".to_string(),
+                    model: None,
+                    total_tokens_input: 0,
+                    total_tokens_output: 0,
+                    updated_at: 0,
+                    is_running: false,
+                };
+                self.agent.sessions.insert(0, session_item);
+                self.agent.selected_session_idx = 0;
+                self.agent.active_session_id = Some(id);
+                self.agent.messages.clear();
+                self.set_status(format!("Created new task session: {}", title));
+            }
+            CoreBridgeEvent::SessionDeleted { id } => {
+                self.agent.sessions.retain(|s| s.id != id);
+                if self.agent.selected_session_idx >= self.agent.sessions.len() && !self.agent.sessions.is_empty() {
+                    self.agent.selected_session_idx = self.agent.sessions.len() - 1;
+                }
+                self.set_status("Deleted task session".to_string());
+            }
         }
     }
 

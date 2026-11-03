@@ -263,8 +263,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                     let gauge = Gauge::default()
                         .gauge_style(
                             ratatui::style::Style::default()
-                                .fg(gauge_color)
-                                .bg(Theme::BG_SURFACE_ELEVATED),
+                                .fg(gauge_color),
                         )
                         .percent(quota.percentage)
                         .label(format!("{}% Available", quota.percentage));
