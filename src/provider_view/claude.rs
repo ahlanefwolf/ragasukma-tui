@@ -11,8 +11,8 @@ pub fn load_claude_tab() -> ProviderTabState {
         state.accounts = raw_accounts
             .into_iter()
             .map(|a| AccountInfo {
-                id: a.id,
-                email: a.email.unwrap_or_else(|| "default@claude".to_string()),
+                id: a.id.clone(),
+                email: a.email.unwrap_or(a.id),
                 plan: "Claude Pro/Team".to_string(),
                 is_active: a.is_active,
                 status: if a.is_active { "Active".to_string() } else { "Inactive".to_string() },

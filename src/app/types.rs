@@ -146,6 +146,10 @@ pub enum Action {
     AgentCreateProjectBackspace,
     AgentSubmitCreateProject,
 
+    AgentPasteClipboard,
+    AgentCopyActive,
+    AgentSelectAllInput,
+
     FormChar(char),
     FormBackspace,
     FormNextField,
@@ -172,4 +176,7 @@ pub enum Action {
     ToggleAccountActive,
     SetAccountActive,
     RefreshQuota,
+    QuotaScrollUp,
+    QuotaScrollDown,
+    ProviderToggleFocus,
 }

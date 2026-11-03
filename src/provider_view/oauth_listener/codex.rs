@@ -12,7 +12,7 @@ pub async fn exchange_codex_token(
     tokio::task::spawn_blocking(move || {
         let code_verifier =
             ragasukma_core::llm::providers::codex::oauth::take_oauth_state(&state)
-                .ok_or_else(|| "Code verifier PKCE tidak ditemukan".to_string())?;
+                .ok_or_else(|| "PKCE code verifier not found".to_string())?;
 
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(30))
