@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::agent_view::state::AgentWorkspaceState;
-use crate::agent_view::types::{AgentFocusArea, AgentSidebarTab};
+use crate::agent_view::types::AgentFocusArea;
 use crate::app::Action;
 
 impl AgentWorkspaceState {
@@ -46,8 +46,8 @@ impl AgentWorkspaceState {
         // Modal: Pending Tool Approval / Diff Review
         if self.pending_approval.is_some() {
             return match code {
-                KeyCode::Char('y') | KeyCode::Enter => Some(Action::AgentApprovePending),
-                KeyCode::Char('n') | KeyCode::Esc => Some(Action::AgentRejectPending),
+                KeyCode::Char('y') => Some(Action::AgentApprovePending),
+                KeyCode::Char('n') => Some(Action::AgentRejectPending),
                 KeyCode::Down | KeyCode::Char('j') => Some(Action::AgentScrollDown),
                 KeyCode::Up | KeyCode::Char('k') => Some(Action::AgentScrollUp),
                 _ => None,
@@ -58,11 +58,6 @@ impl AgentWorkspaceState {
         if self.is_input_focused {
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 return match code {
-                    KeyCode::Char('v') | KeyCode::Char('V') => Some(Action::AgentPasteClipboard),
-                    KeyCode::Char('c') | KeyCode::Char('C') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                        Some(Action::AgentCopyActive)
-                    }
-                    KeyCode::Char('a') | KeyCode::Char('A') => Some(Action::AgentSelectAllInput),
                     KeyCode::Char('c') => {
                         if self.is_running {
                             Some(Action::AgentCancelTurn)
@@ -97,9 +92,10 @@ impl AgentWorkspaceState {
             };
         }
 
-        // Global shortcuts visible in footer (q, 1-5) when not typing in an input
+        // Global shortcuts visible in footer (q, ?, 1-5) when not typing in an input
         match code {
             KeyCode::Char('q') => return Some(Action::Quit),
+            KeyCode::Char('?') | KeyCode::F(1) => return Some(Action::ToggleHelp),
             KeyCode::Char('1') => return Some(Action::SwitchTab(0)),
             KeyCode::Char('2') => return Some(Action::SwitchTab(1)),
             KeyCode::Char('3') => return Some(Action::SwitchTab(2)),
@@ -122,81 +118,63 @@ impl AgentWorkspaceState {
             };
         }
 
-        // When browsing panels (Chat, Files, Inspector)
+        // When browsing panels (Folders, Tasks, Files, Chat, Input, Inspector)
         match code {
             KeyCode::Char('i') => Some(Action::AgentFocusInput),
             KeyCode::Tab => Some(Action::AgentFocusNextPanel),
             KeyCode::BackTab => Some(Action::AgentFocusPrevPanel),
-            KeyCode::Char('f') => match self.focus_area {
-                AgentFocusArea::Files => Some(Action::AgentBrowseFolderDialog),
-                _ => Some(Action::AgentFocusFiles),
-            },
-            KeyCode::F(2) if self.focus_area == AgentFocusArea::Files => {
-                Some(Action::AgentBrowseFolderDialog)
-            }
-            KeyCode::Char('c') => {
-                if self.focus_area == AgentFocusArea::Chat {
-                    Some(Action::AgentClearChat)
-                } else {
-                    Some(Action::AgentFocusChat)
-                }
-            }
             KeyCode::Char('b') => Some(Action::AgentToggleSidebar),
             KeyCode::Char('m') => Some(Action::AgentCycleModel),
             KeyCode::Char('x') => Some(Action::AgentToggleToolExpand),
+            KeyCode::Char('s') if matches!(self.focus_area, AgentFocusArea::Tasks | AgentFocusArea::Files) => {
+                Some(Action::AgentSwitchSidebarTab)
+            }
             KeyCode::Char('r') => match self.focus_area {
                 AgentFocusArea::Files => Some(Action::AgentScanFiles),
                 _ => Some(Action::AgentToggleReasoning),
             },
-            KeyCode::Char('t') => match self.focus_area {
-                AgentFocusArea::Files => Some(Action::AgentSwitchSidebarTab),
-                _ => Some(Action::AgentCycleToolFilter),
-            },
-            KeyCode::Char('n') => match self.focus_area {
-                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => {
-                    Some(Action::AgentNewTask)
-                }
-                _ => None,
-            },
+            KeyCode::Char('t') if self.focus_area == AgentFocusArea::Inspector => {
+                Some(Action::AgentCycleToolFilter)
+            }
+            KeyCode::Char('n') if self.focus_area == AgentFocusArea::Tasks => {
+                Some(Action::AgentNewTask)
+            }
 
             KeyCode::Down | KeyCode::Char('j') => match self.focus_area {
-                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => Some(Action::AgentNextTask),
+                AgentFocusArea::Tasks => Some(Action::AgentNextTask),
                 AgentFocusArea::Files => Some(Action::AgentSelectFileNext),
-                AgentFocusArea::Chat => Some(Action::AgentScrollDown),
+                AgentFocusArea::Folders => Some(Action::AgentNextFolder),
+                AgentFocusArea::Chat | AgentFocusArea::Input => Some(Action::AgentScrollDown),
                 AgentFocusArea::Inspector => Some(Action::AgentScrollDown),
             },
             KeyCode::Up | KeyCode::Char('k') => match self.focus_area {
-                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => Some(Action::AgentPrevTask),
+                AgentFocusArea::Tasks => Some(Action::AgentPrevTask),
                 AgentFocusArea::Files => Some(Action::AgentSelectFilePrev),
-                AgentFocusArea::Chat => Some(Action::AgentScrollUp),
+                AgentFocusArea::Folders => Some(Action::AgentPrevFolder),
+                AgentFocusArea::Chat | AgentFocusArea::Input => Some(Action::AgentScrollUp),
                 AgentFocusArea::Inspector => Some(Action::AgentScrollUp),
             },
             KeyCode::Enter => match self.focus_area {
-                AgentFocusArea::Files if self.sidebar_tab == AgentSidebarTab::Tasks => {
-                    Some(Action::AgentSwitchTask)
-                }
+                AgentFocusArea::Tasks => Some(Action::AgentSwitchTask),
                 AgentFocusArea::Files => Some(Action::AgentToggleFileTreeExpand),
+                AgentFocusArea::Folders => Some(Action::AgentFocusFiles),
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
+                AgentFocusArea::Input => Some(Action::AgentSubmitPrompt),
                 AgentFocusArea::Inspector => None,
             },
-            KeyCode::Char('+') | KeyCode::Char('a') if self.focus_area == AgentFocusArea::Files => {
+            KeyCode::Char('a') if matches!(self.focus_area, AgentFocusArea::Folders | AgentFocusArea::Files) => {
                 Some(Action::AgentOpenAddFolderModal)
             }
-            KeyCode::Char('o') | KeyCode::F(3) if self.focus_area == AgentFocusArea::Files => {
+            KeyCode::Char('o') if matches!(self.focus_area, AgentFocusArea::Folders | AgentFocusArea::Files) => {
                 Some(Action::AgentOpenFolderInFileManager)
             }
-            KeyCode::Char('-') | KeyCode::Char('d') if self.focus_area == AgentFocusArea::Files => {
-                if self.sidebar_tab == AgentSidebarTab::Tasks {
-                    Some(Action::AgentDeleteSelectedTask)
-                } else {
-                    Some(Action::AgentRemoveActiveFolder)
-                }
-            }
-            KeyCode::Char('[') if self.focus_area == AgentFocusArea::Files => {
-                Some(Action::AgentPrevFolder)
-            }
-            KeyCode::Char(']') if self.focus_area == AgentFocusArea::Files => {
-                Some(Action::AgentNextFolder)
+            KeyCode::Char('d') => match self.focus_area {
+                AgentFocusArea::Tasks => Some(Action::AgentDeleteSelectedTask),
+                AgentFocusArea::Folders => Some(Action::AgentRemoveActiveFolder),
+                _ => None,
+            },
+            KeyCode::Char('c') if self.focus_area == AgentFocusArea::Chat => {
+                Some(Action::AgentClearChat)
             }
             KeyCode::Char(' ') if self.focus_area == AgentFocusArea::Files => {
                 Some(Action::AgentInsertSelectedFile)

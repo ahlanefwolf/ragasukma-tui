@@ -16,21 +16,12 @@ pub struct AccountInfo {
     pub quotas: Vec<ModelQuotaItem>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ProviderFocusArea {
-    #[default]
-    Accounts,
-    Quotas,
-}
-
 #[derive(Debug, Clone)]
 pub struct ProviderTabState {
     pub provider_name: String,
     pub icon: String,
     pub accounts: Vec<AccountInfo>,
     pub selected_account_idx: usize,
-    pub focus_area: ProviderFocusArea,
-    pub quota_scroll_offset: usize,
     pub last_refreshed: Option<String>,
     pub is_refreshing: bool,
 }

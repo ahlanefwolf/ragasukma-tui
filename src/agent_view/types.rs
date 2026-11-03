@@ -57,8 +57,11 @@ pub struct ChatMessage {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentFocusArea {
+    Tasks,
     Files,
+    Folders,
     Chat,
+    Input,
     Inspector,
 }
 

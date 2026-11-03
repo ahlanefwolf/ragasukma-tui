@@ -1,0 +1,156 @@
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    Frame,
+};
+
+use crate::agent_view::state::AgentWorkspaceState;
+use crate::agent_view::types::AgentFocusArea;
+use crate::theme::Theme;
+
+pub fn render_right_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(7), Constraint::Min(8)])
+        .split(area);
+
+    let is_focused = state.focus_area == AgentFocusArea::Inspector;
+
+    let breakdown = state.calculate_token_breakdown();
+    let usage_pct = (breakdown.usage_ratio() * 100.0) as usize;
+
+    let model_block = Block::default()
+        .title(if is_focused {
+            Span::styled(" 🧠 Model Telemetry [Focused] ", Theme::badge_gold())
+        } else {
+            Span::styled(" 🧠 Model Telemetry ", Theme::header_title())
+        })
+        .borders(Borders::ALL)
+        .border_style(if is_focused {
+            Theme::border_focused()
+        } else {
+            Theme::border_subtle()
+        })
+        .style(Theme::block_base());
+
+    let lines_model = vec![
+        Line::from(vec![
+            Span::styled("Active Model : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(
+                &state.active_model,
+                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Token Usage  : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(
+                format!(
+                    "{} / {} ({}%)",
+                    breakdown.total_used(),
+                    breakdown.max_context_limit,
+                    usage_pct
+                ),
+                Style::default().fg(if breakdown.is_danger() {
+                    Theme::STATUS_ERROR
+                } else if breakdown.is_warning() {
+                    Theme::STATUS_WARNING
+                } else {
+                    Theme::CYAN_ACCENT
+                }),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Remaining    : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(
+                format!("{} tokens", breakdown.remaining_tokens()),
+                Style::default().fg(Theme::TEXT_PRIMARY),
+            ),
+        ]),
+    ];
+    frame.render_widget(Paragraph::new(lines_model).block(model_block), chunks[0]);
+
+    let block_tools = Block::default()
+        .title(if is_focused {
+            Span::styled(" 🛠️ MCP Tool Status [Focused] ", Theme::badge_gold())
+        } else {
+            Span::styled(" 🛠️ MCP Tool Status ", Theme::header_title())
+        })
+        .borders(Borders::ALL)
+        .border_style(if is_focused {
+            Theme::border_focused()
+        } else {
+            Theme::border_subtle()
+        })
+        .style(Theme::block_base());
+
+    let tools_lines: Vec<Line> = vec![
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("workspace_list_dir", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("workspace_read_file", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("workspace_write_file", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("workspace_edit_file", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("workspace_grep", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("workspace_run_cmd", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("quota_fetch_all", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("db_query_execute", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("git_status_check", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+        Line::from(vec![
+            Span::styled("● ", Theme::status_success()),
+            Span::styled("git_diff_inspect", Style::default().fg(Theme::TEXT_PRIMARY)),
+        ]),
+    ];
+
+    let total_tools = tools_lines.len();
+    let inner_height = chunks[1].height.saturating_sub(2) as usize;
+    let max_scroll = total_tools.saturating_sub(inner_height);
+    let scroll_y = state.inspector_scroll_offset.min(max_scroll);
+
+    frame.render_widget(
+        Paragraph::new(tools_lines)
+            .scroll((scroll_y as u16, 0))
+            .block(block_tools),
+        chunks[1],
+    );
+
+    if total_tools > inner_height {
+        let mut scrollbar_state = ScrollbarState::default()
+            .content_length(total_tools)
+            .position(scroll_y);
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼")),
+            chunks[1],
+            &mut scrollbar_state,
+        );
+    }
+}

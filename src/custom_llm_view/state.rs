@@ -6,8 +6,41 @@ use super::types::{CustomLlmTabState, FormField};
 
 impl CustomLlmTabState {
     pub fn new() -> Self {
-        let accounts = load_accounts();
-        let models = Vec::new();
+        let mut accounts = load_accounts();
+        if accounts.is_empty() {
+            accounts = vec![
+                CustomLlmAccount {
+                    prefix: "groq".to_string(),
+                    name: "Groq Cloud LPU".to_string(),
+                    base_url: "https://api.groq.com/openai/v1".to_string(),
+                    api_key: "gsk_live_preview99824".to_string(),
+                    enabled: true,
+                },
+                CustomLlmAccount {
+                    prefix: "deepseek".to_string(),
+                    name: "DeepSeek API Platform".to_string(),
+                    base_url: "https://api.deepseek.com/v1".to_string(),
+                    api_key: "sk-dsk-live-7721".to_string(),
+                    enabled: true,
+                },
+                CustomLlmAccount {
+                    prefix: "local".to_string(),
+                    name: "Local Ollama / vLLM".to_string(),
+                    base_url: "http://localhost:11434/v1".to_string(),
+                    api_key: String::new(),
+                    enabled: false,
+                },
+            ];
+            let _ = save_accounts(&accounts);
+        }
+
+        let models = vec![
+            ("llama-3.3-70b-versatile".to_string(), "groq".to_string()),
+            ("llama-3.1-8b-instant".to_string(), "groq".to_string()),
+            ("deepseek-chat".to_string(), "deepseek".to_string()),
+            ("deepseek-reasoner".to_string(), "deepseek".to_string()),
+            ("qwen2.5-coder:7b".to_string(), "local".to_string()),
+        ];
 
         Self {
             accounts,

@@ -236,55 +236,64 @@ impl AgentWorkspaceState {
 
     pub fn focus_input(&mut self) {
         self.is_input_focused = true;
-        self.focus_area = AgentFocusArea::Chat;
+        self.focus_area = AgentFocusArea::Input;
     }
 
     pub fn unfocus_input(&mut self) {
         self.is_input_focused = false;
+        if self.focus_area == AgentFocusArea::Input {
+            self.focus_area = AgentFocusArea::Chat;
+        }
     }
 
     pub fn cycle_focus_next(&mut self) {
-        self.focus_area = match self.focus_area {
-            AgentFocusArea::Files => AgentFocusArea::Chat,
-            AgentFocusArea::Chat => {
-                if self.is_inspector_visible {
-                    AgentFocusArea::Inspector
-                } else if self.is_sidebar_visible {
-                    AgentFocusArea::Files
-                } else {
-                    AgentFocusArea::Chat
-                }
+        let mut order = Vec::new();
+        if self.is_sidebar_visible {
+            match self.sidebar_tab {
+                AgentSidebarTab::Tasks => order.push(AgentFocusArea::Tasks),
+                AgentSidebarTab::Files => order.push(AgentFocusArea::Files),
             }
-            AgentFocusArea::Inspector => {
-                if self.is_sidebar_visible {
-                    AgentFocusArea::Files
-                } else {
-                    AgentFocusArea::Chat
-                }
-            }
-        };
+            order.push(AgentFocusArea::Folders);
+        }
+        order.push(AgentFocusArea::Chat);
+        order.push(AgentFocusArea::Input);
+        if self.is_inspector_visible {
+            order.push(AgentFocusArea::Inspector);
+        }
+
+        if let Some(pos) = order.iter().position(|&f| f == self.focus_area) {
+            let next_pos = (pos + 1) % order.len();
+            self.focus_area = order[next_pos];
+        } else {
+            self.focus_area = order.first().copied().unwrap_or(AgentFocusArea::Chat);
+        }
+
+        self.is_input_focused = self.focus_area == AgentFocusArea::Input;
     }
 
     pub fn cycle_focus_prev(&mut self) {
-        self.focus_area = match self.focus_area {
-            AgentFocusArea::Files => {
-                if self.is_inspector_visible {
-                    AgentFocusArea::Inspector
-                } else {
-                    AgentFocusArea::Chat
-                }
+        let mut order = Vec::new();
+        if self.is_sidebar_visible {
+            match self.sidebar_tab {
+                AgentSidebarTab::Tasks => order.push(AgentFocusArea::Tasks),
+                AgentSidebarTab::Files => order.push(AgentFocusArea::Files),
             }
-            AgentFocusArea::Chat => {
-                if self.is_sidebar_visible {
-                    AgentFocusArea::Files
-                } else if self.is_inspector_visible {
-                    AgentFocusArea::Inspector
-                } else {
-                    AgentFocusArea::Chat
-                }
-            }
-            AgentFocusArea::Inspector => AgentFocusArea::Chat,
-        };
+            order.push(AgentFocusArea::Folders);
+        }
+        order.push(AgentFocusArea::Chat);
+        order.push(AgentFocusArea::Input);
+        if self.is_inspector_visible {
+            order.push(AgentFocusArea::Inspector);
+        }
+
+        if let Some(pos) = order.iter().position(|&f| f == self.focus_area) {
+            let prev_pos = if pos == 0 { order.len() - 1 } else { pos - 1 };
+            self.focus_area = order[prev_pos];
+        } else {
+            self.focus_area = order.first().copied().unwrap_or(AgentFocusArea::Chat);
+        }
+
+        self.is_input_focused = self.focus_area == AgentFocusArea::Input;
     }
 
     pub fn scroll_up(&mut self) {

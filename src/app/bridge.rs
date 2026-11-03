@@ -9,11 +9,6 @@ impl App {
                 self.set_status(format!("Agent siap (session {})", session_id));
             }
             CoreBridgeEvent::StatusChange(msg) => {
-                if msg.contains("kuota") || msg.contains("quota") {
-                    self.antigravity.is_refreshing = false;
-                    self.codex.is_refreshing = false;
-                    self.claude.is_refreshing = false;
-                }
                 self.set_status(msg);
             }
             CoreBridgeEvent::Delta(delta) => {
@@ -71,15 +66,15 @@ impl App {
                 account_id,
                 quotas,
             } => {
-                let model_count = quotas.len();
                 let p = match provider.to_lowercase().as_str() {
                     "antigravity" => &mut self.antigravity,
                     "codex" => &mut self.codex,
                     "claude" => &mut self.claude,
                     _ => return,
                 };
-                p.update_account_quotas(&account_id, quotas);
-                self.set_status(format!("Updated quota for {} ({} models)", provider, model_count));
+                if let Some(acc) = p.accounts.iter_mut().find(|a| a.id == account_id) {
+                    acc.quotas = quotas;
+                }
             }
             CoreBridgeEvent::ProjectsLoaded {
                 projects,
@@ -93,6 +88,13 @@ impl App {
 
                 self.agent.projects = projects
                     .into_iter()
+                    .filter(|p| {
+                        let lower_name = p.name.to_lowercase();
+                        let lower_id = p.id.to_lowercase();
+                        lower_id != "default"
+                            && !lower_name.contains("workspace default")
+                            && !lower_name.contains("default workspace")
+                    })
                     .map(|p| crate::agent_view::types::ProjectItem {
                         id: p.id,
                         name: p.name,

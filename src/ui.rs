@@ -40,6 +40,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     if let Some(ref err_msg) = app.error_modal {
         render_error_modal(frame, err_msg, size);
     }
+
+    if app.show_help {
+        render_help_modal(frame, app, size);
+    }
 }
 
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
@@ -144,9 +148,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         match app.active_tab {
             0 => crate::agent_view::ui::get_footer_key_hints(&app.agent, area.width),
-            1 => crate::provider_view::ui::get_footer_key_hints(&app.antigravity),
-            2 => crate::provider_view::ui::get_footer_key_hints(&app.codex),
-            3 => crate::provider_view::ui::get_footer_key_hints(&app.claude),
+            1..=3 => crate::provider_view::ui::get_footer_key_hints(),
             4 => crate::custom_llm_view::ui::get_footer_key_hints(&app.custom_llm),
             _ => vec![],
         }
@@ -232,6 +234,86 @@ fn render_error_modal(frame: &mut Frame, err_msg: &str, area: Rect) {
     frame.render_widget(para, inner_area);
 }
 
+fn render_help_modal(frame: &mut Frame, app: &App, area: Rect) {
+    let popup_area = centered_rect(75, 75, area);
+    frame.render_widget(Clear, popup_area);
+
+    let (active_tab_title, focus_str, specific_lines) = match app.active_tab {
+        0 => crate::agent_view::ui::get_help_lines(&app.agent),
+        1 => (
+            "Antigravity Provider (Tab [2])".to_string(),
+            "Accounts & Model Quota",
+            crate::provider_view::ui::get_help_lines("Antigravity"),
+        ),
+        2 => (
+            "Codex Provider (Tab [3])".to_string(),
+            "Accounts & Model Quota",
+            crate::provider_view::ui::get_help_lines("Codex"),
+        ),
+        3 => (
+            "Claude Provider (Tab [4])".to_string(),
+            "Accounts & Model Quota",
+            crate::provider_view::ui::get_help_lines("Claude"),
+        ),
+        4 => (
+            "Custom LLM Endpoints (Tab [5])".to_string(),
+            if app.custom_llm.is_form_open {
+                "Add/Edit Custom Provider Form"
+            } else {
+                "Custom Provider Endpoints List"
+            },
+            crate::custom_llm_view::ui::get_help_lines(&app.custom_llm),
+        ),
+        _ => ("Unknown".to_string(), "General", vec![]),
+    };
+
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("  TAB / FOKUS SAAT INI: ", Theme::badge_gold()),
+            Span::styled(active_tab_title, Theme::header_title().add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::styled("  KOMPONEN AKTIF       : ", Theme::text_muted()),
+            Span::styled(focus_str, Style::default().fg(Theme::CYAN_ACCENT)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("  --- Perintah Khusus Konteks Aktif ---", Theme::badge_cyan())),
+    ];
+
+    lines.extend(specific_lines);
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("  --- Navigasi Global ---", Theme::badge_cyan())));
+    lines.push(Line::from(vec![
+        Span::styled("   1 .. 5         : ", Theme::badge_cyan()),
+        Span::raw("Switch tabs (1:Agent, 2:Antigravity, 3:Codex, 4:Claude, 5:Custom LLM)"),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("   Tab / Shift+Tab: ", Theme::badge_cyan()),
+        Span::raw("Cycle fokus antar panel / field aktif"),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("   ?              : ", Theme::badge_cyan()),
+        Span::raw("Buka / tutup panduan bantuan ini (Help modal)"),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("   Ctrl+C         : ", Theme::badge_cyan()),
+        Span::raw("Keluar dari aplikasi (Force Quit)"),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("   q              : ", Theme::badge_cyan()),
+        Span::raw("Keluar aplikasi (ketika sedang tidak mengetik prompt)"),
+    ]));
+
+    let help_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border_gold())
+        .title(Span::styled(" 📖 Panduan Tombol Cepat (Bantuan) ", Theme::badge_gold()));
+
+    let help_para = Paragraph::new(lines).block(help_block).wrap(Wrap { trim: true });
+    frame.render_widget(help_para, popup_area);
+}
+
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -251,4 +333,3 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1]
 }
-
