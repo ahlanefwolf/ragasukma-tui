@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 
@@ -11,6 +11,8 @@ use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
 
 pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
+    frame.render_widget(Clear, area);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(6), Constraint::Min(5)])
@@ -135,15 +137,15 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     ];
 
     let total_tools = tools_lines.len();
-    let inner_height = chunks[1].height.saturating_sub(2) as usize;
+    let tools_inner = block_tools.inner(chunks[1]);
+    let inner_height = tools_inner.height as usize;
     let max_scroll = total_tools.saturating_sub(inner_height);
     let scroll_y = state.inspector_scroll_offset.min(max_scroll);
 
+    frame.render_widget(block_tools, chunks[1]);
     frame.render_widget(
-        Paragraph::new(tools_lines)
-            .scroll((scroll_y as u16, 0))
-            .block(block_tools),
-        chunks[1],
+        Paragraph::new(tools_lines).scroll((scroll_y as u16, 0)),
+        tools_inner,
     );
 
     if total_tools > inner_height {
@@ -155,7 +157,7 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
                 .orientation(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
                 .end_symbol(Some("▼")),
-            chunks[1],
+            tools_inner,
             &mut scrollbar_state,
         );
     }

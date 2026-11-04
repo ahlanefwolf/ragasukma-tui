@@ -118,20 +118,34 @@ fn render_body(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
-    let status_msg = app.status_message.as_deref().unwrap_or("Ready");
-    let status_width = (status_msg.chars().count() as u16 + 12)
-        .min(area.width.saturating_sub(20))
-        .max(16);
-
     let footer_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(status_width), Constraint::Min(0)])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
+
+    let (status_label, status_style) = match app.status_message.as_deref() {
+        Some(msg) => {
+            let lower = msg.to_lowercase();
+            if lower.contains("error") || lower.contains("failed") || lower.contains("gagal") {
+                (" ERROR ", Theme::status_error())
+            } else if lower.contains("warn")
+                || lower.contains("peringatan")
+                || lower.contains("busy")
+                || lower.contains("sibuk")
+            {
+                (" WARNING ", Theme::status_warning())
+            } else {
+                (" READY ", Theme::badge_info())
+            }
+        }
+        None => (" READY ", Theme::badge_info()),
+    };
 
     // Left: Status notification
     let status_line = Line::from(vec![
         Span::styled(" STATUS: ", Theme::key_badge()),
-        Span::styled(format!(" {status_msg}"), Style::default().fg(Theme::TEXT_PRIMARY)),
+        Span::raw(" "),
+        Span::styled(status_label, status_style),
     ]);
     frame.render_widget(Paragraph::new(status_line), footer_chunks[0]);
 
@@ -260,4 +274,3 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
     horizontal_layout.get(1).copied().unwrap_or(target_row)
 }
-

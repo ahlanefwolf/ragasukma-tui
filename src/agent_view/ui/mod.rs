@@ -1,6 +1,7 @@
 pub mod chat;
 pub mod helpers;
 pub mod inspector;
+pub mod message_renderer;
 pub mod modals;
 pub mod sidebar;
 

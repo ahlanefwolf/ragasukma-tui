@@ -35,13 +35,7 @@ pub struct App {
 }
 
 pub(crate) fn current_time_str() -> String {
-    let now = std::time::SystemTime::now();
-    let d = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
-    let secs = d.as_secs();
-    let h = (secs / 3600) % 24;
-    let m = (secs / 60) % 60;
-    let s = secs % 60;
-    format!("{:02}:{:02}:{:02}", h, m, s)
+    chrono::Local::now().format("%m/%d %H:%M").to_string()
 }
 
 impl App {

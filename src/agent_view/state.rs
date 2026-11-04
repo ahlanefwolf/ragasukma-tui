@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -15,6 +16,7 @@ pub struct AgentWorkspaceState {
     pub input_buffer: String,
     pub cursor_pos: usize,
     pub scroll_offset: usize,
+    pub chat_max_scroll: Cell<usize>,
     pub is_input_focused: bool,
     pub focus_area: AgentFocusArea,
     pub is_running: bool,
@@ -80,6 +82,7 @@ impl Default for AgentWorkspaceState {
             input_buffer: String::new(),
             cursor_pos: 0,
             scroll_offset: 0,
+            chat_max_scroll: Cell::new(0),
             inspector_scroll_offset: 0,
             is_sidebar_visible: true,
             is_inspector_visible: true,
@@ -147,6 +150,8 @@ impl AgentWorkspaceState {
                 }
             })
             .collect();
+        self.scroll_offset = 0;
+        self.auto_scroll = true;
     }
 
     pub fn clear_chat(&mut self) {
@@ -187,6 +192,7 @@ impl AgentWorkspaceState {
     }
 
     pub fn append_chunk(&mut self, chunk: &str) {
+        self.auto_scroll = true;
         if let Some(last) = self
             .messages
             .last_mut()
@@ -195,6 +201,7 @@ impl AgentWorkspaceState {
             last.content.push_str(chunk);
             return;
         }
+
         self.messages.push(ChatMessage {
             role: MessageRole::Assistant,
             sender_name: "Agent".to_string(),
@@ -206,6 +213,7 @@ impl AgentWorkspaceState {
     }
 
     pub fn append_thought(&mut self, thought: &str) {
+        self.auto_scroll = true;
         if let Some(last) = self
             .messages
             .last_mut()
@@ -237,6 +245,8 @@ impl AgentWorkspaceState {
             self.input_buffer.clear();
             self.cursor_pos = 0;
             self.tag_query = None;
+            self.scroll_offset = 0;
+            self.auto_scroll = true;
             Some(trimmed)
         }
     }
@@ -309,7 +319,8 @@ impl AgentWorkspaceState {
         if self.focus_area == AgentFocusArea::McpTools {
             self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_sub(1);
         } else {
-            self.scroll_offset = self.scroll_offset.saturating_add(3);
+            let max = self.chat_max_scroll.get();
+            self.scroll_offset = (self.scroll_offset.saturating_add(3)).min(max);
             self.auto_scroll = false;
         }
     }
@@ -318,7 +329,9 @@ impl AgentWorkspaceState {
         if self.focus_area == AgentFocusArea::McpTools {
             self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_add(1);
         } else {
-            self.scroll_offset = self.scroll_offset.saturating_sub(3);
+            let max = self.chat_max_scroll.get();
+            let current = self.scroll_offset.min(max);
+            self.scroll_offset = current.saturating_sub(3);
             if self.scroll_offset == 0 {
                 self.auto_scroll = true;
             }
@@ -326,7 +339,7 @@ impl AgentWorkspaceState {
     }
 
     pub fn scroll_to_top(&mut self) {
-        self.scroll_offset = 9999;
+        self.scroll_offset = self.chat_max_scroll.get();
         self.auto_scroll = false;
     }
 
@@ -463,6 +476,8 @@ impl AgentWorkspaceState {
 
     pub fn start_turn(&mut self) {
         self.is_running = true;
+        self.scroll_offset = 0;
+        self.auto_scroll = true;
     }
 
     pub fn cancel_turn(&mut self) {

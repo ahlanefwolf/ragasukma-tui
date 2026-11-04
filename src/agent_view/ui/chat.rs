@@ -2,12 +2,15 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{
+        Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+    },
     Frame,
 };
 
+use super::message_renderer::{calculate_total_visual_lines, render_message_standard};
 use crate::agent_view::state::AgentWorkspaceState;
-use crate::agent_view::types::{AgentFocusArea, MessageRole, ToolExecutionStatus};
+use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
 
 pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
@@ -18,72 +21,6 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
 
     let is_chat_focused = state.focus_area == AgentFocusArea::Chat;
     let is_input_focused = state.focus_area == AgentFocusArea::Input || state.is_input_focused;
-
-    let mut chat_lines = Vec::new();
-    if state.messages.is_empty() {
-        chat_lines.push(Line::from(vec![
-            Span::styled("Welcome to ", Style::default().fg(Theme::TEXT_SECONDARY)),
-            Span::styled(
-                "Ragasukma AI Agent",
-                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                "! Type your message below or press @ to attach files.",
-                Style::default().fg(Theme::TEXT_SECONDARY),
-            ),
-        ]));
-    } else {
-        for msg in &state.messages {
-            let (badge, badge_style) = match msg.role {
-                MessageRole::User => (" You ", Theme::badge_info()),
-                MessageRole::Assistant => (" Assistant ", Theme::badge_gold()),
-                MessageRole::System => (" System ", Theme::badge_gray()),
-                MessageRole::Tool => (" Tool ", Theme::badge_cyan()),
-            };
-
-            chat_lines.push(Line::from(vec![
-                Span::styled(badge, badge_style),
-                Span::raw(" "),
-                Span::styled(
-                    format!("[{}]", msg.timestamp),
-                    Style::default().fg(Theme::TEXT_SECONDARY),
-                ),
-            ]));
-
-            for line in msg.content.lines() {
-                chat_lines.push(Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(line, Style::default().fg(Theme::TEXT_PRIMARY)),
-                ]));
-            }
-
-            for tc in &msg.tool_calls {
-                let status_icon = match tc.status {
-                    ToolExecutionStatus::Running => "⏳ Running...",
-                    ToolExecutionStatus::Success => "✓ Completed",
-                    ToolExecutionStatus::Failed => "✗ Failed",
-                    ToolExecutionStatus::PendingApproval => "⚠️ Pending Approval",
-                };
-                let status_color = match tc.status {
-                    ToolExecutionStatus::Running => Theme::CYAN_ACCENT,
-                    ToolExecutionStatus::Success => Theme::STATUS_SUCCESS,
-                    ToolExecutionStatus::Failed => Theme::STATUS_ERROR,
-                    ToolExecutionStatus::PendingApproval => Theme::STATUS_WARNING,
-                };
-
-                chat_lines.push(Line::from(vec![
-                    Span::raw("  🛠️ ["),
-                    Span::styled(
-                        &tc.name,
-                        Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("] "),
-                    Span::styled(status_icon, Style::default().fg(status_color)),
-                ]));
-            }
-            chat_lines.push(Line::from(""));
-        }
-    }
 
     let chat_title = if is_chat_focused {
         Span::styled(" 💬 Agent Conversation [Focused] ", Theme::badge_gold())
@@ -101,11 +38,78 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         })
         .style(Theme::block_base());
 
+    let chat_inner = chat_block.inner(chunks[0]);
+    let text_width = chat_inner.width.saturating_sub(1) as usize;
+    let inner_height = chat_inner.height as usize;
+
+    let mut chat_lines = Vec::new();
+    if state.messages.is_empty() {
+        chat_lines.push(Line::from(vec![
+            Span::styled("Welcome to ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled(
+                "Ragasukma AI Agent",
+                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "! Type your message below or press @ to attach files.",
+                Style::default().fg(Theme::TEXT_SECONDARY),
+            ),
+        ]));
+    } else {
+        for msg in &state.messages {
+            chat_lines.extend(render_message_standard(msg));
+        }
+        // Tambahkan baris kosong ekstra di akhir agar pesan terbawah selalu terlihat utuh dan tidak mepet
+        chat_lines.push(Line::from(""));
+        chat_lines.push(Line::from(""));
+    }
+
+    let calculated_visual = calculate_total_visual_lines(&chat_lines, text_width);
+    let total_visual_lines = calculated_visual.max(chat_lines.len());
+
+    let max_scroll = total_visual_lines.saturating_sub(inner_height);
+    state.chat_max_scroll.set(max_scroll);
+    let effective_scroll = if state.auto_scroll {
+        max_scroll
+    } else {
+        max_scroll.saturating_sub(state.scroll_offset)
+    };
+
+    frame.render_widget(Clear, chunks[0]);
+    frame.render_widget(chat_block, chunks[0]);
+
+    let text_area = Rect {
+        x: chat_inner.x,
+        y: chat_inner.y,
+        width: chat_inner.width.saturating_sub(1),
+        height: chat_inner.height,
+    };
+    let scrollbar_area = Rect {
+        x: chat_inner.x + chat_inner.width.saturating_sub(1),
+        y: chat_inner.y,
+        width: 1.min(chat_inner.width),
+        height: chat_inner.height,
+    };
+
     let p = Paragraph::new(chat_lines)
-        .block(chat_block)
         .wrap(Wrap { trim: false })
-        .scroll((state.scroll_offset as u16, 0));
-    frame.render_widget(p, chunks[0]);
+        .scroll((effective_scroll as u16, 0));
+    frame.render_widget(p, text_area);
+
+    if max_scroll > 0 && scrollbar_area.width > 0 {
+        let mut scrollbar_state = ScrollbarState::new(max_scroll).position(effective_scroll);
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"))
+                .thumb_symbol("█")
+                .track_symbol(Some("│"))
+                .style(Style::default().fg(Theme::CYAN_ACCENT)),
+            scrollbar_area,
+            &mut scrollbar_state,
+        );
+    }
 
     // Input Bar Card
     let input_border = if state.tag_query.is_some() {
