@@ -41,8 +41,35 @@ impl App {
             }
             CoreBridgeEvent::TurnCompleted(msg) => {
                 tracing::info!("Turn completed: {msg}");
+                if !msg.trim().is_empty() {
+                    let mut found = false;
+                    if let Some(last) = self
+                        .agent
+                        .messages
+                        .last_mut()
+                        .filter(|m| m.role == crate::agent_view::types::MessageRole::Assistant && m.content.is_empty())
+                    {
+                        last.content = msg.clone();
+                        found = true;
+                    }
+                    if !found {
+                        self.agent.messages.push(crate::agent_view::types::ChatMessage {
+                            role: crate::agent_view::types::MessageRole::Assistant,
+                            sender_name: "Agent".to_string(),
+                            content: msg,
+                            timestamp: "now".to_string(),
+                            tool_calls: Vec::new(),
+                            reasoning: None,
+                        });
+                    }
+                }
                 self.agent.finish_turn();
-                self.set_status(format!("Turn completed: {}", msg));
+                self.set_status("Turn completed".to_string());
+                if let (Some(sid), Some(tx)) = (self.agent.active_session_id.as_ref(), self.bridge_cmd_tx.as_ref()) {
+                    let _ = tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
+                        session_id: sid.clone(),
+                    });
+                }
             }
             CoreBridgeEvent::TurnCancelled { session_id } => {
                 tracing::warn!("Turn cancelled for session: {session_id}");
@@ -51,6 +78,14 @@ impl App {
             }
             CoreBridgeEvent::TurnFailed { error, session_id } => {
                 tracing::error!("Turn failed for session {session_id}: {error}");
+                self.agent.messages.push(crate::agent_view::types::ChatMessage {
+                    role: crate::agent_view::types::MessageRole::Assistant,
+                    sender_name: "System Error".to_string(),
+                    content: format!("⚠️ Error: {}", error),
+                    timestamp: "now".to_string(),
+                    tool_calls: Vec::new(),
+                    reasoning: None,
+                });
                 self.agent.fail_turn(error.clone());
                 self.set_status(format!("Turn failed: {}", error));
             }

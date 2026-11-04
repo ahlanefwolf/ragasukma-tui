@@ -13,7 +13,7 @@ use crate::theme::Theme;
 pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(8), Constraint::Min(5)])
+        .constraints([Constraint::Length(6), Constraint::Min(5)])
         .split(area);
 
     let is_model_focused = state.focus_area == AgentFocusArea::ModelTelemetry;
@@ -34,11 +34,11 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
         .style(Theme::block_base());
 
     let breakdown = state.calculate_token_breakdown();
-    let usage_pct = (breakdown.usage_ratio() * 100.0).round() as usize;
+    let total_task = breakdown.total_task_tokens();
 
     let lines_model = vec![
         Line::from(vec![
-            Span::styled("Model: ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Model   : ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
                 format!("[◈ {}]", state.active_model),
                 Style::default()
@@ -47,28 +47,31 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
             ),
         ]),
         Line::from(vec![
-            Span::styled("Usage: ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Requests: ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
-                format!(
-                    "{} / {} ({}%)",
-                    breakdown.total_used(),
-                    breakdown.max_context_limit,
-                    usage_pct
-                ),
-                Style::default().fg(if breakdown.is_danger() {
-                    Theme::STATUS_ERROR
-                } else if breakdown.is_warning() {
-                    Theme::STATUS_WARNING
-                } else {
-                    Theme::CYAN_ACCENT
-                }),
+                format!("{} req{}", breakdown.task_requests, if breakdown.task_requests == 1 { "" } else { "s" }),
+                Style::default().fg(Theme::CYAN_ACCENT),
             ),
         ]),
         Line::from(vec![
-            Span::styled("Left : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Tokens  : ", Style::default().fg(Theme::TEXT_MUTED)),
             Span::styled(
-                format!("{} tokens remaining", breakdown.remaining_tokens()),
+                format!("▲ {} in", breakdown.task_input_tokens),
                 Style::default().fg(Theme::TEXT_PRIMARY),
+            ),
+            Span::styled("  •  ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(
+                format!("▼ {} out", breakdown.task_output_tokens),
+                Style::default().fg(Theme::TEXT_PRIMARY),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Total   : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(
+                format!("{} tokens", total_task),
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
     ];

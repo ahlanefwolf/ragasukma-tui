@@ -592,12 +592,43 @@ impl AgentWorkspaceState {
     pub fn calculate_token_breakdown(&self) -> TokenBreakdown {
         let chat_tokens = self.messages.iter().map(|m| m.content.len() / 4).sum();
         let session_tokens = self.sessions.iter().map(|s| (s.total_tokens_input + s.total_tokens_output) as usize).sum();
+
+        let mut task_requests = 0;
+        let mut msg_in_tokens = 0;
+        let mut msg_out_tokens = 0;
+
+        for msg in &self.messages {
+            let tok = (msg.content.len() / 4).max(1);
+            match msg.role {
+                crate::agent_view::types::MessageRole::User => {
+                    task_requests += 1;
+                    msg_in_tokens += tok;
+                }
+                crate::agent_view::types::MessageRole::Assistant => {
+                    msg_out_tokens += tok;
+                }
+                _ => {}
+            }
+        }
+
+        let (stored_in, stored_out) = if let Some(s) = self.sessions.get(self.selected_session_idx) {
+            (s.total_tokens_input as usize, s.total_tokens_output as usize)
+        } else {
+            (0, 0)
+        };
+
+        let task_input_tokens = stored_in.max(msg_in_tokens);
+        let task_output_tokens = stored_out.max(msg_out_tokens);
+
         TokenBreakdown {
             system_tokens: 1500,
             chat_history_tokens: chat_tokens,
             session_tokens,
             completion_tokens: self.total_completion_tokens,
             max_context_limit: self.max_context_limit,
+            task_input_tokens,
+            task_output_tokens,
+            task_requests,
         }
     }
 

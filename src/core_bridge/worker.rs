@@ -93,14 +93,40 @@ pub fn spawn_core_bridge_worker(
                     if let Some((_prompt, model_override)) = last_turn_request.clone() {
                         let sid_exec = active_sid.clone();
                         let exec_tx = worker_tx.clone();
+
+                        let mut session_sub = ragasukma_core::agent::events::get_session_sender(&sid_exec).subscribe();
+                        let stream_tx = exec_tx.clone();
+                        let stream_forwarder = tokio::spawn(async move {
+                            while let Ok(evt) = session_sub.recv().await {
+                                match evt {
+                                    ragasukma_core::agent::models::AgentSessionEvent::Delta { delta } => {
+                                        let _ = stream_tx.send(CoreBridgeEvent::Delta(delta));
+                                    }
+                                    ragasukma_core::agent::models::AgentSessionEvent::ThoughtDelta { delta } => {
+                                        let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta(delta));
+                                    }
+                                    ragasukma_core::agent::models::AgentSessionEvent::StatusChange { status } => {
+                                        let _ = stream_tx.send(CoreBridgeEvent::StatusChange(status));
+                                    }
+                                    ragasukma_core::agent::models::AgentSessionEvent::StepInfo { iteration, action, details } => {
+                                        let _ = stream_tx.send(CoreBridgeEvent::StepInfo { iteration, action, details });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        });
+
                         let handle = tokio::spawn(async move {
                             tracing::info!("Retrying turn for session: {sid_exec}");
-                            match ragasukma_core::agent::executor::execute_session_turn(
+                            let res = ragasukma_core::agent::executor::execute_session_turn(
                                 &sid_exec,
                                 model_override.as_deref(),
                             )
-                            .await
-                            {
+                            .await;
+
+                            stream_forwarder.abort();
+
+                            match res {
                                 Ok(reply) => {
                                     let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
                                 }
@@ -355,14 +381,41 @@ pub fn spawn_core_bridge_worker(
                     let exec_tx = worker_tx.clone();
 
                     last_turn_request = Some((prompt.clone(), model_override.clone()));
+
+                    // Realtime event streamer: subscribe to core agent session events
+                    let mut session_sub = ragasukma_core::agent::events::get_session_sender(&sid_exec).subscribe();
+                    let stream_tx = exec_tx.clone();
+                    let stream_forwarder = tokio::spawn(async move {
+                        while let Ok(evt) = session_sub.recv().await {
+                            match evt {
+                                ragasukma_core::agent::models::AgentSessionEvent::Delta { delta } => {
+                                    let _ = stream_tx.send(CoreBridgeEvent::Delta(delta));
+                                }
+                                ragasukma_core::agent::models::AgentSessionEvent::ThoughtDelta { delta } => {
+                                    let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta(delta));
+                                }
+                                ragasukma_core::agent::models::AgentSessionEvent::StatusChange { status } => {
+                                    let _ = stream_tx.send(CoreBridgeEvent::StatusChange(status));
+                                }
+                                ragasukma_core::agent::models::AgentSessionEvent::StepInfo { iteration, action, details } => {
+                                    let _ = stream_tx.send(CoreBridgeEvent::StepInfo { iteration, action, details });
+                                }
+                                _ => {}
+                            }
+                        }
+                    });
+
                     let handle = tokio::spawn(async move {
                         tracing::info!("Executing session turn for session: {sid_exec}");
-                        match ragasukma_core::agent::executor::execute_session_turn(
+                        let res = ragasukma_core::agent::executor::execute_session_turn(
                             &sid_exec,
                             model_override.as_deref(),
                         )
-                        .await
-                        {
+                        .await;
+
+                        stream_forwarder.abort();
+
+                        match res {
                             Ok(reply) => {
                                 let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
                             }

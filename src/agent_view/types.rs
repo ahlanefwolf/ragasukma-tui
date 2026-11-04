@@ -141,16 +141,23 @@ impl FileTagQuery {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct TokenBreakdown {
     pub system_tokens: usize,
     pub chat_history_tokens: usize,
     pub session_tokens: usize,
     pub completion_tokens: usize,
     pub max_context_limit: usize,
+    pub task_input_tokens: usize,
+    pub task_output_tokens: usize,
+    pub task_requests: usize,
 }
 
 impl TokenBreakdown {
+    pub fn total_task_tokens(&self) -> usize {
+        self.task_input_tokens + self.task_output_tokens
+    }
+
     pub fn total_used(&self) -> usize {
         self.system_tokens + self.chat_history_tokens + self.session_tokens + self.completion_tokens
     }
