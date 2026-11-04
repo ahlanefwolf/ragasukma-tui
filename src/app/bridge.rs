@@ -223,18 +223,24 @@ impl App {
             } => {
                 self.agent.sessions = sessions
                     .into_iter()
-                    .map(|(sid, title)| crate::agent_view::types::TaskSessionItem {
-                        id: sid,
-                        title,
-                        status: "ready".to_string(),
-                        model: None,
-                        total_tokens_input: 0,
-                        total_tokens_output: 0,
-                        updated_at: 0,
+                    .map(|s| crate::agent_view::types::TaskSessionItem {
+                        id: s.id,
+                        title: s.title,
+                        status: s.status,
+                        model: s.model,
+                        total_tokens_input: s.total_tokens_input,
+                        total_tokens_output: s.total_tokens_output,
+                        updated_at: s.updated_at,
                         is_running: false,
                     })
                     .collect();
-                self.agent.active_session_id = Some(active_id);
+                self.agent.active_session_id = Some(active_id.clone());
+                if let Some(pos) = self.agent.sessions.iter().position(|s| s.id == active_id) {
+                    self.agent.selected_session_idx = pos;
+                    if let Some(ref m) = self.agent.sessions[pos].model {
+                        self.agent.active_model = m.clone();
+                    }
+                }
             }
             CoreBridgeEvent::Error(err) => {
                 tracing::error!("Core bridge error received: {err}");
@@ -242,6 +248,18 @@ impl App {
             }
             CoreBridgeEvent::HistoryLoaded { session_id, messages } => {
                 self.agent.active_session_id = Some(session_id.clone());
+                let sum_in: i64 = messages.iter().map(|m| m.token_usage_input.unwrap_or(0)).sum();
+                let sum_out: i64 = messages.iter().map(|m| m.token_usage_output.unwrap_or(0)).sum();
+                if let Some(pos) = self.agent.sessions.iter().position(|s| s.id == session_id) {
+                    self.agent.selected_session_idx = pos;
+                    if sum_in > 0 || sum_out > 0 {
+                        self.agent.sessions[pos].total_tokens_input = sum_in;
+                        self.agent.sessions[pos].total_tokens_output = sum_out;
+                    }
+                    if let Some(ref m) = self.agent.sessions[pos].model {
+                        self.agent.active_model = m.clone();
+                    }
+                }
                 self.agent.set_messages_from_persisted(messages);
                 self.set_status(format!("Loaded conversation history for session: {}", session_id));
             }
@@ -250,7 +268,7 @@ impl App {
                     id: id.clone(),
                     title: title.clone(),
                     status: "ready".to_string(),
-                    model: None,
+                    model: Some(self.agent.active_model.clone()),
                     total_tokens_input: 0,
                     total_tokens_output: 0,
                     updated_at: 0,

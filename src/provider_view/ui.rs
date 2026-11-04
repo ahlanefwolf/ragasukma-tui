@@ -58,7 +58,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
             let status_badge = if acc.is_active {
                 Span::styled(" ● ACTIVE ", Theme::status_success().add_modifier(Modifier::BOLD))
             } else {
-                Span::styled(" ○ INACTIVE ", Theme::text_muted())
+                Span::styled(" ○ INACTIVE ", Theme::text_secondary())
             };
 
             let prefix = if is_selected { "▶ " } else { "  " };
@@ -69,7 +69,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                     if is_selected {
                         Theme::text_gold()
                     } else {
-                        Theme::text_muted()
+                        Theme::text_secondary()
                     },
                 ),
                 Span::styled(
@@ -84,7 +84,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
 
             let line2 = Line::from(vec![
                 Span::raw("    "),
-                Span::styled(&acc.plan, Theme::text_muted()),
+                Span::styled(&acc.plan, Theme::text_secondary()),
                 Span::raw(" "),
                 status_badge,
             ]);
@@ -113,7 +113,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
     if state.accounts.is_empty() {
         let empty_msg = Paragraph::new(vec![
             Line::from(""),
-            Line::from(Span::styled("  No accounts yet.", Theme::text_muted())),
+            Line::from(Span::styled("  No accounts yet.", Theme::text_secondary())),
             Line::from(""),
             Line::from(vec![
                 Span::raw("  Press "),
@@ -162,7 +162,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                     if account.is_active {
                         Theme::status_success()
                     } else {
-                        Theme::text_muted()
+                        Theme::text_secondary()
                     },
                 ),
             ]),
@@ -173,7 +173,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                         .last_refreshed
                         .as_deref()
                         .unwrap_or("Realtime Streaming Active"),
-                    Theme::text_muted(),
+                    Theme::text_secondary(),
                 ),
             ]),
         ];
@@ -256,7 +256,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
 
         if account.quotas.is_empty() {
             let empty_text = vec![
-                Line::from(Span::styled("No model quota data available.", Theme::text_muted())),
+                Line::from(Span::styled("No model quota data available.", Theme::text_secondary())),
                 Line::from(Span::styled("Press [r] to fetch/refresh quota from server...", Theme::text_gold())),
             ];
             let p = Paragraph::new(empty_text);
@@ -275,7 +275,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                             Theme::text_primary().add_modifier(Modifier::BOLD),
                         ),
                         Span::raw("  "),
-                        Span::styled(&quota.detail, Theme::text_muted()),
+                        Span::styled(&quota.detail, Theme::text_secondary()),
                         Span::raw("  "),
                         Span::styled(
                             format!("(Reset: {})", quota.reset_in),
@@ -312,7 +312,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
             .title(" Account & Quota Info ");
         let msg = Paragraph::new(vec![
             Line::from(""),
-            Line::from(Span::styled("  No account selected.", Theme::text_muted())),
+            Line::from(Span::styled("  No account selected.", Theme::text_secondary())),
             Line::from(""),
             Line::from(vec![
                 Span::raw("  Press "),

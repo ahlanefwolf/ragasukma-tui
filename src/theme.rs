@@ -19,7 +19,7 @@ impl Theme {
     // -------------------------------------------------------------
     pub const TEXT_PRIMARY: Color = Color::Rgb(237, 234, 225); // #edeae1 --gi-text-primary
     pub const TEXT_SECONDARY: Color = Color::Rgb(159, 167, 184); // #9fa7b8 --gi-text-secondary
-    pub const TEXT_MUTED: Color = Color::Rgb(95, 102, 117); // #5f6675 --gi-text-muted
+    pub const TEXT_MUTED: Color = Color::Rgb(159, 167, 184); // mapped to TEXT_SECONDARY for readability // #5f6675 --gi-text-muted
 
     // -------------------------------------------------------------
     // Brand Colors
@@ -162,7 +162,7 @@ impl Theme {
 
     #[must_use]
     pub fn status_inactive() -> Style {
-        Style::default().fg(Self::TEXT_MUTED)
+        Style::default().fg(Self::TEXT_SECONDARY)
     }
 
     #[must_use]
@@ -177,7 +177,7 @@ impl Theme {
 
     #[must_use]
     pub fn text_muted() -> Style {
-        Style::default().fg(Self::TEXT_MUTED)
+        Style::default().fg(Self::TEXT_SECONDARY)
     }
 
     #[must_use]

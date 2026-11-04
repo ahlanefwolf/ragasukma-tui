@@ -51,7 +51,7 @@ pub fn render_tool_card(
         ),
         Span::styled(
             format!("{}{}", duration_str, exit_code_str),
-            Style::default().fg(Theme::TEXT_MUTED),
+            Style::default().fg(Theme::TEXT_SECONDARY),
         ),
     ]));
 
@@ -65,7 +65,7 @@ pub fn render_tool_card(
                     .fg(Theme::TEXT_SECONDARY)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(tc.args_summary.clone(), Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(tc.args_summary.clone(), Style::default().fg(Theme::TEXT_SECONDARY)),
         ]));
 
         // Terminal output stream
@@ -171,7 +171,7 @@ pub fn render_diff_lines(diff: &str) -> Vec<Line<'static>> {
         } else {
             lines.push(Line::from(Span::styled(
                 line.to_string(),
-                Style::default().fg(Theme::TEXT_MUTED),
+                Style::default().fg(Theme::TEXT_SECONDARY),
             )));
         }
     }
@@ -252,7 +252,7 @@ pub fn render_approval_modal(
         frame.render_widget(p, chunks[1]);
     } else {
         let info_p = Paragraph::new("No file modification diff. Tool requests direct system execution approval.")
-            .style(Style::default().fg(Theme::TEXT_MUTED))
+            .style(Style::default().fg(Theme::TEXT_SECONDARY))
             .block(Block::default().borders(Borders::ALL).border_style(Theme::border_subtle()));
         frame.render_widget(info_p, chunks[1]);
     }
@@ -263,7 +263,7 @@ pub fn render_approval_modal(
         Span::raw("  "),
         Span::styled(" [n] Reject ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
         Span::raw("  "),
-        Span::styled(" [Esc] Dismiss ", Style::default().fg(Theme::TEXT_MUTED)),
+        Span::styled(" [Esc] Dismiss ", Style::default().fg(Theme::TEXT_SECONDARY)),
     ]));
     frame.render_widget(actions_p, chunks[2]);
 }

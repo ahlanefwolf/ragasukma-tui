@@ -213,6 +213,7 @@ pub struct ProjectItem {
 pub struct ModelSelectorModalState {
     pub is_open: bool,
     pub selected_idx: usize,
+    pub search_query: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

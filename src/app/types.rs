@@ -126,6 +126,8 @@ pub enum Action {
     AgentSelectNextModalModel,
     AgentSelectPrevModalModel,
     AgentApplyModalModel,
+    AgentModelModalChar(char),
+    AgentModelModalBackspace,
     AgentRefreshModels,
 
     // Multi-Folder Workspace Support (1:1 with web agent)

@@ -4,7 +4,9 @@ use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
-use super::types::{CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto};
+use super::types::{
+    CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto, SessionDto,
+};
 use super::worker::spawn_core_bridge_worker;
 
 pub struct CoreBridge {
@@ -18,18 +20,22 @@ impl CoreBridge {
         db_pool: SqlitePool,
         event_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
     ) -> Result<Self> {
-        let initial_projects = list_projects().await.unwrap_or_default();
+        let mut initial_projects = list_projects().await.unwrap_or_default();
+        // Prioritize project with the most recent activity (latest updated_at)
+        initial_projects.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
         let project = initial_projects.first().cloned();
         let (project_id, project_name) = match &project {
             Some(p) => (p.id.clone(), p.name.clone()),
             None => (String::new(), "No Project".to_string()),
         };
 
-        let existing_sessions = if !project_id.is_empty() {
+        let mut existing_sessions = if !project_id.is_empty() {
             list_sessions(&project_id).await.unwrap_or_default()
         } else {
             Vec::new()
         };
+        // Prioritize session with the most recent activity (latest updated_at)
+        existing_sessions.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
         let session = existing_sessions.first().cloned();
         let session_id = session.as_ref().map(|s| s.id.clone()).unwrap_or_default();
 
@@ -44,8 +50,7 @@ impl CoreBridge {
         });
 
         // Emit initial project list
-        let all_projects = list_projects().await.unwrap_or_default();
-        let project_dtos = all_projects
+        let project_dtos = initial_projects
             .into_iter()
             .map(|p| ProjectDto {
                 id: p.id,
@@ -62,18 +67,13 @@ impl CoreBridge {
         });
 
         // Emit initial session list and history
-        let all_sessions = if !pid.is_empty() {
-            list_sessions(&pid).await.unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        let sessions_summary = all_sessions
+        let sessions_dto = existing_sessions
             .into_iter()
-            .map(|s| (s.id, s.title))
+            .map(SessionDto::from)
             .collect::<Vec<_>>();
 
         let _ = event_tx.send(CoreBridgeEvent::SessionsLoaded {
-            sessions: sessions_summary,
+            sessions: sessions_dto,
             active_id: sid.clone(),
         });
 
@@ -167,12 +167,22 @@ impl CoreBridge {
             .map_err(|e| anyhow::anyhow!("Gagal menghapus project: {}", e))
     }
 
-    pub fn create_session(&self, title: &str) -> Result<()> {
+    pub fn create_session(&self, title: &str, model: Option<String>) -> Result<()> {
         self.cmd_tx
             .send(CoreBridgeCommand::CreateSession {
                 title: title.to_string(),
+                model,
             })
             .map_err(|e| anyhow::anyhow!("Gagal membuat session baru: {}", e))
+    }
+
+    pub fn update_session_model(&self, session_id: &str, model: &str) -> Result<()> {
+        self.cmd_tx
+            .send(CoreBridgeCommand::UpdateSessionModel {
+                session_id: session_id.to_string(),
+                model: model.to_string(),
+            })
+            .map_err(|e| anyhow::anyhow!("Gagal update session model: {}", e))
     }
 
     pub fn delete_session(&self, session_id: &str) -> Result<()> {

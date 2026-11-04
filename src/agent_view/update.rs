@@ -173,9 +173,11 @@ pub fn handle_agent_action(
         }
         Action::AgentNewTask => {
             let default_title = format!("Task #{}", agent.sessions.len() + 1);
+            let active_model = agent.active_model.clone();
             if let Some(tx) = bridge_cmd_tx {
                 let _ = tx.send(CoreBridgeCommand::CreateSession {
                     title: default_title,
+                    model: Some(active_model),
                 });
             } else {
                 agent.create_new_task(None);
@@ -198,6 +200,9 @@ pub fn handle_agent_action(
         Action::AgentSwitchTask => {
             if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
                 let sid = s.id.clone();
+                if let Some(ref m) = s.model {
+                    agent.active_model = m.clone();
+                }
                 agent.active_session_id = Some(sid.clone());
                 if let Some(tx) = bridge_cmd_tx {
                     let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
@@ -211,6 +216,9 @@ pub fn handle_agent_action(
             agent.next_session();
             if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
                 let sid = s.id.clone();
+                if let Some(ref m) = s.model {
+                    agent.active_model = m.clone();
+                }
                 agent.active_session_id = Some(sid.clone());
                 if let Some(tx) = bridge_cmd_tx {
                     let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
@@ -224,6 +232,9 @@ pub fn handle_agent_action(
             agent.prev_session();
             if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
                 let sid = s.id.clone();
+                if let Some(ref m) = s.model {
+                    agent.active_model = m.clone();
+                }
                 agent.active_session_id = Some(sid.clone());
                 if let Some(tx) = bridge_cmd_tx {
                     let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
@@ -263,11 +274,22 @@ pub fn handle_agent_action(
         Action::AgentCycleModel => {
             agent.cycle_model();
             let model_name = agent.active_model.clone();
+            if let Some(s) = agent.sessions.get_mut(agent.selected_session_idx) {
+                s.model = Some(model_name.clone());
+            }
+            if let Some(ref sid) = agent.active_session_id
+                && let Some(tx) = bridge_cmd_tx
+            {
+                let _ = tx.send(CoreBridgeCommand::UpdateSessionModel {
+                    session_id: sid.clone(),
+                    model: model_name.clone(),
+                });
+            }
             Some(format!("Selected model: {}", model_name))
         }
         Action::AgentOpenModelModal => {
             agent.open_model_modal();
-            Some("Select Model: Use [↑/↓/←/→] or [j/k/h/l] to navigate tags, [Enter] to select, [Esc] to cancel".to_string())
+            Some("Select Model: Type to filter, [↑/↓] or [Tab] to navigate, [Enter] to select, [Esc] to cancel".to_string())
         }
         Action::AgentCloseModelModal => {
             agent.close_model_modal();
@@ -281,9 +303,28 @@ pub fn handle_agent_action(
             agent.select_prev_modal_model();
             None
         }
+        Action::AgentModelModalChar(c) => {
+            agent.model_modal_push_char(c);
+            None
+        }
+        Action::AgentModelModalBackspace => {
+            agent.model_modal_backspace();
+            None
+        }
         Action::AgentApplyModalModel => {
             agent.apply_modal_model();
             let model_name = agent.active_model.clone();
+            if let Some(s) = agent.sessions.get_mut(agent.selected_session_idx) {
+                s.model = Some(model_name.clone());
+            }
+            if let Some(ref sid) = agent.active_session_id
+                && let Some(tx) = bridge_cmd_tx
+            {
+                let _ = tx.send(CoreBridgeCommand::UpdateSessionModel {
+                    session_id: sid.clone(),
+                    model: model_name.clone(),
+                });
+            }
             Some(format!("Active model set to: {}", model_name))
         }
         Action::AgentRefreshModels => {

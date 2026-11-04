@@ -47,13 +47,11 @@ impl AgentWorkspaceState {
         if self.model_modal.is_open {
             return match code {
                 KeyCode::Esc => Some(Action::AgentCloseModelModal),
-                KeyCode::Down | KeyCode::Right | KeyCode::Char('j') | KeyCode::Char('l') | KeyCode::Tab => {
-                    Some(Action::AgentSelectNextModalModel)
-                }
-                KeyCode::Up | KeyCode::Left | KeyCode::Char('k') | KeyCode::Char('h') | KeyCode::BackTab => {
-                    Some(Action::AgentSelectPrevModalModel)
-                }
+                KeyCode::Down | KeyCode::Tab => Some(Action::AgentSelectNextModalModel),
+                KeyCode::Up | KeyCode::BackTab => Some(Action::AgentSelectPrevModalModel),
                 KeyCode::Enter => Some(Action::AgentApplyModalModel),
+                KeyCode::Backspace => Some(Action::AgentModelModalBackspace),
+                KeyCode::Char(c) => Some(Action::AgentModelModalChar(c)),
                 _ => None,
             };
         }

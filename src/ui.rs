@@ -156,7 +156,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(
         Paragraph::new(legend_line)
             .alignment(Alignment::Right)
-            .style(Theme::text_muted()),
+            .style(Theme::text_secondary()),
         footer_chunks[1],
     );
 }
@@ -178,7 +178,7 @@ fn render_confirm_dialog(frame: &mut Frame, dialog: &crate::app::ConfirmDialogSt
         Line::from(vec![
             Span::styled(" [y / Enter] Confirm ", Theme::badge_gold().add_modifier(Modifier::BOLD)),
             Span::raw("    "),
-            Span::styled(" [n / Esc] Cancel ", Theme::text_muted()),
+            Span::styled(" [n / Esc] Cancel ", Theme::text_secondary()),
         ]),
     ];
 
@@ -208,7 +208,7 @@ fn render_error_modal(frame: &mut Frame, err_msg: &str, area: Rect) {
 
     let text = vec![
         Line::from(""),
-        Line::from(Span::styled("An unexpected error occurred:", Theme::text_muted())),
+        Line::from(Span::styled("An unexpected error occurred:", Theme::text_secondary())),
         Line::from(""),
         Line::from(Span::styled(err_msg, Theme::status_danger())),
         Line::from(""),

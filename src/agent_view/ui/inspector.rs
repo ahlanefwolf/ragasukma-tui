@@ -38,7 +38,7 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
 
     let lines_model = vec![
         Line::from(vec![
-            Span::styled("Model   : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Model   : ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
                 format!("[◈ {}]", state.active_model),
                 Style::default()
@@ -47,26 +47,26 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
             ),
         ]),
         Line::from(vec![
-            Span::styled("Requests: ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Requests: ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
                 format!("{} req{}", breakdown.task_requests, if breakdown.task_requests == 1 { "" } else { "s" }),
                 Style::default().fg(Theme::CYAN_ACCENT),
             ),
         ]),
         Line::from(vec![
-            Span::styled("Tokens  : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Tokens  : ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
                 format!("▲ {} in", breakdown.task_input_tokens),
                 Style::default().fg(Theme::TEXT_PRIMARY),
             ),
-            Span::styled("  •  ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("  •  ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
                 format!("▼ {} out", breakdown.task_output_tokens),
                 Style::default().fg(Theme::TEXT_PRIMARY),
             ),
         ]),
         Line::from(vec![
-            Span::styled("Total   : ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Total   : ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
                 format!("{} tokens", total_task),
                 Style::default()

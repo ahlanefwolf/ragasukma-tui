@@ -73,7 +73,7 @@ impl Default for AgentWorkspaceState {
         let active_model = available_models
             .first()
             .cloned()
-            .unwrap_or_else(|| "cc:claude-3-5-sonnet-20241022".to_string());
+            .unwrap_or_else(|| "cc/claude-3-5-sonnet-20241022".to_string());
 
         Self {
             messages: Vec::new(),
@@ -388,9 +388,24 @@ impl AgentWorkspaceState {
         }
     }
 
+    pub fn filtered_modal_models(&self) -> Vec<String> {
+        let q = self.model_modal.search_query.trim().to_lowercase();
+        if q.is_empty() {
+            self.available_models.clone()
+        } else {
+            self.available_models
+                .iter()
+                .filter(|m| m.to_lowercase().contains(&q))
+                .cloned()
+                .collect()
+        }
+    }
+
     pub fn open_model_modal(&mut self) {
         self.model_modal.is_open = true;
-        if let Some(idx) = self.available_models.iter().position(|m| m == &self.active_model) {
+        self.model_modal.search_query.clear();
+        let filtered = self.filtered_modal_models();
+        if let Some(idx) = filtered.iter().position(|m| m == &self.active_model) {
             self.model_modal.selected_idx = idx;
         } else {
             self.model_modal.selected_idx = 0;
@@ -399,19 +414,38 @@ impl AgentWorkspaceState {
 
     pub fn close_model_modal(&mut self) {
         self.model_modal.is_open = false;
+        self.model_modal.search_query.clear();
+    }
+
+    pub fn model_modal_push_char(&mut self, c: char) {
+        self.model_modal.search_query.push(c);
+        let filtered = self.filtered_modal_models();
+        if self.model_modal.selected_idx >= filtered.len() {
+            self.model_modal.selected_idx = 0;
+        }
+    }
+
+    pub fn model_modal_backspace(&mut self) {
+        self.model_modal.search_query.pop();
+        let filtered = self.filtered_modal_models();
+        if self.model_modal.selected_idx >= filtered.len() {
+            self.model_modal.selected_idx = 0;
+        }
     }
 
     pub fn select_next_modal_model(&mut self) {
-        if !self.available_models.is_empty() {
+        let filtered = self.filtered_modal_models();
+        if !filtered.is_empty() {
             self.model_modal.selected_idx =
-                (self.model_modal.selected_idx + 1) % self.available_models.len();
+                (self.model_modal.selected_idx + 1) % filtered.len();
         }
     }
 
     pub fn select_prev_modal_model(&mut self) {
-        if !self.available_models.is_empty() {
+        let filtered = self.filtered_modal_models();
+        if !filtered.is_empty() {
             if self.model_modal.selected_idx == 0 {
-                self.model_modal.selected_idx = self.available_models.len() - 1;
+                self.model_modal.selected_idx = filtered.len() - 1;
             } else {
                 self.model_modal.selected_idx -= 1;
             }
@@ -419,10 +453,12 @@ impl AgentWorkspaceState {
     }
 
     pub fn apply_modal_model(&mut self) {
-        if let Some(m) = self.available_models.get(self.model_modal.selected_idx) {
+        let filtered = self.filtered_modal_models();
+        if let Some(m) = filtered.get(self.model_modal.selected_idx) {
             self.active_model = m.clone();
         }
         self.model_modal.is_open = false;
+        self.model_modal.search_query.clear();
     }
 
     pub fn start_turn(&mut self) {

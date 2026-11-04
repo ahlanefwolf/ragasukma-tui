@@ -38,7 +38,7 @@ fn render_header_banner(frame: &mut Frame, area: Rect) {
         Span::raw(" "),
         Span::styled(
             "[Groq, DeepSeek, Together, Ollama, vLLM, LMStudio, OpenRouter]",
-            Theme::text_muted(),
+            Theme::text_secondary(),
         ),
     ]);
 
@@ -91,7 +91,7 @@ fn render_accounts_table(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
                 if is_selected {
                     Theme::header_title().add_modifier(Modifier::BOLD)
                 } else {
-                    Theme::text_muted()
+                    Theme::text_secondary()
                 },
             ));
 
@@ -104,23 +104,23 @@ fn render_accounts_table(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
                 },
             ));
 
-            let url_cell = Cell::from(Span::styled(acc.base_url.clone(), Theme::text_muted()));
+            let url_cell = Cell::from(Span::styled(acc.base_url.clone(), Theme::text_secondary()));
 
             let masked_key = if acc.api_key.is_empty() {
-                Span::styled("(none / local)", Theme::text_muted())
+                Span::styled("(none / local)", Theme::text_secondary())
             } else if acc.api_key.len() > 8 {
                 let start = &acc.api_key[..4];
                 let end = &acc.api_key[acc.api_key.len() - 3..];
-                Span::styled(format!("{start}••••{end}"), Theme::text_muted())
+                Span::styled(format!("{start}••••{end}"), Theme::text_secondary())
             } else {
-                Span::styled("••••••••", Theme::text_muted())
+                Span::styled("••••••••", Theme::text_secondary())
             };
             let key_cell = Cell::from(masked_key);
 
             let status_span = if acc.enabled {
                 Span::styled(" ● ENABLED ", Theme::status_success().add_modifier(Modifier::BOLD))
             } else {
-                Span::styled(" ○ DISABLED ", Theme::text_muted())
+                Span::styled(" ○ DISABLED ", Theme::text_secondary())
             };
             let status_cell = Cell::from(status_span);
 
@@ -180,26 +180,26 @@ fn render_bottom_panes(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
     let details_text = if let Some(acc) = selected_acc {
         vec![
             Line::from(vec![
-                Span::styled("Name:         ", Theme::text_muted()),
+                Span::styled("Name:         ", Theme::text_secondary()),
                 Span::styled(&acc.name, Theme::text_gold().add_modifier(Modifier::BOLD)),
             ]),
             Line::from(vec![
-                Span::styled("Model Prefix: ", Theme::text_muted()),
+                Span::styled("Model Prefix: ", Theme::text_secondary()),
                 Span::styled(
                     format!("{}/<model_name>", acc.prefix),
                     Theme::status_info().add_modifier(Modifier::BOLD),
                 ),
             ]),
             Line::from(vec![
-                Span::styled("Endpoint:     ", Theme::text_muted()),
+                Span::styled("Endpoint:     ", Theme::text_secondary()),
                 Span::styled(&acc.base_url, Theme::text_primary()),
             ]),
             Line::from(vec![
-                Span::styled("Status:       ", Theme::text_muted()),
+                Span::styled("Status:       ", Theme::text_secondary()),
                 if acc.enabled {
                     Span::styled("Active & Available for Agent routing", Theme::status_success())
                 } else {
-                    Span::styled("Inactive (Toggle with [Space])", Theme::text_muted())
+                    Span::styled("Inactive (Toggle with [Space])", Theme::text_secondary())
                 },
             ]),
             Line::from(""),
@@ -214,7 +214,7 @@ fn render_bottom_panes(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
     } else {
         vec![Line::from(Span::styled(
             "No custom provider selected. Press 'a' to add a new one.",
-            Theme::text_muted(),
+            Theme::text_secondary(),
         ))]
     };
 
@@ -234,7 +234,7 @@ fn render_bottom_panes(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
             vec![
                 Line::from(Span::styled(
                     "No cached models found for this prefix.",
-                    Theme::text_muted(),
+                    Theme::text_secondary(),
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
@@ -256,7 +256,7 @@ fn render_bottom_panes(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
     } else {
         vec![Line::from(Span::styled(
             "Select a provider to inspect its registered models",
-            Theme::text_muted(),
+            Theme::text_secondary(),
         ))]
     };
 
@@ -344,11 +344,11 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
             if state.focused_field == FormField::Enabled {
                 Theme::header_title().add_modifier(Modifier::BOLD)
             } else {
-                Theme::text_muted()
+                Theme::text_secondary()
             },
         ),
         Span::raw(" "),
-        Span::styled("(Press Space to toggle)", Theme::text_muted()),
+        Span::styled("(Press Space to toggle)", Theme::text_secondary()),
     ]));
     frame.render_widget(enabled_para, inner[4]);
 
@@ -368,7 +368,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let cancel_style = if state.focused_field == FormField::CancelBtn {
         Theme::badge_gold().add_modifier(Modifier::BOLD)
     } else {
-        Theme::text_muted()
+        Theme::text_secondary()
     };
 
     let btns = Line::from(vec![

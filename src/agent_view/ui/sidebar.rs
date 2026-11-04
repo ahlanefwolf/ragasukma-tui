@@ -71,14 +71,14 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
         } else {
             folder_spans.push(Span::styled(
                 format!(" {} ", name),
-                Style::default().fg(Theme::TEXT_MUTED),
+                Style::default().fg(Theme::TEXT_SECONDARY),
             ));
         }
     }
     if folder_spans.is_empty() {
         folder_spans.push(Span::styled(
             " (No attached workspaces) ",
-            Style::default().fg(Theme::TEXT_MUTED),
+            Style::default().fg(Theme::TEXT_SECONDARY),
         ));
     }
     frame.render_widget(Paragraph::new(Line::from(folder_spans)).block(folder_block), chunks[0]);
@@ -95,7 +95,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
         } else {
             Span::styled(
                 format!(" Tasks ({}) ", state.sessions.len()),
-                Style::default().fg(Theme::TEXT_MUTED),
+                Style::default().fg(Theme::TEXT_SECONDARY),
             )
         },
         Span::raw("  |  "),
@@ -107,7 +107,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
         } else {
             Span::styled(
                 format!(" Files ({}) ", state.workspace_files.len()),
-                Style::default().fg(Theme::TEXT_MUTED),
+                Style::default().fg(Theme::TEXT_SECONDARY),
             )
         },
     ];
@@ -140,7 +140,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
             let task_items: Vec<ListItem> = if state.sessions.is_empty() {
                 vec![ListItem::new(Line::from(vec![Span::styled(
                     " (No tasks created yet) ",
-                    Style::default().fg(Theme::TEXT_MUTED),
+                    Style::default().fg(Theme::TEXT_SECONDARY),
                 )]))]
             } else {
                 state
@@ -159,7 +159,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                         } else if is_current {
                             Theme::GOLD_PRIMARY
                         } else {
-                            Theme::TEXT_MUTED
+                            Theme::TEXT_SECONDARY
                         };
 
                         let status_tag = if s.is_running { " [Running]" } else { "" };
@@ -183,7 +183,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                             Span::styled(marker, Style::default().fg(marker_color)),
                             Span::styled(&s.title, style),
                             Span::styled(status_tag, Style::default().fg(Theme::CYAN_ACCENT)),
-                            Span::styled(token_tag, Style::default().fg(Theme::TEXT_MUTED)),
+                            Span::styled(token_tag, Style::default().fg(Theme::TEXT_SECONDARY)),
                         ]))
                     })
                     .collect()
@@ -243,7 +243,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
             let file_items: Vec<ListItem> = if state.workspace_files.is_empty() {
                 vec![ListItem::new(Line::from(vec![Span::styled(
                     " (No files found in workspace) ",
-                    Style::default().fg(Theme::TEXT_MUTED),
+                    Style::default().fg(Theme::TEXT_SECONDARY),
                 )]))]
             } else {
                 state

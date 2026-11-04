@@ -2,13 +2,13 @@ use ragasukma_core::agent::events::get_session_sender;
 use ragasukma_core::agent::models::AgentSessionEvent;
 use ragasukma_core::agent::repository::{
     create_message, create_project, create_session, delete_project, delete_session, get_project,
-    list_messages, list_projects, list_sessions,
+    list_messages, list_projects, list_sessions, update_session_model,
 };
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
-use super::types::{CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto};
+use super::types::{CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto, SessionDto};
 
 pub fn spawn_session_subscriber(
     sub_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
@@ -62,6 +62,45 @@ pub fn spawn_session_subscriber(
     });
 }
 
+fn detect_provider(model: &str) -> &'static str {
+    let lower = model.to_lowercase();
+    if lower.contains("claude") {
+        "claude"
+    } else if lower.contains("codex") || lower.contains("openai") || lower.contains("gpt") {
+        "codex"
+    } else {
+        "antigravity"
+    }
+}
+
+async fn record_turn_usage(
+    pool: &SqlitePool,
+    model: &str,
+    input_text: &str,
+    output_text: &str,
+    duration_ms: u64,
+    status: &str,
+) {
+    let input_tokens = (input_text.len() / 4).max(1);
+    let output_tokens = output_text.len() / 4;
+    let provider = detect_provider(model);
+
+    if let Err(e) = ragasukma_core::llm::usage::record_usage_to_pool(
+        pool,
+        provider,
+        model,
+        input_tokens,
+        0,
+        output_tokens,
+        duration_ms,
+        status,
+    )
+    .await
+    {
+        tracing::warn!("Failed to record turn usage to pool: {e}");
+    }
+}
+
 pub fn spawn_core_bridge_worker(
     mut cmd_rx: mpsc::UnboundedReceiver<CoreBridgeCommand>,
     worker_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
@@ -90,9 +129,10 @@ pub fn spawn_core_bridge_worker(
                     }
                 }
                 CoreBridgeCommand::RetryTurn => {
-                    if let Some((_prompt, model_override)) = last_turn_request.clone() {
+                    if let Some((retry_prompt, model_override)) = last_turn_request.clone() {
                         let sid_exec = active_sid.clone();
                         let exec_tx = worker_tx.clone();
+                        let last_prompt = retry_prompt;
 
                         let mut session_sub = ragasukma_core::agent::events::get_session_sender(&sid_exec).subscribe();
                         let stream_tx = exec_tx.clone();
@@ -116,8 +156,10 @@ pub fn spawn_core_bridge_worker(
                             }
                         });
 
+                        let pool_exec = pool_clone.clone();
                         let handle = tokio::spawn(async move {
                             tracing::info!("Retrying turn for session: {sid_exec}");
+                            let turn_start = std::time::Instant::now();
                             let res = ragasukma_core::agent::executor::execute_session_turn(
                                 &sid_exec,
                                 model_override.as_deref(),
@@ -125,13 +167,33 @@ pub fn spawn_core_bridge_worker(
                             .await;
 
                             stream_forwarder.abort();
+                            let duration_ms = turn_start.elapsed().as_millis() as u64;
+                            let chosen_model = model_override.as_deref().unwrap_or("antigravity");
 
                             match res {
                                 Ok(reply) => {
+                                    record_turn_usage(
+                                        &pool_exec,
+                                        chosen_model,
+                                        &last_prompt,
+                                        &reply,
+                                        duration_ms,
+                                        "success",
+                                    )
+                                    .await;
                                     let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
                                 }
                                 Err(e) => {
                                     tracing::error!("Retry turn error: {e:?}");
+                                    record_turn_usage(
+                                        &pool_exec,
+                                        chosen_model,
+                                        &last_prompt,
+                                        "",
+                                        duration_ms,
+                                        "error",
+                                    )
+                                    .await;
                                     let _ = exec_tx.send(CoreBridgeEvent::TurnFailed {
                                         session_id: sid_exec,
                                         error: e.to_string(),
@@ -248,14 +310,15 @@ pub fn spawn_core_bridge_worker(
                 }
                 CoreBridgeCommand::SwitchProject { project_id } => {
                     worker_project_id = project_id.clone();
-                    let proj = get_project(&project_id).await.ok().flatten();
-                    let project_name = proj
-                        .as_ref()
-                        .map(|p| p.name.clone())
-                        .unwrap_or_else(|| "Workspace".to_string());
-                    let project_root_path = proj.and_then(|p| p.root_path);
-
-                    let sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
+                    let _ = sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
+                        .bind(&worker_project_id)
+                        .execute(&pool_clone)
+                        .await;
+                    let prj_opt = get_project(&worker_project_id).await.ok().flatten();
+                    let project_name = prj_opt.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Project".to_string());
+                    let project_root_path = prj_opt.as_ref().and_then(|p| p.root_path.clone());
+                    let mut sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
+                    sessions.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
                     let active_session = sessions.first().cloned();
                     active_sid = active_session.as_ref().map(|s| s.id.clone()).unwrap_or_default();
                     if let Ok(mut guard) = current_sid_clone.lock() {
@@ -266,7 +329,7 @@ pub fn spawn_core_bridge_worker(
                         project_name,
                         root_path: project_root_path,
                     });
-                    let sessions_summary = sessions.into_iter().map(|s| (s.id, s.title)).collect();
+                    let sessions_summary = sessions.into_iter().map(SessionDto::from).collect();
                     let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
                         sessions: sessions_summary,
                         active_id: active_sid.clone(),
@@ -288,10 +351,12 @@ pub fn spawn_core_bridge_worker(
                     });
                     if worker_project_id == project_id {
                         // If deleted current project, switch to first available project
-                        let rem_projects = list_projects().await.unwrap_or_default();
+                        let mut rem_projects = list_projects().await.unwrap_or_default();
+                        rem_projects.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
                         if let Some(first) = rem_projects.first() {
                             worker_project_id = first.id.clone();
-                            let sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
+                            let mut sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
+                            sessions.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
                             let first_sess = sessions.first().cloned();
                             if let Some(fs) = first_sess {
                                 active_sid = fs.id.clone();
@@ -304,18 +369,18 @@ pub fn spawn_core_bridge_worker(
                                     root_path: first.root_path.clone(),
                                 });
                                 let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
-                                    sessions: sessions.into_iter().map(|s| (s.id, s.title)).collect(),
+                                    sessions: sessions.into_iter().map(SessionDto::from).collect(),
                                     active_id: active_sid.clone(),
                                 });
                             }
                         }
                     }
                 }
-                CoreBridgeCommand::CreateSession { title } => {
+                CoreBridgeCommand::CreateSession { title, model } => {
                     if let Ok(new_sess) = create_session(
                         &worker_project_id,
                         &title,
-                        None,
+                        model.as_deref(),
                         None,
                         None,
                     )
@@ -336,6 +401,14 @@ pub fn spawn_core_bridge_worker(
                     if let Ok(mut guard) = current_sid_clone.lock() {
                         *guard = session_id.clone();
                     }
+                    let _ = sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
+                        .bind(&active_sid)
+                        .execute(&pool_clone)
+                        .await;
+                    let _ = sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
+                        .bind(&worker_project_id)
+                        .execute(&pool_clone)
+                        .await;
                     if let Ok(msgs) = list_messages(&session_id).await {
                         let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
                         let _ = worker_tx.send(CoreBridgeEvent::HistoryLoaded {
@@ -343,6 +416,13 @@ pub fn spawn_core_bridge_worker(
                             messages: dtos,
                         });
                     }
+                }
+                CoreBridgeCommand::UpdateSessionModel { session_id, model } => {
+                    let _ = update_session_model(&session_id, &model).await;
+                    let _ = sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
+                        .bind(&session_id)
+                        .execute(&pool_clone)
+                        .await;
                 }
                 CoreBridgeCommand::DeleteSession { session_id } => {
                     let _ = delete_session(&session_id).await;
@@ -405,8 +485,11 @@ pub fn spawn_core_bridge_worker(
                         }
                     });
 
+                    let pool_exec = pool_clone.clone();
+                    let prompt_for_usage = prompt.clone();
                     let handle = tokio::spawn(async move {
                         tracing::info!("Executing session turn for session: {sid_exec}");
+                        let turn_start = std::time::Instant::now();
                         let res = ragasukma_core::agent::executor::execute_session_turn(
                             &sid_exec,
                             model_override.as_deref(),
@@ -414,13 +497,33 @@ pub fn spawn_core_bridge_worker(
                         .await;
 
                         stream_forwarder.abort();
+                        let duration_ms = turn_start.elapsed().as_millis() as u64;
+                        let chosen_model = model_override.as_deref().unwrap_or("antigravity");
 
                         match res {
                             Ok(reply) => {
+                                record_turn_usage(
+                                    &pool_exec,
+                                    chosen_model,
+                                    &prompt_for_usage,
+                                    &reply,
+                                    duration_ms,
+                                    "success",
+                                )
+                                .await;
                                 let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
                             }
                             Err(e) => {
                                 tracing::error!("Execute session turn error: {e:?}");
+                                record_turn_usage(
+                                    &pool_exec,
+                                    chosen_model,
+                                    &prompt_for_usage,
+                                    "",
+                                    duration_ms,
+                                    "error",
+                                )
+                                .await;
                                 let _ = exec_tx.send(CoreBridgeEvent::TurnFailed {
                                     session_id: sid_exec,
                                     error: e.to_string(),

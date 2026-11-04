@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
@@ -64,7 +64,7 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
                 Span::styled(active_mark, Style::default().fg(Color::Green)),
                 Span::styled(&proj.name, name_style),
                 Span::raw(" "),
-                Span::styled(format!("({desc})"), Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("({desc})"), Style::default().fg(Theme::TEXT_SECONDARY)),
             ]);
             ListItem::new(line)
         })
@@ -139,7 +139,7 @@ pub fn render_add_folder_modal(frame: &mut Frame, area: Rect, modal: &AddFolderM
     } else {
         lines.push(Line::from(Span::styled(
             "  Press Enter to validate & add folder, Esc to cancel",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Theme::TEXT_SECONDARY),
         )));
     }
 
@@ -177,7 +177,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
 
     let items: Vec<ListItem> = if total == 0 {
         vec![ListItem::new(Line::from(vec![
-            Span::styled("  🔍 No items matching ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("  🔍 No items matching ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
                 format!("\"@{}\"", tq.query),
                 Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
@@ -218,7 +218,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
                     Style::default().fg(Theme::TEXT_PRIMARY)
                 };
 
-                let dir_style = Style::default().fg(Theme::TEXT_MUTED);
+                let dir_style = Style::default().fg(Theme::TEXT_SECONDARY);
 
                 ListItem::new(Line::from(vec![
                     Span::styled(
@@ -313,33 +313,75 @@ pub fn render_diff_preview_modal(frame: &mut Frame, diff: &DiffApprovalState, ar
 }
 
 pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceState, area: Rect) {
-    let popup_area = centered_rect(60, 50, area);
+    let popup_area = centered_rect(65, 55, area);
     frame.render_widget(Clear, popup_area);
 
-    let total = state.available_models.len();
+    let filtered_models = state.filtered_modal_models();
+    let total = filtered_models.len();
     let sel = state.model_modal.selected_idx;
-    let title = if total > 0 {
-        format!(" 🏷️ Select Model [{}/{}] ", sel + 1, total)
-    } else {
-        " 🏷️ Select Model ".to_string()
-    };
 
-    let block = Block::default()
+    let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
-        .title(Span::styled(title, Theme::header_title()))
+        .title(Span::styled(" 🏷️ Select Model ", Theme::header_title()))
         .title_bottom(Line::from(vec![
-            Span::styled(" [↑/↓/←/→] ", Style::default().fg(Theme::GOLD_PRIMARY)),
-            Span::styled("Navigate  ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(" [Type] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Filter  ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled("[↑/↓/Tab] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Navigate  ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled("[Enter] ", Style::default().fg(Theme::GOLD_PRIMARY)),
-            Span::styled("Select  ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Select  ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled("[Esc] ", Style::default().fg(Theme::GOLD_PRIMARY)),
-            Span::styled("Cancel", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Cancel", Style::default().fg(Theme::TEXT_SECONDARY)),
         ]))
         .style(Theme::block_base());
 
-    let inner_height = (popup_area.height.saturating_sub(2) as usize).max(1);
-    let offset = if sel >= inner_height {
+    let inner_area = outer_block.inner(popup_area);
+    frame.render_widget(outer_block, popup_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Search input box
+            Constraint::Min(1),    // Model list
+        ])
+        .split(inner_area);
+
+    // Render Search input box
+    let search_query = &state.model_modal.search_query;
+    let query_display = if search_query.is_empty() {
+        Span::styled(
+            "Type model name or keyword to filter... ",
+            Style::default().fg(Theme::TEXT_SECONDARY),
+        )
+    } else {
+        Span::styled(
+            format!("{}_", search_query),
+            Style::default()
+                .fg(Theme::GOLD_PRIMARY)
+                .add_modifier(Modifier::BOLD),
+        )
+    };
+
+    let search_box = Paragraph::new(Line::from(vec![
+        Span::styled(" 🔍 ", Style::default().fg(Theme::CYAN_ACCENT)),
+        query_display,
+    ]))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Theme::border_focused())
+            .title(Span::styled(
+                format!(" Search [{}/{}] ", total, state.available_models.len()),
+                Theme::badge_gold(),
+            )),
+    );
+    frame.render_widget(search_box, chunks[0]);
+
+    // Render Model list
+    let list_area = chunks[1];
+    let inner_height = list_area.height as usize;
+    let offset = if inner_height > 0 && sel >= inner_height {
         sel.saturating_sub(inner_height - 1)
     } else {
         0
@@ -349,11 +391,16 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
     let mut items: Vec<ListItem> = Vec::new();
 
     if total == 0 {
+        let msg = if search_query.is_empty() {
+            " [No models available] "
+        } else {
+            " [No matching models found] "
+        };
         items.push(ListItem::new(Line::from(vec![
-            Span::styled(" [No models available] ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled(msg, Style::default().fg(Theme::TEXT_SECONDARY)),
         ])));
     } else {
-        for (idx, m) in state.available_models[offset..end].iter().enumerate() {
+        for (idx, m) in filtered_models[offset..end].iter().enumerate() {
             let actual_idx = offset + idx;
             let is_selected = actual_idx == sel;
             let is_active = m == &state.active_model;
@@ -371,13 +418,13 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
             } else if is_active {
                 Line::from(vec![
                     Span::raw("   "),
-                    Span::styled(format!("[✓ {}]", m), Style::default().fg(Theme::CYAN_ACCENT)),
+                    Span::styled(format!("  {}  ", m), Style::default().fg(Theme::TEXT_PRIMARY)),
                     Span::styled(" (current)", Style::default().fg(Theme::CYAN_ACCENT)),
                 ])
             } else {
                 Line::from(vec![
                     Span::raw("   "),
-                    Span::styled(format!("[○ {}]", m), Style::default().fg(Theme::TEXT_SECONDARY)),
+                    Span::styled(format!("  {}", m), Style::default().fg(Theme::TEXT_SECONDARY)),
                 ])
             };
 
@@ -385,10 +432,10 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
         }
     }
 
-    let list = List::new(items).block(block);
-    frame.render_widget(list, popup_area);
+    let list = List::new(items);
+    frame.render_widget(list, list_area);
 
-    if total > inner_height {
+    if total > inner_height && inner_height > 0 {
         let mut scrollbar_state = ScrollbarState::default()
             .content_length(total)
             .position(sel);
@@ -397,7 +444,7 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
                 .orientation(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
                 .end_symbol(Some("▼")),
-            popup_area,
+            list_area,
             &mut scrollbar_state,
         );
     }

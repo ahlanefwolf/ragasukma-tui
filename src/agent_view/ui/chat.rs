@@ -46,7 +46,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
                 Span::raw(" "),
                 Span::styled(
                     format!("[{}]", msg.timestamp),
-                    Style::default().fg(Theme::TEXT_MUTED),
+                    Style::default().fg(Theme::TEXT_SECONDARY),
                 ),
             ]));
 
@@ -139,12 +139,12 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         let placeholder = if is_input_focused {
             Span::styled(
                 "Type a prompt, or @ to attach file context... (Enter to send)",
-                Style::default().fg(Theme::TEXT_MUTED).add_modifier(Modifier::ITALIC),
+                Style::default().fg(Theme::TEXT_SECONDARY).add_modifier(Modifier::ITALIC),
             )
         } else {
             Span::styled(
                 "Press [i] or [Enter] to write a message...",
-                Style::default().fg(Theme::TEXT_MUTED),
+                Style::default().fg(Theme::TEXT_SECONDARY),
             )
         };
         Line::from(vec![prompt_prefix, placeholder])
