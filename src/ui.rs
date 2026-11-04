@@ -118,11 +118,6 @@ fn render_body(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
-    let footer_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(area);
-
     let (status_label, status_style) = match app.status_message.as_deref() {
         Some(msg) => {
             let lower = msg.to_lowercase();
@@ -147,6 +142,15 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         Span::raw(" "),
         Span::styled(status_label, status_style),
     ]);
+
+    // Give the status widget exactly what it needs (with a 2-char buffer),
+    // and dedicate the rest of the entire width to the key hints legend.
+    let status_len = (status_line.width() as u16).saturating_add(2);
+    let footer_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(status_len), Constraint::Min(0)])
+        .split(area);
+
     frame.render_widget(Paragraph::new(status_line), footer_chunks[0]);
 
     // Right: Keybindings legend (delegated context-sensitively to domain modules)
@@ -157,7 +161,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         ]
     } else {
         match app.active_tab {
-            0 => crate::agent_view::ui::get_footer_key_hints(&app.agent, area.width),
+            0 => crate::agent_view::ui::get_footer_key_hints(&app.agent, footer_chunks[1].width),
             1 => crate::provider_view::ui::get_footer_key_hints(&app.antigravity),
             2 => crate::provider_view::ui::get_footer_key_hints(&app.codex),
             3 => crate::provider_view::ui::get_footer_key_hints(&app.claude),
