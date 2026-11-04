@@ -577,7 +577,8 @@ pub fn spawn_core_bridge_worker(
                                 let mut provider = ragasukma_core::llm::providers::codex::CodexProvider::new();
                                 match provider.get_account_quota(&acc_id) {
                                     Ok(res) => {
-                                        quotas = crate::provider_view::codex::map_codex_quotas(res);
+                                        let models = provider.get_dynamic_available_models().unwrap_or_default();
+                                        quotas = crate::provider_view::codex::map_codex_quotas(res, models);
                                     }
                                     Err(e) => {
                                         err_msg = Some(e.to_string());
@@ -588,7 +589,8 @@ pub fn spawn_core_bridge_worker(
                                 let mut provider = ragasukma_core::llm::providers::claude::ClaudeProvider::new();
                                 match provider.get_account_quota(&acc_id) {
                                     Ok(res) => {
-                                        quotas = crate::provider_view::claude::map_claude_quotas(res);
+                                        let models = provider.get_dynamic_available_models().unwrap_or_default();
+                                        quotas = crate::provider_view::claude::map_claude_quotas(res, models);
                                     }
                                     Err(e) => {
                                         err_msg = Some(e.to_string());

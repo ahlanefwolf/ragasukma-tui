@@ -67,6 +67,7 @@ pub enum Action {
 
     StartAntigravityOAuth,
     StartCodexOAuth,
+    StartClaudeOAuth,
 
     AgentInsertChar(char),
     AgentBackspace,

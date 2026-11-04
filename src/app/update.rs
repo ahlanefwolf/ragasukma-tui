@@ -203,6 +203,41 @@ impl App {
                 crate::oauth_listener::open_browser_oauth(&auth_url);
                 self.set_status(format!("OAuth Codex dibuka di browser (port {port})"));
             }
+            Action::StartClaudeOAuth => {
+                let port = 54321;
+                let redirect_uri = format!("http://localhost:{}/oauth/callback", port);
+                let (code_verifier, code_challenge) =
+                    ragasukma_core::llm::providers::claude::oauth::generate_pkce();
+                let state = format!(
+                    "claude_oauth_{}_{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    std::process::id()
+                );
+                ragasukma_core::llm::providers::claude::oauth::store_oauth_state(
+                    &state,
+                    &code_verifier,
+                );
+                let auth_url = ragasukma_core::llm::providers::claude::oauth::build_auth_url(
+                    &redirect_uri,
+                    &state,
+                    &code_challenge,
+                );
+
+                if let Some(event_tx) = self.event_tx.clone() {
+                    crate::oauth_listener::spawn_oauth_listener(
+                        crate::oauth_listener::OAuthProviderKind::Claude,
+                        port,
+                        state,
+                        event_tx,
+                    );
+                }
+
+                crate::oauth_listener::open_browser_oauth(&auth_url);
+                self.set_status(format!("OAuth Claude dibuka di browser (port {port})"));
+            }
             Action::ShowDiffPreview {
                 file_path,
                 tool_name,

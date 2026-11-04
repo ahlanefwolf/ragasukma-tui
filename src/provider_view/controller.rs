@@ -25,6 +25,8 @@ impl ProviderTabState {
                         Some(Action::StartAntigravityOAuth)
                     } else if self.provider_name.contains("Codex") {
                         Some(Action::StartCodexOAuth)
+                    } else if self.provider_name.contains("Claude") {
+                        Some(Action::StartClaudeOAuth)
                     } else {
                         None
                     }

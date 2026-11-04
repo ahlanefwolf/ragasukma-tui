@@ -1,5 +1,6 @@
 pub mod antigravity;
 pub mod browser;
+pub mod claude;
 pub mod codex;
 pub mod server;
 
@@ -12,6 +13,7 @@ use crate::event::AppEvent;
 pub enum OAuthProviderKind {
     Antigravity,
     Codex,
+    Claude,
 }
 
 pub fn spawn_oauth_listener(
@@ -27,6 +29,7 @@ pub fn spawn_oauth_listener(
                 let prov = match kind {
                     OAuthProviderKind::Antigravity => "antigravity",
                     OAuthProviderKind::Codex => "codex",
+                    OAuthProviderKind::Claude => "claude",
                 };
                 let _ = event_tx.send(AppEvent::OAuthFailed {
                     provider: prov.to_string(),
@@ -41,6 +44,7 @@ pub fn spawn_oauth_listener(
             OAuthProviderKind::Codex => {
                 ragasukma_core::llm::providers::codex::constants::CODEX_REDIRECT_URI.to_string()
             }
+            OAuthProviderKind::Claude => format!("http://localhost:{}/oauth/callback", port),
         };
         let exchange_res = match kind {
             OAuthProviderKind::Antigravity => {
@@ -48,6 +52,9 @@ pub fn spawn_oauth_listener(
             }
             OAuthProviderKind::Codex => {
                 codex::exchange_codex_token(&callback_data.code, &redirect_uri, &expected_state).await
+            }
+            OAuthProviderKind::Claude => {
+                claude::exchange_claude_token(&callback_data.code, &redirect_uri, &expected_state).await
             }
         };
 
@@ -57,6 +64,7 @@ pub fn spawn_oauth_listener(
                 let prov = match kind {
                     OAuthProviderKind::Antigravity => "antigravity",
                     OAuthProviderKind::Codex => "codex",
+                    OAuthProviderKind::Claude => "claude",
                 };
                 let _ = event_tx.send(AppEvent::OAuthSuccess {
                     provider: prov.to_string(),
@@ -68,6 +76,7 @@ pub fn spawn_oauth_listener(
                 let prov = match kind {
                     OAuthProviderKind::Antigravity => "antigravity",
                     OAuthProviderKind::Codex => "codex",
+                    OAuthProviderKind::Claude => "claude",
                 };
                 let _ = event_tx.send(AppEvent::OAuthFailed {
                     provider: prov.to_string(),
