@@ -77,43 +77,60 @@ async fn run_app(
 
         term.draw(|f| ui::draw(f, app))?;
 
-        let event = events.next().await?;
-        match event {
-            AppEvent::Key(key) => {
-                if let Some(act) = app.handle_key_event(key) {
-                    app.update(act);
+        let mut event = events.next().await?;
+        loop {
+            match event {
+                AppEvent::Key(key) => {
+                    if let Some(act) = app.handle_key_event(key) {
+                        app.update(act);
+                    }
+                }
+                AppEvent::CoreEvent(evt) => {
+                    app.handle_bridge_event(evt);
+                }
+                AppEvent::OAuthSuccess { provider, email } => {
+                    tracing::info!("OAuth login success: provider='{provider}', email='{email}'");
+                    term.clear()?;
+                    if provider == "antigravity" {
+                        app.antigravity =
+                            ragasukma_tui::provider_view::antigravity::load_antigravity_tab();
+                    } else if provider == "codex" {
+                        app.codex = ragasukma_tui::provider_view::codex::load_codex_tab();
+                    }
+                    app.set_status(format!(
+                        "OAuth Login Berhasil! Akun {} ({}) terhubung.",
+                        email, provider
+                    ));
+                }
+                AppEvent::OAuthFailed { provider, error } => {
+                    tracing::error!("OAuth login failed: provider='{provider}', error='{error}'");
+                    term.clear()?;
+                    app.set_status(format!("OAuth Login Gagal [{}]: {}", provider, error));
+                }
+                AppEvent::Tick => {
+                    app.on_tick();
+                }
+                AppEvent::Resize(_, _) => {
+                    term.clear()?;
+                }
+                AppEvent::Mouse(_) => {}
+                AppEvent::Error(err) => {
+                    tracing::error!("Event error: {err}");
                 }
             }
-            AppEvent::CoreEvent(evt) => {
-                app.handle_bridge_event(evt);
+
+            if app.should_quit {
+                break;
             }
-            AppEvent::OAuthSuccess { provider, email } => {
-                tracing::info!("OAuth login success: provider='{provider}', email='{email}'");
-                term.clear()?;
-                if provider == "antigravity" {
-                    app.antigravity = ragasukma_tui::provider_view::antigravity::load_antigravity_tab();
-                } else if provider == "codex" {
-                    app.codex = ragasukma_tui::provider_view::codex::load_codex_tab();
+
+            // Drain any pending events that are immediately ready in the queue before redrawing
+            match events.rx.try_recv() {
+                Ok(next_evt) => {
+                    event = next_evt;
                 }
-                app.set_status(format!("OAuth Login Berhasil! Akun {} ({}) terhubung.", email, provider));
-            }
-            AppEvent::OAuthFailed { provider, error } => {
-                tracing::error!("OAuth login failed: provider='{provider}', error='{error}'");
-                term.clear()?;
-                app.set_status(format!("OAuth Login Gagal [{}]: {}", provider, error));
-            }
-            AppEvent::Tick => {
-                app.on_tick();
-            }
-            AppEvent::Resize(_, _) => {
-                term.clear()?;
-            }
-            AppEvent::Mouse(_) => {}
-            AppEvent::Error(err) => {
-                tracing::error!("Event error: {err}");
+                Err(_) => break,
             }
         }
     }
-
     Ok(())
 }

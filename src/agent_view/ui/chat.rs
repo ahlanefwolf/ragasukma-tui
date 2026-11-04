@@ -3,7 +3,7 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
     },
     Frame,
 };
@@ -59,13 +59,17 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         for msg in &state.messages {
             chat_lines.extend(render_message_standard(msg));
         }
-        // Tambahkan baris kosong ekstra di akhir agar pesan terbawah selalu terlihat utuh dan tidak mepet
-        chat_lines.push(Line::from(""));
-        chat_lines.push(Line::from(""));
+        // Berikan overscroll lines (scroll beyond last line ala terminal modern)
+        // agar pesan terbawah 100% tidak pernah kepotong dan pengguna bisa loss-in scroll ke bawah
+        let overscroll_lines = (inner_height / 2).max(6);
+        for _ in 0..overscroll_lines {
+            chat_lines.push(Line::from(""));
+        }
     }
 
     let calculated_visual = calculate_total_visual_lines(&chat_lines, text_width);
-    let total_visual_lines = calculated_visual.max(chat_lines.len());
+    // Tambahkan buffer toleransi word wrap agar rendering Ratatui tidak pernah terpotong
+    let total_visual_lines = calculated_visual.max(chat_lines.len()) + 4;
 
     let max_scroll = total_visual_lines.saturating_sub(inner_height);
     state.chat_max_scroll.set(max_scroll);
@@ -73,17 +77,9 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         max_scroll
     } else {
         max_scroll.saturating_sub(state.scroll_offset)
-    };
+    }
+    .min(max_scroll);
 
-    frame.render_widget(Clear, chunks[0]);
-    frame.render_widget(chat_block, chunks[0]);
-
-    let text_area = Rect {
-        x: chat_inner.x,
-        y: chat_inner.y,
-        width: chat_inner.width.saturating_sub(1),
-        height: chat_inner.height,
-    };
     let scrollbar_area = Rect {
         x: chat_inner.x + chat_inner.width.saturating_sub(1),
         y: chat_inner.y,
@@ -94,10 +90,11 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let p = Paragraph::new(chat_lines)
         .wrap(Wrap { trim: false })
         .scroll((effective_scroll as u16, 0));
-    frame.render_widget(p, text_area);
+    frame.render_widget(p, chat_inner);
 
     if max_scroll > 0 && scrollbar_area.width > 0 {
-        let mut scrollbar_state = ScrollbarState::new(max_scroll).position(effective_scroll);
+        let mut scrollbar_state =
+            ScrollbarState::new(total_visual_lines).position(effective_scroll.min(max_scroll));
         frame.render_stateful_widget(
             Scrollbar::default()
                 .orientation(ScrollbarOrientation::VerticalRight)
