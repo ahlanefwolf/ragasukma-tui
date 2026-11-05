@@ -496,8 +496,6 @@ pub fn get_footer_key_hints(state: &CustomLlmTabState) -> Vec<Span<'static>> {
             Span::raw("Fetch Models "),
             Span::styled(" [1-5] ", Theme::key_badge()),
             Span::raw("Tabs "),
-            Span::styled(" [?] ", Theme::key_badge()),
-            Span::raw("Help "),
             Span::styled(" [q] ", Theme::key_badge()),
             Span::raw("Quit "),
         ]

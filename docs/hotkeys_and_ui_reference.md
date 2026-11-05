@@ -1,150 +1,193 @@
 # 📚 Ragasukma TUI - Hotkeys, Focus Areas, Modals & Footer Helpers (Tab 1 - Tab 5)
 
-Dokumentasi komprehensif seluruh interaksi antarmuka pengguna (UI), fokus kartu (cards), modal pop-up, hotkey navigasi, dan footer helper context untuk **Tab 1 sampai Tab 5** di `ragasukma-tui`.
+Dokumentasi resmi dan akurat sesuai implementasi source code (`ragasukma-tui/src/agent_view`, `ragasukma-tui/src/provider_view`, dan `ragasukma-tui/src/custom_llm_view`).
 
 ---
 
 ## 📑 Navigasi Global (Global Shortcuts)
 
-Berlaku di seluruh tab aplikasi:
+Berlaku di seluruh tab aplikasi saat pengguna tidak sedang mengetik di dalam text input / form:
 
 | Hotkey | Aksi | Keterangan |
 | :--- | :--- | :--- |
-| `1` | **Tab 1: Agent Workspace** | Tampilan chat, agent inspector, history, dan konfigurasi tool |
-| `2` | **Tab 2: Antigravity** | Manajemen akun OAuth & kuota provider Antigravity |
-| `3` | **Tab 3: Codex** | Manajemen akun OAuth & kuota provider Codex |
-| `4` | **Tab 4: Claude** | Manajemen akun OAuth & kuota provider Claude |
-| `5` | **Tab 5: Custom LLM** | Integrasi custom endpoint OpenAI/Ollama |
-| `Ctrl+c` / `q` | **Quit Application** | Keluar dari aplikasi (tidak aktif saat berada dalam mode input text/form) |
-| `?` | **Toggle Help Modal** | Membuka bantuan & ringkasan shortcut global |
+| `1` | Switch ke **Tab 1: Agent Workspace** | Mode obrolan coding agent, tasks, file tree, tool diff review |
+| `2` | Switch ke **Tab 2: Antigravity** | Provider OAuth & Quota Antigravity |
+| `3` | Switch ke **Tab 3: Codex** | Provider OAuth & Quota Codex |
+| `4` | Switch ke **Tab 4: Claude** | Provider OAuth & Quota Claude |
+| `5` | Switch ke **Tab 5: Custom LLM** | Endpoint kustom OpenAI-compatible / Ollama |
+| `q` | **Quit Application** | Keluar dari aplikasi |
+| `?` atau `F1` | **Toggle Help Modal** | Membuka modal bantuan shortcut |
+| `Ctrl+c` | **Cancel Turn / Quit** | Menghentikan agent turn jika sedang `is_running`, atau quit aplikasi jika idle |
 
 ---
 
 ## 1️⃣ Tab 1: Agent Workspace (`ragasukma-tui/src/agent_view`)
 
-### 🔲 Focus Areas & Cards
-Navigasi antar kartu/panel menggunakan tombol `Tab` (maju) dan `Shift+Tab` / `BackTab` (mundur).
+### 🔲 Focus Areas (`AgentFocusArea`)
 
-Urutan rotasi fokus (`AgentFocusArea`):
-1. **Chat Input** (`AgentFocusArea::ChatInput`)
-2. **Messages / Transcript** (`AgentFocusArea::Messages`)
-3. **Session List / History** (`AgentFocusArea::SessionList`)
-4. **Preset List** (`AgentFocusArea::PresetList`)
-5. **Tool Catalog / Cards** (`AgentFocusArea::ToolCatalog`)
-6. **Active Subagents Inspector** (`AgentFocusArea::ActiveSubagents`)
-7. **Model Telemetry** (`AgentFocusArea::ModelTelemetry`)
+Panel/kartu di Tab 1 terdiri dari:
+1. `Folders`: Workspace Folder Manager (atas sidebar)
+2. `Tasks`: Riwayat sesi task agent (tab sidebar)
+3. `Files`: Explorer file tree workspace (tab sidebar)
+4. `Chat`: Transcript pesan percakapan dan output reasoning
+5. `Input`: Text prompt input prompt (memiliki Normal & Insert Mode)
+6. `ModelTelemetry`: Widget info model & metrik token/latensi
+7. `McpTools`: Inspector tool execution & MCP calls
 
----
-
-### ⌨️ Hotkey & Footer Helper per Area di Tab 1
-
-#### 1. Chat Input (`AgentFocusArea::ChatInput`)
-* **Footer Helper:**
-  `[Enter] Send` | `[Shift+Enter / Alt+Enter] Newline` | `[Tab] Focus` | `[@] Tag Query` | `[/] Slash Command` | `[Ctrl+s] Subagent Modal` | `[Ctrl+t] Tools Modal` | `[Ctrl+o] Presets Modal`
-* **Daftar Hotkey:**
-  - `Enter`: Mengirim prompt / pesan ke agent.
-  - `Shift+Enter` atau `Alt+Enter`: Menambahkan baris baru (newline) pada area input.
-  - `@`: Membuka modal **Tag Query** untuk mention subagent, tool, atau model target.
-  - `/`: Membuka autocomplete popup **Slash Commands**.
-  - `Ctrl+s`: Membuka modal **Subagent Management**.
-  - `Ctrl+t`: Membuka modal **Tool Management / Config**.
-  - `Ctrl+o`: Membuka modal **Preset Selector**.
-  - `Esc`: Menutup pop-up saran autocomplete atau tag query.
-  - `Tab`: Pindah fokus ke card/area berikutnya.
-
-#### 2. Messages / Transcript (`AgentFocusArea::Messages`)
-* **Footer Helper:**
-  `[j/k or ↑/↓] Scroll` | `[g/G] Top/Bottom` | `[Ctrl+d/Ctrl+u] Half Page` | `[c] Copy Last Codeblock` | `[y] Copy Message` | `[Tab] Focus`
-* **Daftar Hotkey:**
-  - `j` / `Down`: Gulir pesan ke bawah.
-  - `k` / `Up`: Gulir pesan ke atas.
-  - `g` / `Home`: Lompat langsung ke pesan paling awal (atas).
-  - `G` / `End`: Lompat langsung ke pesan terbaru (bawah) dan mengaktifkan auto-scroll.
-  - `Ctrl+d` / `PageDown`: Gulir setengah layar ke bawah.
-  - `Ctrl+u` / `PageUp`: Gulir setengah layar ke atas.
-  - `c`: Menyalin code block terakhir yang digenerate oleh LLM ke clipboard sistem.
-  - `y`: Menyalin isi pesan yang sedang dipilih ke clipboard.
-  - `Tab`: Pindah fokus ke area Session List.
-
-#### 3. Session List (`AgentFocusArea::SessionList`)
-* **Footer Helper:**
-  `[j/k] Select` | `[Enter] Load Session` | `[n] New Session` | `[d] Delete Session` | `[r] Rename Session` | `[Tab] Focus`
-* **Daftar Hotkey:**
-  - `j` / `Down`: Pilih sesi berikutnya di sidebar.
-  - `k` / `Up`: Pilih sesi sebelumnya di sidebar.
-  - `Enter`: Memuat (load) sesi riwayat percakapan yang dipilih.
-  - `n`: Membuat sesi obrolan baru yang bersih (*New Session*).
-  - `d`: Konfirmasi dan menghapus sesi yang disorot.
-  - `r`: Mengubah nama (rename) judul sesi.
-  - `Tab`: Pindah fokus ke Preset List.
-
-#### 4. Preset List (`AgentFocusArea::PresetList`)
-* **Footer Helper:**
-  `[j/k] Select Preset` | `[Enter] Apply Preset` | `[Space] Details` | `[Tab] Focus`
-* **Daftar Hotkey:**
-  - `j` / `Down`: Memilih preset berikutnya.
-  - `k` / `Up`: Memilih preset sebelumnya.
-  - `Enter`: Menerapkan instruksi preset ke sesi aktif.
-  - `Space`: Membuka preview detail instruksi preset.
-  - `Tab`: Pindah fokus ke Tool Catalog.
-
-#### 5. Tool Catalog / Tool Cards (`AgentFocusArea::ToolCatalog`)
-* **Footer Helper:**
-  `[j/k] Navigate` | `[Space] Toggle Enable/Disable` | `[Enter/c] Config Modal` | `[Tab] Focus`
-* **Daftar Hotkey:**
-  - `j` / `Down`: Memilih kartu tool berikutnya.
-  - `k` / `Up`: Memilih kartu tool sebelumnya.
-  - `Space`: Mengaktifkan / menonaktifkan tool (Toggle On/Off).
-  - `Enter` / `c`: Membuka modal konfigurasi parameter tool.
-  - `Tab`: Pindah fokus ke Active Subagents Inspector.
-
-#### 6. Active Subagents Inspector (`AgentFocusArea::ActiveSubagents`)
-* **Footer Helper:**
-  `[j/k] Select` | `[Enter] Inspect Telemetry` | `[k] Terminate Subagent` | `[Tab] Focus`
-* **Daftar Hotkey:**
-  - `j` / `Down`: Memilih subagent worker.
-  - `Enter`: Membuka telemetry dan step log subagent terpilih.
-  - `k`: Menghentikan paksa (terminate/kill) proses subagent aktif.
-  - `Tab`: Pindah fokus ke Model Telemetry.
-
-#### 7. Model Telemetry (`AgentFocusArea::ModelTelemetry`)
-* **Footer Helper:**
-  `[j/k] Scroll Logs` | `[r] Reset Stats` | `[Tab] Focus`
-* **Daftar Hotkey:**
-  - `j` / `Down`: Scroll log metrik penggunaan token dan latensi.
-  - `r`: Reset statistik token & latensi.
-  - `Tab`: Pindah fokus kembali ke Chat Input.
+Navigasi fokus panel:
+- `Tab`: Pindah fokus ke panel berikutnya (`AgentFocusNextPanel`).
+- `Shift+Tab` / `BackTab`: Pindah fokus ke panel sebelumnya (`AgentFocusPrevPanel`).
+- `b`: Toggle buka / tutup Sidebar (`AgentToggleSidebar`).
+- `m`: Membuka modal pemilihan model (`Select Model Modal`).
+- `P`: Membuka modal switcher project (`Project Switcher Modal`).
+- `r`: Toggle status reasoning collapse/expand (saat tidak fokus di Files).
 
 ---
 
-### 🪟 Modals di Tab 1
+### ⌨️ Hotkey & Footer Helper per Focus Area di Tab 1
 
-1. **Tag Query Modal (`@mention`)**
-   - **Trigger:** Mengetik `@` di Chat Input.
-   - **Navigasi:** `j` / `k` atau tombol panah untuk memilih Subagent, Tool, atau Provider target.
-   - **Aksi:** `Enter` atau `Tab` untuk menerapkan tag ke dalam prompt input; `Esc` untuk menutup.
-2. **Tool Config Modal**
-   - **Trigger:** Tekan `Enter` atau `c` saat fokus di Tool Catalog, atau shortcut `Ctrl+t`.
-   - **Navigasi:** `Tab` / `Shift+Tab` untuk berpindah field setting form tool.
-   - **Aksi:** `Enter` untuk menyimpan; `Esc` untuk batal/menutup.
-3. **Subagent Delegation Modal**
-   - **Trigger:** Shortcut `Ctrl+s`.
-   - **Navigasi:** `j` / `k` memilih template agent worker.
-   - **Aksi:** `Enter` untuk spawn subagent baru; `Esc` untuk menutup.
-4. **Preset Selector Modal**
-   - **Trigger:** Shortcut `Ctrl+o`.
-   - **Navigasi:** `j` / `k` untuk menelusuri preset.
-   - **Aksi:** `Enter` untuk menerapkan preset; `Esc` untuk menutup.
+#### 1. Panel: `Folders` (`AgentFocusArea::Folders`)
+* **Footer Helper:**
+  `[Tab] Focus` | `[j/k or ↑/↓] Select` | `[a] Add` | `[d] Remove` | `[o] Open` | `[P] Projects` | `[b] Sidebar` | `[q] Quit`
+* **Daftar Hotkey:**
+  - `j` / `Down`: Pilih folder berikutnya.
+  - `k` / `Up`: Pilih folder sebelumnya.
+  - `a`: Membuka modal dialog **Add Folder to Workspace**.
+  - `d`: Menghapus folder yang dipilih dari workspace aktif.
+  - `o`: Membuka folder yang dipilih di File Manager sistem OS.
+  - `P`: Membuka dialog daftar project (`Project Switcher`).
+
+#### 2. Panel: `Tasks` (`AgentFocusArea::Tasks`)
+* **Footer Helper:**
+  `[Tab] Focus` | `[j/k or ↑/↓] Select` | `[n] New` | `[d] Delete` | `[s] Files Tab` | `[b] Sidebar` | `[q] Quit`
+* **Daftar Hotkey:**
+  - `j` / `Down`: Pilih dan langsung switch ke task session berikutnya.
+  - `k` / `Up`: Pilih dan langsung switch ke task session sebelumnya.
+  - `n`: Membuat task session baru.
+  - `d`: Menghapus task session yang dipilih.
+  - `s`: Berpindah tab sidebar dari Tasks ke Files.
+
+#### 3. Panel: `Files` (`AgentFocusArea::Files`)
+* **Footer Helper:**
+  `[Tab] Focus` | `[j/k or ↑/↓] Select` | `[Enter] Expand` | `[Space] Insert Path` | `[a] Add Folder` | `[r] Rescan` | `[s] Tasks Tab` | `[o] Open` | `[q] Quit`
+* **Daftar Hotkey:**
+  - `j` / `Down`: Sorot file/direktori berikutnya.
+  - `k` / `Up`: Sorot file/direktori sebelumnya.
+  - `Enter`: Expand / collapse direktori dalam file tree.
+  - `Space`: Memasukkan path file terpilih langsung ke text input prompt (`@path/to/file`).
+  - `a`: Membuka modal dialog **Add Folder to Workspace**.
+  - `r`: Rescan / scan ulang isi direktori file tree.
+  - `s`: Berpindah tab sidebar dari Files ke Tasks.
+  - `o`: Membuka path file/direktori di File Manager OS.
+
+#### 4. Panel: `Chat` (`AgentFocusArea::Chat`)
+* **Footer Helper:**
+  `[Tab] Focus` | `[i/Enter] Write` | `[j/k or ↑/↓] Scroll` | `[m] Model` | `[b] Sidebar` | `[q] Quit`
+* **Daftar Hotkey:**
+  - `i` atau `Enter`: Masuk ke **Insert Mode** pada text input prompt.
+  - `j` / `Down`: Gulir riwayat pesan ke bawah.
+  - `k` / `Up`: Gulir riwayat pesan ke atas.
+  - `m`: Membuka popup pemilihan model (`Select Model Modal`).
+  - `b`: Toggle tampilkan/sembunyikan sidebar.
+
+#### 5. Panel: `Input` (`AgentFocusArea::Input`)
+
+Terdapat 2 mode saat berada di area input:
+
+##### A. Insert Mode (`is_input_focused = true`)
+* **Footer Helper:**
+  `[Enter] Send` | `[@] Tag File/Folder` | `[Esc] Normal Mode` | `[Tab] Next Focus` | `[Ctrl+C] Stop Agent`
+* **Daftar Hotkey:**
+  - `Enter`: Kirim prompt ke agent (`SubmitPrompt`).
+  - `@`: Membuka popup autocomplete tag file/folder (`Tag Query`).
+  - `Esc`: Keluar dari mode pengetikan kembali ke **Normal Mode** (`UnfocusInput`).
+  - `Backspace`: Hapus karakter di posisi kursor.
+  - `Ctrl+c`: Membatalkan giliran agent yang sedang berjalan (`CancelTurn`), atau keluar aplikasi jika idle.
+  - `Tab`: Pindah fokus ke panel berikutnya.
+  - `Shift+Tab` / `BackTab`: Pindah fokus ke panel sebelumnya.
+
+##### B. Normal Mode (`is_input_focused = false`)
+* **Footer Helper:**
+  `[Tab] Focus` | `[i/Enter] Write` | `[m] Model` | `[↑/↓] Scroll Chat` | `[q] Quit`
+* **Daftar Hotkey:**
+  - `i` atau `Enter`: Masuk ke **Insert Mode** untuk mulai mengetik.
+  - `m`: Membuka modal pemilihan model.
+  - `j` / `Down`: Gulir riwayat chat ke bawah.
+  - `k` / `Up`: Gulir riwayat chat ke atas.
+
+#### 6. Panel: `ModelTelemetry` (`AgentFocusArea::ModelTelemetry`)
+* **Footer Helper:**
+  `[Tab] Focus` | `[m] Cycle Model` | `[f/F5] Refresh` | `[b] Sidebar` | `[q] Quit`
+* **Daftar Hotkey:**
+  - `m`: Buka modal ganti model.
+  - `f` atau `F5`: Refresh data provider dan daftar model dari backend.
+
+#### 7. Panel: `McpTools` (`AgentFocusArea::McpTools`)
+* **Footer Helper:**
+  `[Tab] Focus` | `[j/k] Select` | `[t] Filter` | `[x] Expand/Collapse` | `[q] Quit`
+* **Daftar Hotkey:**
+  - `j` / `Down`: Gulir daftar pemanggilan tool ke bawah.
+  - `k` / `Up`: Gulir daftar pemanggilan tool ke atas.
+  - `t`: Ganti filter status tool (`All` ➔ `RunningOnly` ➔ `FailedOnly`).
+  - `x`: Toggle expand / collapse detail diff & output tool yang dipilih.
+
+---
+
+### 🪟 Modals & Popups di Tab 1
+
+#### 1. Add Folder Modal (`add_folder_modal`)
+- **Trigger:** Tekan `a` pada panel `Folders` atau `Files`.
+- **Hotkey:**
+  - `Karakter`: Mengetik path direktori.
+  - `Backspace`: Menghapus karakter.
+  - `Tab`: Buka native dialog browse folder OS.
+  - `Enter`: Submit dan tambahkan folder ke workspace.
+  - `Esc`: Batal dan tutup modal.
+
+#### 2. Project Switcher Modal (`project_modal`)
+- **Trigger:** Tekan `P` (Shift+p).
+- **Hotkey:**
+  - `j` / `Down`: Sorot project berikutnya.
+  - `k` / `Up`: Sorot project sebelumnya.
+  - `Enter`: Switch ke project terpilih.
+  - `n`: Buka dialog pembuatan project baru (`Create Project Modal`).
+  - `Esc`: Tutup modal.
+
+#### 3. Create Project Modal (`create_project_modal`)
+- **Trigger:** Tekan `n` saat berada di Project Switcher Modal.
+- **Hotkey:**
+  - `Karakter`: Ketik nama project baru.
+  - `Backspace`: Hapus karakter.
+  - `Enter`: Submit & buat project baru.
+  - `Esc`: Batal dan tutup modal.
+
+#### 4. Select Model Modal (`model_modal`)
+- **Trigger:** Tekan `m` di Chat, Input (Normal Mode), atau Telemetry.
+- **Hotkey:**
+  - `j` / `Down` / `Tab`: Sorot model berikutnya.
+  - `k` / `Up` / `BackTab`: Sorot model sebelumnya.
+  - `Karakter`: Filter nama model.
+  - `Backspace`: Hapus filter karakter.
+  - `Enter`: Terapkan model yang dipilih ke agent workspace.
+  - `Esc`: Batal & tutup modal.
+
+#### 5. Tag Query Autocomplete Popup (`tag_query`)
+- **Trigger:** Mengetik karakter `@` saat sedang berada di `Insert Mode` input prompt.
+- **Hotkey:**
+  - `Down`: Sorot hasil file/folder autocomplete berikutnya.
+  - `Up`: Sorot hasil file/folder autocomplete sebelumnya.
+  - `Enter` atau `Tab`: Masukkan tag path file yang dipilih ke dalam input prompt.
+  - `Esc`: Tutup popup autocomplete tag.
 
 ---
 
 ## 2️⃣-4️⃣ Tab 2, 3, 4: Providers (`ragasukma-tui/src/provider_view`)
 *(Tab 2: Antigravity | Tab 3: Codex | Tab 4: Claude)*
 
-### 🔲 Focus Area & Cards
-Setiap tab provider terbagi menjadi 2 area/kartu utama yang dapat ditukar menggunakan tombol `Tab`:
+### 🔲 Focus Areas & Cards
+Setiap tab provider terbagi menjadi 2 area/kartu utama yang dapat ditukar dengan tombol `Tab`:
 1. **Accounts Card** (`ProviderFocusArea::Accounts`) - Menampilkan daftar akun, status login, dan default badge.
-2. **Quotas Card** (`ProviderFocusArea::Quotas`) - Menampilkan daftar limit kuota model, sisa persentase, dan reset counter.
+2. **Quotas Card** (`ProviderFocusArea::Quotas`) - Menampilkan limit kuota model, sisa persentase, dan reset counter.
 
 ---
 
@@ -155,15 +198,15 @@ Setiap tab provider terbagi menjadi 2 area/kartu utama yang dapat ditukar menggu
   `[Tab] Quotas` | `[j/k] Select` | `[Space] Active` | `[a] Add` | `[d] Delete` | `[r] Refresh` | `[1-5] Tabs` | `[q] Quit`
 * **Daftar Hotkey:**
   - `Tab`: Pindah fokus ke **Quotas Card**.
-  - `j` / `Down`: Memilih akun di bawahnya.
-  - `k` / `Up`: Memilih akun di atasnya.
-  - `Space`: Toggle status aktif / tidak aktif untuk akun yang dipilih.
-  - `Enter`: Menjadikan akun yang dipilih sebagai akun default (*Default Account*).
-  - `a`: Membuka browser untuk memulai alur autentikasi OAuth provider (`StartAntigravityOAuth` / `StartCodexOAuth` / `StartClaudeOAuth`).
-  - `d`: Menghapus akun yang dipilih beserta kredensial penyimpanannya.
-  - `r` / `R`: Refresh data kuota akun yang sedang dipilih.
-  - `Ctrl+j` / `Ctrl+Down`: Scroll Quotas Card ke bawah tanpa perlu memindahkan fokus.
-  - `Ctrl+k` / `Ctrl+Up`: Scroll Quotas Card ke atas tanpa perlu memindahkan fokus.
+  - `j` / `Down`: Sorot akun berikutnya.
+  - `k` / `Up`: Sorot akun sebelumnya.
+  - `Space`: Toggle status aktif / tidak aktif untuk akun yang dipilih (`ToggleAccountActive`).
+  - `Enter`: Menjadikan akun yang dipilih sebagai akun default (`SetAccountActive`).
+  - `a`: Membuka browser untuk memulai alur OAuth login provider (`StartAntigravityOAuth` / `StartCodexOAuth` / `StartClaudeOAuth`).
+  - `d`: Menghapus akun yang dipilih beserta kredensial penyimpanannya (`ConfirmDelete`).
+  - `r` / `R`: Refresh data kuota akun yang sedang dipilih (`RefreshQuota`).
+  - `Ctrl+j` / `Ctrl+Down`: Scroll daftar Quota ke bawah tanpa harus memindahkan fokus.
+  - `Ctrl+k` / `Ctrl+Up`: Scroll daftar Quota ke atas tanpa harus memindahkan fokus.
 
 #### 2. Quotas Card (`ProviderFocusArea::Quotas`)
 * **Footer Helper:**
@@ -178,10 +221,10 @@ Setiap tab provider terbagi menjadi 2 area/kartu utama yang dapat ditukar menggu
 
 ## 5️⃣ Tab 5: Custom LLM (`ragasukma-tui/src/custom_llm_view`)
 
-### 🔲 Focus Area & Cards
+### 🔲 Focus Areas & Cards
 Tab ini terbagi menjadi 2 kartu horizontal yang ditukar dengan tombol `Tab`:
-1. **Providers Card** (`CustomLlmFocus::Providers`) - Tabel konfigurasi prefix, nama provider, base URL, dan status ON/OFF.
-2. **Models Catalog Card** (`CustomLlmFocus::Models`) - Katalog model yang tersedia untuk prefix provider yang dipilih.
+1. **Providers Card** (`CustomLlmFocus::Providers`) - Tabel konfigurasi prefix, nama provider, base URL endpoint, dan status ON/OFF.
+2. **Models Catalog Card** (`CustomLlmFocus::Models`) - Tabel model yang tersedia untuk provider yang sedang dipilih.
 
 ---
 
@@ -189,16 +232,16 @@ Tab ini terbagi menjadi 2 kartu horizontal yang ditukar dengan tombol `Tab`:
 
 #### Normal Mode (Tanpa Modal Terbuka)
 * **Footer Helper:**
-  `[Tab] Switch Focus` | `[j/k] Select` | `[a] Add Provider` | `[e] Edit` | `[Space] Toggle` | `[d] Delete` | `[r] Fetch Models` | `[1-5] Tabs` | `[?] Help` | `[q] Quit`
+  `[Tab] Switch Focus` | `[j/k] Select` | `[a] Add Provider` | `[e] Edit` | `[Space] Toggle` | `[d] Delete` | `[r] Fetch Models` | `[1-5] Tabs` | `[q] Quit`
 * **Daftar Hotkey:**
   - `Tab`: Berpindah fokus antara **Providers Card** dan **Models Catalog Card**.
   - `j` / `Down`: Memilih entri berikutnya pada tabel aktif.
   - `k` / `Up`: Memilih entri sebelumnya pada tabel aktif.
-  - `a`: Membuka modal **Add Custom Provider** form baru.
-  - `e`: Membuka modal **Edit Custom Provider** untuk provider yang sedang dipilih.
+  - `a`: Membuka formulir modal **Add Custom Provider** (`CustomLlmModal::Add`).
+  - `e`: Membuka formulir modal **Edit Custom Provider** untuk provider yang sedang dipilih (`CustomLlmModal::Edit`).
   - `Space`: Mengaktifkan / menonaktifkan status auto-routing (`ON` / `OFF`).
-  - `d`: Membuka modal konfirmasi hapus provider.
-  - `r` / `R`: Fetch / refresh katalog model secara realtime dari endpoint `/v1/models`.
+  - `d`: Membuka dialog konfirmasi hapus provider (`CustomLlmModal::DeleteConfirm`).
+  - `r` / `R`: Fetch / query katalog model secara realtime dari endpoint `/v1/models`.
 
 ---
 
@@ -208,12 +251,12 @@ Tab ini terbagi menjadi 2 kartu horizontal yang ditukar dengan tombol `Tab`:
 * **Footer Helper:**
   `[Tab/Shift+Tab] Next/Prev Field` | `[Enter] Submit` | `[Esc] Cancel`
 * **Daftar Hotkey Form Modal:**
-  - `Tab` / `Down`: Berpindah ke field form berikutnya dengan siklus:
+  - `Tab` / `Down`: Berpindah ke input field berikutnya dengan urutan siklus:
     `Prefix (/custom)` ➔ `Provider Name` ➔ `Base URL Endpoint` ➔ `API Key` ➔ `Provider Enabled Checkbox` ➔ `[Save & Apply]` ➔ `[Cancel]`.
   - `Shift+Tab` / `Up`: Berpindah ke field form sebelumnya.
   - `Space`: Mengubah status centang `[✔]` / `[ ]` jika berada pada field Enabled Checkbox.
   - `Enter`: Submit form dan menyimpan konfigurasi jika berada di input field atau di tombol `[Save & Apply]`.
-  - `Esc`: Membatalkan input dan menutup formulir tanpa menyimpan.
+  - `Esc`: Membatalkan input dan menutup formulir modal tanpa menyimpan.
 
 #### 2. Confirm Deletion Modal (`render_delete_modal`)
 * **Daftar Hotkey Modal Hapus:**

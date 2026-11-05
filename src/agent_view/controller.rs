@@ -27,7 +27,7 @@ impl AgentWorkspaceState {
                 KeyCode::Down | KeyCode::Char('j') => Some(Action::AgentSelectNextProject),
                 KeyCode::Up | KeyCode::Char('k') => Some(Action::AgentSelectPrevProject),
                 KeyCode::Enter => Some(Action::AgentSwitchProject),
-                KeyCode::Char('n') | KeyCode::Char('+') => Some(Action::AgentOpenCreateProjectModal),
+                KeyCode::Char('n') => Some(Action::AgentOpenCreateProjectModal),
                 _ => None,
             };
         }
@@ -56,17 +56,6 @@ impl AgentWorkspaceState {
             };
         }
 
-        // Modal: Pending Tool Approval / Diff Review
-        if self.pending_approval.is_some() {
-            return match code {
-                KeyCode::Char('y') => Some(Action::AgentApprovePending),
-                KeyCode::Char('n') => Some(Action::AgentRejectPending),
-                KeyCode::Down | KeyCode::Char('j') => Some(Action::AgentScrollDown),
-                KeyCode::Up | KeyCode::Char('k') => Some(Action::AgentScrollUp),
-                _ => None,
-            };
-        }
-
         // When the input textarea is focused
         if self.is_input_focused {
             if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -78,7 +67,6 @@ impl AgentWorkspaceState {
                             Some(Action::Quit)
                         }
                     }
-                    KeyCode::Char('u') => Some(Action::AgentClearInput),
                     _ => None,
                 };
             }
@@ -91,14 +79,6 @@ impl AgentWorkspaceState {
                     KeyCode::Up => return Some(Action::AgentTagQueryPrev),
                     KeyCode::Tab | KeyCode::Enter => return Some(Action::AgentApplyTag),
                     _ => {}
-                }
-            }
-
-            if key.modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c') {
-                if self.is_running {
-                    return Some(Action::AgentCancelTurn);
-                } else {
-                    return Some(Action::Quit);
                 }
             }
 
@@ -182,27 +162,11 @@ impl AgentWorkspaceState {
                 AgentFocusArea::ModelTelemetry => None,
             },
             KeyCode::Enter => match self.focus_area {
-                AgentFocusArea::Tasks => Some(Action::AgentSwitchTask),
                 AgentFocusArea::Files => Some(Action::AgentToggleFileTreeExpand),
-                AgentFocusArea::Folders => Some(Action::AgentFocusFiles),
-                AgentFocusArea::Chat => Some(Action::AgentFocusInput),
                 AgentFocusArea::Input => Some(Action::AgentSubmitPrompt),
-                AgentFocusArea::ModelTelemetry | AgentFocusArea::McpTools => None,
-            },
-            KeyCode::Char('a') if matches!(self.focus_area, AgentFocusArea::Folders | AgentFocusArea::Files) => {
-                Some(Action::AgentOpenAddFolderModal)
-            }
-            KeyCode::Char('o') if matches!(self.focus_area, AgentFocusArea::Folders | AgentFocusArea::Files) => {
-                Some(Action::AgentOpenFolderInFileManager)
-            }
-            KeyCode::Char('d') => match self.focus_area {
-                AgentFocusArea::Tasks => Some(Action::AgentDeleteSelectedTask),
-                AgentFocusArea::Folders => Some(Action::AgentRemoveActiveFolder),
+                AgentFocusArea::Chat => Some(Action::AgentFocusInput),
                 _ => None,
             },
-            KeyCode::Char('c') if self.focus_area == AgentFocusArea::Chat => {
-                Some(Action::AgentClearChat)
-            }
             KeyCode::Char(' ') if self.focus_area == AgentFocusArea::Files => {
                 Some(Action::AgentInsertSelectedFile)
             }

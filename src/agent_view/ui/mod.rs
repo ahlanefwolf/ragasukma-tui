@@ -251,8 +251,6 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         AgentFocusArea::Folders => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
             hints.push(Span::raw("Select "));
-            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-            hints.push(Span::raw("Focus Files "));
             hints.push(Span::styled(" [a] ", Theme::key_badge()));
             hints.push(Span::raw("Add "));
             hints.push(Span::styled(" [d] ", Theme::key_badge()));
@@ -267,8 +265,6 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         AgentFocusArea::Tasks => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
             hints.push(Span::raw("Select "));
-            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-            hints.push(Span::raw("Switch Task "));
             hints.push(Span::styled(" [n] ", Theme::key_badge()));
             hints.push(Span::raw("New "));
             hints.push(Span::styled(" [d] ", Theme::key_badge()));
@@ -322,8 +318,6 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::raw("Tag File/Folder "));
             hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
             hints.push(Span::raw("Normal Mode "));
-            hints.push(Span::styled(" [Ctrl+U] ", Theme::key_badge()));
-            hints.push(Span::raw("Clear "));
         }
         AgentFocusArea::Input => {
             if state.is_running {

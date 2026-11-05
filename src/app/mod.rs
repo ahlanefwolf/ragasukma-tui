@@ -93,15 +93,9 @@ mod tests {
         app.update(action);
         assert_ne!(app.agent.expanded_tool_idx, initial_expand);
 
-        // Test input focused hotkeys: Ctrl+U, Ctrl+C, Esc
+        // Test input focused hotkeys: Ctrl+C, Esc
         app.agent.focus_input();
         app.agent.input_buffer = "hello world".to_string();
-
-        let ctrl_u = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL);
-        let action = app.handle_key_event(ctrl_u).expect("action expected");
-        assert_eq!(action, Action::AgentClearInput);
-        app.update(action);
-        assert!(app.agent.input_buffer.is_empty());
 
         let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
         let action = app.handle_key_event(ctrl_c).expect("action expected");
