@@ -659,7 +659,8 @@ impl AgentWorkspaceState {
         let chat_tokens = self.messages.iter().map(|m| m.content.len() / 4).sum();
         let session_tokens = self.sessions.iter().map(|s| (s.total_tokens_input + s.total_tokens_output) as usize).sum();
 
-        let mut task_requests = 0;
+        let mut user_prompts = 0;
+        let mut assistant_turns = 0;
         let mut msg_in_tokens = 0;
         let mut msg_out_tokens = 0;
 
@@ -667,15 +668,30 @@ impl AgentWorkspaceState {
             let tok = (msg.content.len() / 4).max(1);
             match msg.role {
                 crate::agent_view::types::MessageRole::User => {
-                    task_requests += 1;
+                    user_prompts += 1;
                     msg_in_tokens += tok;
                 }
                 crate::agent_view::types::MessageRole::Assistant => {
+                    assistant_turns += 1;
                     msg_out_tokens += tok;
+                }
+                crate::agent_view::types::MessageRole::Tool => {
+                    // Tool output diumpankan kembali sebagai input context ke pemanggilan model berikutnya
+                    msg_in_tokens += tok;
                 }
                 _ => {}
             }
         }
+
+        // Hitung total LLM interaction turns (request ke model):
+        // Setiap respon assistant merepresentasikan 1 kali siklus panggilan LLM API yang selesai dieksekusi.
+        // Jika request sedang aktif atau user baru mengirim prompt dan belum ada respon assistant,
+        // minimal prompt user dihitung sebagai request berjalan.
+        let task_requests = if assistant_turns > 0 {
+            assistant_turns
+        } else {
+            user_prompts
+        };
 
         let (stored_in, stored_out) = if let Some(s) = self.sessions.get(self.selected_session_idx) {
             (s.total_tokens_input as usize, s.total_tokens_output as usize)
