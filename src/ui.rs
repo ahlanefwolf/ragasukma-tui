@@ -121,56 +121,13 @@ fn render_body(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
-    let (status_label, status_style) = match app.status_message.as_deref() {
-        Some(msg) => {
-            let lower = msg.to_lowercase();
-            if lower.contains("error") || lower.contains("failed") || lower.contains("gagal") {
-                (" ERROR ", Theme::status_error())
-            } else if lower.contains("warn")
-                || lower.contains("peringatan")
-                || lower.contains("busy")
-                || lower.contains("sibuk")
-            {
-                (" WARNING ", Theme::status_warning())
-            } else {
-                (" READY ", Theme::badge_info())
-            }
-        }
-        None => (" READY ", Theme::badge_info()),
-    };
-
-    // Left: Status notification
-    let status_line = Line::from(vec![
-        Span::styled(" STATUS: ", Theme::key_badge()),
-        Span::raw(" "),
-        Span::styled(status_label, status_style),
-    ]);
-
-    // Give the status widget exactly what it needs (with a 2-char buffer),
-    // and dedicate the rest of the entire width to the key hints legend.
-    let status_len = (status_line.width() as u16).saturating_add(2);
-    let footer_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(status_len), Constraint::Min(0)])
-        .split(area);
-
-    frame.render_widget(Paragraph::new(status_line), footer_chunks[0]);
-
-    // Right: Keybindings legend (delegated context-sensitively to domain modules)
-    let key_spans = if app.show_help {
-        vec![
-            Span::styled(" [Esc/q/?] ", Theme::key_badge()),
-            Span::raw("Close Help "),
-        ]
-    } else {
-        match app.active_tab {
-            0 => crate::agent_view::ui::get_footer_key_hints(&app.agent, footer_chunks[1].width),
-            1 => crate::provider_view::ui::get_footer_key_hints(&app.antigravity),
-            2 => crate::provider_view::ui::get_footer_key_hints(&app.codex),
-            3 => crate::provider_view::ui::get_footer_key_hints(&app.claude),
-            4 => crate::custom_llm_view::ui::get_footer_key_hints(&app.custom_llm),
-            _ => vec![],
-        }
+    let key_spans = match app.active_tab {
+        0 => crate::agent_view::ui::get_footer_key_hints(&app.agent, area.width),
+        1 => crate::provider_view::ui::get_footer_key_hints(&app.antigravity),
+        2 => crate::provider_view::ui::get_footer_key_hints(&app.codex),
+        3 => crate::provider_view::ui::get_footer_key_hints(&app.claude),
+        4 => crate::custom_llm_view::ui::get_footer_key_hints(&app.custom_llm),
+        _ => vec![],
     };
 
     let legend_line = Line::from(key_spans);
@@ -178,7 +135,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         Paragraph::new(legend_line)
             .alignment(Alignment::Right)
             .style(Theme::text_secondary()),
-        footer_chunks[1],
+        area,
     );
 }
 
@@ -234,7 +191,7 @@ fn render_error_modal(frame: &mut Frame, err_msg: &str, area: Rect) {
         Line::from(Span::styled(err_msg, Theme::status_danger())),
         Line::from(""),
         Line::from(vec![
-            Span::styled(" [Esc / Enter] ", Theme::key_badge()),
+            Span::styled(" [Esc] ", Theme::key_badge()),
             Span::raw("Dismiss"),
         ]),
     ];

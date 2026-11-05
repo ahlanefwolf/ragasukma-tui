@@ -14,7 +14,6 @@ pub struct App {
     pub active_tab: usize,
     pub should_quit: bool,
     pub tick_count: u64,
-    pub show_help: bool,
 
     pub status_message: Option<String>,
     pub status_timestamp: Option<Instant>,
@@ -56,7 +55,6 @@ impl App {
             active_tab: 0,
             should_quit: false,
             tick_count: 0,
-            show_help: false,
             status_message: Some("Ready - Ragakusma Agent TUI".to_string()),
             status_timestamp: Some(Instant::now()),
             agent,

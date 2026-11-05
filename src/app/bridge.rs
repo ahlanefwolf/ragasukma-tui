@@ -6,7 +6,7 @@ impl App {
     pub fn handle_bridge_event(&mut self, ev: CoreBridgeEvent) {
         match ev {
             CoreBridgeEvent::Connected { session_id, .. } => {
-                self.set_status(format!("Agent siap (session {})", session_id));
+                self.set_status(format!("Agent ready (session {})", session_id));
             }
             CoreBridgeEvent::StatusChange { session_id, status } => {
                 if session_id.as_ref() == self.agent.active_session_id.as_ref() || session_id.is_none() {

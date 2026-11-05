@@ -41,9 +41,9 @@ impl App {
             };
         }
 
-        if self.error_modal.is_some() || self.show_help {
+        if self.error_modal.is_some() {
             return match code {
-                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => Some(Action::CloseModal),
+                KeyCode::Esc => Some(Action::CloseModal),
                 _ => None,
             };
         }
@@ -93,7 +93,6 @@ impl App {
             KeyCode::Tab => Some(Action::NextTab),
             KeyCode::BackTab => Some(Action::PrevTab),
             KeyCode::Char('q') => Some(Action::Quit),
-            KeyCode::Char('?') | KeyCode::F(1) => Some(Action::ToggleHelp),
             _ => None,
         }
     }

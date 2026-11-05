@@ -41,11 +41,10 @@ async fn main() -> Result<()> {
         Ok(bridge) => {
             tracing::info!("CoreBridge initialized successfully");
             app.bridge_cmd_tx = Some(bridge.cmd_tx);
-            app.status_message = Some("Connected to Ragasukma Core engine.".to_string());
         }
         Err(e) => {
             tracing::error!("Core initialization failed: {e:?}");
-            app.status_message = Some(format!("Core init warning: {}", e));
+            app.error_modal = Some(format!("Core initialization error: {e}"));
         }
     }
     app.set_event_tx(events.tx.clone());
@@ -105,7 +104,7 @@ async fn run_app(
                 AppEvent::OAuthFailed { provider, error } => {
                     tracing::error!("OAuth login failed: provider='{provider}', error='{error}'");
                     term.clear()?;
-                    app.set_status(format!("OAuth Login Failed [{}]: {}", provider, error));
+                    app.error_modal = Some(format!("OAuth Login Failed [{}]: {}", provider, error));
                 }
                 AppEvent::Tick => {
                     app.on_tick();

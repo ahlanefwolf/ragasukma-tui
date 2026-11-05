@@ -73,13 +73,7 @@ impl App {
                     }
                 }
             }
-            Action::ToggleHelp => {
-                self.show_help = !self.show_help;
-            }
             Action::CloseModal => {
-                self.show_help = false;
-                self.confirm_dialog = None;
-                self.diff_modal = None;
                 self.error_modal = None;
             }
             Action::SetStatus(msg) => {

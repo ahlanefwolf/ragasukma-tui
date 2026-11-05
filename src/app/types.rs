@@ -48,10 +48,9 @@ pub struct ConfirmDialogState {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Quit,
+    SwitchTab(usize),
     NextTab,
     PrevTab,
-    SwitchTab(usize),
-    ToggleHelp,
     CloseModal,
     SetStatus(String),
 
