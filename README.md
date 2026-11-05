@@ -1,10 +1,19 @@
-# Ragasukma TUI 🖥️⚡
+<div align="center">
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-F2B5D4?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Linux_%7C_Windows_%7C_macOS-2F3B46?style=flat-square)](https://github.com/ahlanefwolf/ragasukma-tui/releases)
-[![Donate](https://img.shields.io/badge/Donate-SociaBuzz-FF7043?style=flat-square&logo=coffeescript&logoColor=white)](https://sociabuzz.com/ahlanefwolf)
+  <img src="icons/128x128@2x.png" alt="Ragasukma Logo" width="120" height="120" />
 
-> A smart Terminal User Interface (TUI) for coding alongside AI agents, managing multi-account LLMs (Claude, ChatGPT/Codex, Google Antigravity), and monitoring quota usage directly from your terminal.
+  # Ragasukma TUI
+  **Smart Terminal Interface for Autonomous AI Coding & Multi-Account LLM Management**
+
+  [![Platform](https://img.shields.io/badge/Platform-Linux_%7C_Windows_%7C_macOS-2F3B46?style=flat-square)](https://github.com/ahlanefwolf/ragasukma-tui/releases)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-F2B5D4?style=flat-square)](LICENSE)
+  [![Donate](https://img.shields.io/badge/Donate-SociaBuzz-FF7043?style=flat-square&logo=coffeescript&logoColor=white)](https://sociabuzz.com/ahlanefwolf)
+
+  <p align="center">
+    A smart Terminal User Interface (TUI) for coding alongside AI agents, managing multi-account LLMs (Claude, ChatGPT/Codex, Google Antigravity), and monitoring quota usage directly from your terminal.
+  </p>
+
+</div>
 
 ---
 
