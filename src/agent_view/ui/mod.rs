@@ -305,13 +305,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::raw("Scroll "));
             hints.push(Span::styled(" [m] ", Theme::key_badge()));
             hints.push(Span::raw("Model "));
-            hints.push(Span::styled(" [c] ", Theme::key_badge()));
-            hints.push(Span::raw("Clear "));
             if width > 95 {
-                hints.push(Span::styled(" [x] ", Theme::key_badge()));
-                hints.push(Span::raw("Tools "));
-                hints.push(Span::styled(" [r] ", Theme::key_badge()));
-                hints.push(Span::raw("Reasoning "));
                 hints.push(Span::styled(" [b] ", Theme::key_badge()));
                 hints.push(Span::raw("Sidebar "));
             }
@@ -339,8 +333,6 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::raw("Cycle Model "));
             hints.push(Span::styled(" [f/F5] ", Theme::key_badge()));
             hints.push(Span::raw("Fetch/Refresh "));
-            hints.push(Span::styled(" [r] ", Theme::key_badge()));
-            hints.push(Span::raw("Reasoning "));
         }
         AgentFocusArea::McpTools => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));

@@ -165,7 +165,7 @@ impl CustomLlmTabState {
     }
 
     pub fn refresh_models(&mut self) {
-        let fetched = std::thread::spawn(ragasukma_core::llm::providers::custom::fetch_models)
+        let fetched = std::thread::spawn(super::service::fetch_models)
             .join()
             .unwrap_or_default();
         if !fetched.is_empty() {
