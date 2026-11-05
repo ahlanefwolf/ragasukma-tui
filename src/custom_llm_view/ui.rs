@@ -257,7 +257,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let inner = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // 0: Top Spacer (jarak dari header modal)
+            Constraint::Length(1), // 0: Top Spacer (margin from modal header)
             Constraint::Length(3), // 1: Prefix
             Constraint::Length(1), // 2: Spacer
             Constraint::Length(3), // 3: Name

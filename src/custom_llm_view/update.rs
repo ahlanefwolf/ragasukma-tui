@@ -10,6 +10,10 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
             state.form_input(*c);
             Some(None)
         }
+        Action::FormPaste(text) => {
+            state.form_paste(text);
+            Some(None)
+        }
         Action::FormBackspace => {
             state.form_backspace();
             Some(None)

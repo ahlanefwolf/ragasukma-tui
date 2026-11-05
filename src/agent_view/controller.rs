@@ -28,6 +28,7 @@ impl AgentWorkspaceState {
                 KeyCode::Up | KeyCode::Char('k') => Some(Action::AgentSelectPrevProject),
                 KeyCode::Enter => Some(Action::AgentSwitchProject),
                 KeyCode::Char('n') => Some(Action::AgentOpenCreateProjectModal),
+                KeyCode::Char('d') => Some(Action::AgentDeleteProject),
                 _ => None,
             };
         }

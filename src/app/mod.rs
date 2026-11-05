@@ -187,19 +187,26 @@ mod tests {
     #[test]
     fn test_multi_folder_workspace() {
         let mut app = App::new(std::path::PathBuf::from("."));
-        assert_eq!(app.agent.workspace_folders.len(), 1);
+        assert_eq!(app.agent.workspace_folders.len(), 0);
 
         // Add valid folder (temp_dir)
         let temp_dir = std::env::temp_dir();
         let add_res = app.agent.add_workspace_folder(temp_dir.clone());
         assert!(add_res.is_ok());
-        assert_eq!(app.agent.workspace_folders.len(), 2);
+        assert_eq!(app.agent.workspace_folders.len(), 1);
 
         // Prevent duplicate folder
         let dup_res = app.agent.add_workspace_folder(temp_dir);
         assert!(dup_res.is_err());
 
-        // When added, the newly added folder becomes the active one
+        // When added, the newly added folder becomes active
+        assert_eq!(app.agent.active_folder_idx, 0);
+
+        // Add a second distinct folder
+        let second_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let add_second = app.agent.add_workspace_folder(second_dir);
+        assert!(add_second.is_ok());
+        assert_eq!(app.agent.workspace_folders.len(), 2);
         assert_eq!(app.agent.active_folder_idx, 1);
 
         // Select next folder cycles back to index 0
@@ -229,5 +236,38 @@ mod tests {
         // Cannot remove the only workspace folder
         let rem_last_res = app.agent.remove_workspace_folder(0);
         assert!(rem_last_res.is_err(), "Expected removing the only workspace folder to fail");
+    }
+
+    #[test]
+    fn test_project_modal_delete_project() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = App::new(std::path::PathBuf::from("."));
+        app.agent.projects = vec![
+            crate::agent_view::types::ProjectItem {
+                id: "p1".to_string(),
+                name: "Project 1".to_string(),
+                description: None,
+                root_path: None,
+            },
+            crate::agent_view::types::ProjectItem {
+                id: "p2".to_string(),
+                name: "Project 2".to_string(),
+                description: None,
+                root_path: None,
+            },
+        ];
+        app.agent.project_modal.is_open = true;
+        app.agent.project_modal.selected_idx = 1;
+
+        let d_key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
+        let action = app.handle_key_event(d_key).expect("action expected");
+        assert_eq!(action, Action::AgentDeleteProject);
+
+        app.update(action);
+        assert!(app.status_message.is_some());
+        assert_eq!(app.agent.projects.len(), 1);
+        assert_eq!(app.agent.projects[0].id, "p1");
+        assert_eq!(app.agent.project_modal.selected_idx, 0);
     }
 }

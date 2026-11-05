@@ -101,6 +101,9 @@ impl App {
         if self.active_tab == 0 && self.agent.is_input_focused {
             return Some(Action::AgentPaste(text));
         }
+        if self.active_tab == 4 && self.custom_llm.is_form_open {
+            return Some(Action::FormPaste(text));
+        }
         None
     }
 }

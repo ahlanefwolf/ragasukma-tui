@@ -79,7 +79,7 @@ pub fn map_codex_quotas(
         });
     }
 
-    // Tampilkan model-model yang didapat langsung dari akun
+    // Display models retrieved directly from account
     for model in models {
         let label = if !model.display_name.is_empty() {
             format!("{} ({})", model.display_name, model.model_id)

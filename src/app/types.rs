@@ -157,6 +157,7 @@ pub enum Action {
     AgentSelectNextProject,
     AgentSelectPrevProject,
     AgentSwitchProject,
+    AgentDeleteProject,
     AgentOpenCreateProjectModal,
     AgentCloseCreateProjectModal,
     AgentCreateProjectChar(char),
@@ -169,6 +170,7 @@ pub enum Action {
 
     FormChar(char),
     FormBackspace,
+    FormPaste(String),
     FormNextField,
     FormPrevField,
     FormSubmit,

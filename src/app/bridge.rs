@@ -225,24 +225,9 @@ impl App {
                     .filter(|p| p.exists())
                     .collect();
 
-                if !folders.is_empty() {
-                    self.agent.workspace_folders = folders;
-                    self.agent.active_folder_idx = 0;
-                    self.agent.scan_workspace_files();
-                } else if !self.agent.workspace_folders.is_empty()
-                    && let (Some(pid), Some(tx)) = (&self.agent.active_project_id, &self.bridge_cmd_tx)
-                {
-                    let current_paths: Vec<String> = self
-                        .agent
-                        .workspace_folders
-                        .iter()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .collect();
-                    let _ = tx.send(CoreBridgeCommand::UpdateProjectFolders {
-                        project_id: pid.clone(),
-                        folders: current_paths,
-                    });
-                }
+                self.agent.workspace_folders = folders;
+                self.agent.active_folder_idx = 0;
+                self.agent.scan_workspace_files();
             }
             CoreBridgeEvent::ProjectCreated { project } => {
                 let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(project.root_path.as_deref());
@@ -254,11 +239,12 @@ impl App {
 
                 self.agent.active_project_id = Some(project.id.clone());
                 self.agent.active_project_name = project.name.clone();
-                if !folders.is_empty() {
-                    self.agent.workspace_folders = folders;
-                    self.agent.active_folder_idx = 0;
-                    self.agent.scan_workspace_files();
-                }
+                self.agent.workspace_folders = folders;
+                self.agent.active_folder_idx = 0;
+                self.agent.scan_workspace_files();
+                self.agent.sessions.clear();
+                self.agent.active_session_id = None;
+                self.agent.clear_chat();
 
                 let item = crate::agent_view::types::ProjectItem {
                     id: project.id.clone(),
@@ -286,6 +272,9 @@ impl App {
                 self.agent.workspace_folders = folders;
                 self.agent.active_folder_idx = 0;
                 self.agent.scan_workspace_files();
+                self.agent.sessions.clear();
+                self.agent.active_session_id = None;
+                self.agent.clear_chat();
             }
             CoreBridgeEvent::ProjectDeleted { id } => {
                 self.agent.projects.retain(|p| p.id != id);
@@ -398,7 +387,7 @@ impl App {
                     .get(&cache_key)
                     .is_some_and(|last| now.duration_since(*last).as_secs() < 60)
             {
-                // Data kuota masih segar dalam batas TTL (60 detik), abaikan fetch redundant
+                // Quota data is still fresh within TTL (60s), ignore redundant fetch
                 return;
             }
 

@@ -4,7 +4,7 @@ use crate::app::types::{Action, DiffApprovalState};
 
 impl App {
     pub fn update(&mut self, action: Action) {
-        // 1. Coba delegasikan ke Agent View module
+        // 1. Delegate to Agent View module
         if let Some(status_opt) = crate::agent_view::update::handle_agent_action(
             &mut self.agent,
             action.clone(),
@@ -16,7 +16,7 @@ impl App {
             return;
         }
 
-        // 2. Coba delegasikan ke Custom LLM View module
+        // 2. Delegate to Custom LLM View module
         if let Some(status_opt) =
             crate::custom_llm_view::update::handle_custom_llm_action(&mut self.custom_llm, &action)
         {
@@ -26,7 +26,7 @@ impl App {
             return;
         }
 
-        // 3. Coba delegasikan ke Provider View module
+        // 3. Delegate to Provider View module
         if let Some(status_opt) = crate::provider_view::update::handle_provider_action(
             self.active_tab,
             &mut self.antigravity,

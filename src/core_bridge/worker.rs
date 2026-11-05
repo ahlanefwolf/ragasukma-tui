@@ -218,7 +218,7 @@ pub fn spawn_core_bridge_worker(
         let mut last_turn_request: Option<(String, Option<String>)> = None;
 
         while let Some(cmd) = cmd_rx.recv().await {
-            // Bersihkan task yang sudah selesai dari active_turns
+            // Clean finished tasks from active_turns
             active_turns.retain(|_, handle| !handle.is_finished());
 
             match cmd {

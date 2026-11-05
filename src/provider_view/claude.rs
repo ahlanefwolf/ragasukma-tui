@@ -84,7 +84,7 @@ pub fn map_claude_quotas(
         });
     }
 
-    // Tampilkan model-model yang didapat langsung dari akun Claude
+    // Display models retrieved directly from Claude account
     for model in models {
         let label = if !model.display_name.is_empty() {
             format!("{} ({})", model.display_name, model.model_id)

@@ -197,6 +197,8 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         hints.push(Span::raw("Switch "));
         hints.push(Span::styled(" [n] ", Theme::key_badge()));
         hints.push(Span::raw("New Project "));
+        hints.push(Span::styled(" [d] ", Theme::key_badge()));
+        hints.push(Span::raw("Remove "));
         hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
         hints.push(Span::raw("Close "));
         return hints;

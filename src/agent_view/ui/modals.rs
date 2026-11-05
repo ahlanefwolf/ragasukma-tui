@@ -30,7 +30,11 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
-        .title(Span::styled(title, Theme::badge_gold()));
+        .title(Span::styled(title, Theme::badge_gold()))
+        .title_bottom(Span::styled(
+            " [Enter] Switch  [n] New  [d] Remove  [Esc] Close ",
+            Theme::text_muted(),
+        ));
 
     let inner_height = (popup_area.height.saturating_sub(2) as usize).max(1);
     let offset = if sel >= inner_height {

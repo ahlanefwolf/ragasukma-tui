@@ -75,7 +75,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
             }
         }
 
-        // Indikator Loading di paling bawah agent conversation saat agent aktif
+        // Loading indicator at the bottom of agent conversation when agent is active
         if state.is_running {
             chat_lines.push(Line::from(vec![
                 Span::styled("  ⚡ ", Style::default().fg(Theme::GOLD_PRIMARY)),

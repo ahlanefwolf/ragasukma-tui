@@ -6,41 +6,8 @@ use super::types::{CustomLlmTabState, FormField};
 
 impl CustomLlmTabState {
     pub fn new() -> Self {
-        let mut accounts = load_accounts();
-        if accounts.is_empty() {
-            accounts = vec![
-                CustomLlmAccount {
-                    prefix: "groq".to_string(),
-                    name: "Groq Cloud LPU".to_string(),
-                    base_url: "https://api.groq.com/openai/v1".to_string(),
-                    api_key: "gsk_live_preview99824".to_string(),
-                    enabled: true,
-                },
-                CustomLlmAccount {
-                    prefix: "deepseek".to_string(),
-                    name: "DeepSeek API Platform".to_string(),
-                    base_url: "https://api.deepseek.com/v1".to_string(),
-                    api_key: "sk-dsk-live-7721".to_string(),
-                    enabled: true,
-                },
-                CustomLlmAccount {
-                    prefix: "local".to_string(),
-                    name: "Local Ollama / vLLM".to_string(),
-                    base_url: "http://localhost:11434/v1".to_string(),
-                    api_key: String::new(),
-                    enabled: false,
-                },
-            ];
-            let _ = save_accounts(&accounts);
-        }
-
-        let models = vec![
-            ("llama-3.3-70b-versatile".to_string(), "groq".to_string()),
-            ("llama-3.1-8b-instant".to_string(), "groq".to_string()),
-            ("deepseek-chat".to_string(), "deepseek".to_string()),
-            ("deepseek-reasoner".to_string(), "deepseek".to_string()),
-            ("qwen2.5-coder:7b".to_string(), "local".to_string()),
-        ];
+        let accounts = load_accounts();
+        let models = Vec::new();
 
         Self {
             accounts,
@@ -186,6 +153,40 @@ impl CustomLlmTabState {
         self.focused_field = self.focused_field.prev();
     }
 
+    pub fn sanitize_form_text(text: &str) -> String {
+        text.replace(['\r', '\n', '\t'], " ")
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect::<String>()
+    }
+
+    pub fn form_paste(&mut self, text: &str) {
+        let cleaned = Self::sanitize_form_text(text);
+        if cleaned.is_empty() {
+            return;
+        }
+
+        match self.focused_field {
+            FormField::Prefix => {
+                for c in cleaned.chars() {
+                    if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                        self.form_prefix.push(c.to_ascii_lowercase());
+                    }
+                }
+            }
+            FormField::Name => {
+                self.form_name.push_str(&cleaned);
+            }
+            FormField::BaseUrl => {
+                self.form_base_url.push_str(cleaned.trim());
+            }
+            FormField::ApiKey => {
+                self.form_api_key.push_str(cleaned.trim());
+            }
+            FormField::Enabled | FormField::SaveBtn | FormField::CancelBtn => {}
+        }
+    }
+
     pub fn form_input(&mut self, c: char) {
         match self.focused_field {
             FormField::Prefix => {
@@ -317,5 +318,36 @@ impl CustomLlmTabState {
                     || m_id.eq_ignore_ascii_case(p_clean)
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_custom_llm_form_paste_base_url_and_api_key() {
+        let mut state = CustomLlmTabState::new();
+        state.open_add_form();
+
+        // 1. Prefix: test cleaning and lowercase filtering
+        state.focused_field = FormField::Prefix;
+        state.form_paste("My-Groq_Provider! 123\n");
+        assert_eq!(state.form_prefix, "my-groq_provider123");
+
+        // 2. Name: test paste
+        state.focused_field = FormField::Name;
+        state.form_paste("  Production API  \n");
+        assert_eq!(state.form_name, "  Production API   ");
+
+        // 3. Base URL: test trimming leading/trailing newlines and spaces
+        state.focused_field = FormField::BaseUrl;
+        state.form_paste("   https://api.openai.com/v1\r\n   ");
+        assert_eq!(state.form_base_url, "https://api.openai.com/v1");
+
+        // 4. API Key: test trimming and sanitizing control characters
+        state.focused_field = FormField::ApiKey;
+        state.form_paste("  sk-ant-api03-live-token\x1b[31m\n  ");
+        assert_eq!(state.form_api_key, "sk-ant-api03-live-token[31m");
     }
 }

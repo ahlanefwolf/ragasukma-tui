@@ -597,10 +597,43 @@ pub fn handle_agent_action(
                     let _ = tx.send(CoreBridgeCommand::SwitchProject {
                         project_id: target_id,
                     });
-                    Some(format!("Beralih ke project: {}", target_name))
+                    Some(format!("Switched to project: {}", target_name))
                 } else {
                     None
                 }
+            } else {
+                None
+            }
+        }
+        Action::AgentDeleteProject => {
+            if let Some(target) = agent.projects.get(agent.project_modal.selected_idx) {
+                let target_id = target.id.clone();
+                let target_name = target.name.clone();
+
+                if let Some(tx) = bridge_cmd_tx {
+                    let _ = tx.send(CoreBridgeCommand::DeleteProject {
+                        project_id: target_id.clone(),
+                    });
+                }
+
+                // If active project is deleted, reset workspace state
+                if agent.active_project_id.as_deref() == Some(&target_id) {
+                    agent.active_project_id = None;
+                    agent.active_project_name.clear();
+                    agent.workspace_folders.clear();
+                    agent.active_folder_idx = 0;
+                    agent.scan_workspace_files();
+                    agent.sessions.clear();
+                    agent.active_session_id = None;
+                    agent.clear_chat();
+                }
+
+                agent.projects.remove(agent.project_modal.selected_idx);
+                if agent.project_modal.selected_idx >= agent.projects.len() && !agent.projects.is_empty() {
+                    agent.project_modal.selected_idx = agent.projects.len() - 1;
+                }
+
+                Some(format!("Project '{}' deleted successfully", target_name))
             } else {
                 None
             }
@@ -609,7 +642,7 @@ pub fn handle_agent_action(
             agent.project_modal.is_open = false;
             agent.create_project_modal.is_open = true;
             agent.create_project_modal.name_input.clear();
-            Some("Buat Project Baru".to_string())
+            Some("Create New Project".to_string())
         }
         Action::AgentCloseCreateProjectModal => {
             agent.create_project_modal.is_open = false;
@@ -627,26 +660,13 @@ pub fn handle_agent_action(
             let name = agent.create_project_modal.name_input.trim().to_string();
             let res = if !name.is_empty() {
                 if let Some(tx) = bridge_cmd_tx {
-                    let initial_folders: Vec<String> = if let Some(f) = agent.workspace_folders.get(agent.active_folder_idx) {
-                        vec![f.to_string_lossy().to_string()]
-                    } else if let Ok(cwd) = std::env::current_dir() {
-                        vec![cwd.to_string_lossy().to_string()]
-                    } else {
-                        Vec::new()
-                    };
-                    let root_path = if initial_folders.is_empty() {
-                        None
-                    } else {
-                        serde_json::to_string(&initial_folders).ok()
-                    };
-
                     let _ = tx.send(CoreBridgeCommand::CreateProject {
                         name: name.clone(),
                         description: None,
-                        root_path,
+                        root_path: None,
                     });
                 }
-                Some(format!("Project '{}' dibuat", name))
+                Some(format!("Project '{}' created", name))
             } else {
                 None
             };
