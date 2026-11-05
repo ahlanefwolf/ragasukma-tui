@@ -83,3 +83,9 @@ impl EventHandler {
             .ok_or_else(|| color_eyre::eyre::eyre!("Event channel closed"))
     }
 }
+
+impl Drop for EventHandler {
+    fn drop(&mut self) {
+        self._task.abort();
+    }
+}

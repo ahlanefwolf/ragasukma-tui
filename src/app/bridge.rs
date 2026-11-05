@@ -67,7 +67,7 @@ impl App {
                             found = true;
                         }
                         if !found {
-                            self.agent.messages.push(crate::agent_view::types::ChatMessage {
+                            self.agent.push_message(crate::agent_view::types::ChatMessage {
                                 role: crate::agent_view::types::MessageRole::Assistant,
                                 sender_name: "Agent".to_string(),
                                 content: msg,
@@ -111,7 +111,7 @@ impl App {
                     s.is_running = false;
                 }
                 if Some(&session_id) == self.agent.active_session_id.as_ref() {
-                    self.agent.messages.push(crate::agent_view::types::ChatMessage {
+                    self.agent.push_message(crate::agent_view::types::ChatMessage {
                         role: crate::agent_view::types::MessageRole::Assistant,
                         sender_name: "System Error".to_string(),
                         content: format!("⚠️ Error: {}", error),
@@ -257,15 +257,18 @@ impl App {
             } => {
                 self.agent.sessions = sessions
                     .into_iter()
-                    .map(|s| crate::agent_view::types::TaskSessionItem {
-                        id: s.id,
-                        title: s.title,
-                        status: s.status,
-                        model: s.model,
-                        total_tokens_input: s.total_tokens_input,
-                        total_tokens_output: s.total_tokens_output,
-                        updated_at: s.updated_at,
-                        is_running: false,
+                    .map(|s| {
+                        let is_running = s.status == "running";
+                        crate::agent_view::types::TaskSessionItem {
+                            id: s.id,
+                            title: s.title,
+                            status: s.status,
+                            model: s.model,
+                            total_tokens_input: s.total_tokens_input,
+                            total_tokens_output: s.total_tokens_output,
+                            updated_at: s.updated_at,
+                            is_running,
+                        }
                     })
                     .collect();
                 self.agent.active_session_id = Some(active_id.clone());

@@ -140,9 +140,30 @@ impl Default for AgentWorkspaceState {
     }
 }
 
+pub const MAX_CHAT_MESSAGES: usize = 300;
+
 impl AgentWorkspaceState {
+    pub fn push_message(&mut self, message: ChatMessage) {
+        self.messages.push(message);
+        self.enforce_message_limit();
+    }
+
+    pub fn set_messages(&mut self, messages: Vec<ChatMessage>) {
+        self.messages = messages;
+        self.enforce_message_limit();
+    }
+
+    fn enforce_message_limit(&mut self) {
+        if self.messages.len() > MAX_CHAT_MESSAGES {
+            let overflow = self.messages.len() - MAX_CHAT_MESSAGES;
+            self.messages.drain(0..overflow);
+            self.expanded_tools.clear();
+            self.expanded_tool_idx = None;
+        }
+    }
+
     pub fn sample() -> Self {
-        Self::default()
+        Default::default()
     }
 
     pub fn set_messages_from_persisted(&mut self, list: Vec<PersistedMessageDto>) {
@@ -165,6 +186,7 @@ impl AgentWorkspaceState {
                 }
             })
             .collect();
+        self.enforce_message_limit();
         self.scroll_offset = 0;
         self.auto_scroll = true;
     }
@@ -225,6 +247,7 @@ impl AgentWorkspaceState {
             tool_calls: Vec::new(),
             reasoning: None,
         });
+        self.enforce_message_limit();
     }
 
     pub fn append_thought(&mut self, thought: &str) {
@@ -1137,5 +1160,70 @@ fn collect_visible_children(
             is_expanded: false,
             parent_path: parent_path.clone(),
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_limit_eviction() {
+        let mut state = AgentWorkspaceState::default();
+        for i in 0..(MAX_CHAT_MESSAGES + 50) {
+            state.push_message(ChatMessage {
+                role: MessageRole::User,
+                sender_name: "User".to_string(),
+                content: format!("Message {}", i),
+                timestamp: "now".to_string(),
+                tool_calls: Vec::new(),
+                reasoning: None,
+            });
+        }
+        assert_eq!(state.messages.len(), MAX_CHAT_MESSAGES);
+        assert_eq!(state.messages[0].content, "Message 50");
+        assert_eq!(state.messages[MAX_CHAT_MESSAGES - 1].content, format!("Message {}", MAX_CHAT_MESSAGES + 49));
+    }
+
+    #[test]
+    fn test_tag_query_navigation_and_selection() {
+        let mut state = AgentWorkspaceState::default();
+        state.is_input_focused = true;
+        state.all_workspace_tag_items = vec![
+            TagItem {
+                name: "file1.rs".into(),
+                path: "src/file1.rs".into(),
+                is_dir: false,
+            },
+            TagItem {
+                name: "file2.rs".into(),
+                path: "src/file2.rs".into(),
+                is_dir: false,
+            },
+        ];
+
+        // Trigger tag query
+        state.input_buffer = "check @file".to_string();
+        state.cursor_pos = state.input_buffer.len();
+        state.check_and_update_tag_query();
+
+        assert!(state.tag_query.is_some());
+        let tq = state.tag_query.as_ref().unwrap();
+        assert_eq!(tq.query, "file");
+        assert_eq!(tq.matched_items.len(), 2);
+        assert_eq!(tq.selected_idx, 0);
+
+        // Next selection
+        state.select_tag_query_next();
+        assert_eq!(state.tag_query.as_ref().unwrap().selected_idx, 1);
+
+        // Prev selection
+        state.select_tag_query_prev();
+        assert_eq!(state.tag_query.as_ref().unwrap().selected_idx, 0);
+
+        // Apply selected tag
+        state.apply_selected_tag();
+        assert!(state.tag_query.is_none());
+        assert_eq!(state.input_buffer, "check @src/file1.rs ");
     }
 }

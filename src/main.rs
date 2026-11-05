@@ -76,7 +76,14 @@ async fn run_app(
 
         term.draw(|f| ui::draw(f, app))?;
 
-        let mut event = events.next().await?;
+        let mut event = tokio::select! {
+            res = events.next() => res?,
+            _ = tokio::signal::ctrl_c() => {
+                tracing::info!("Received Ctrl+C interrupt signal, shutting down cleanly");
+                app.should_quit = true;
+                break;
+            }
+        };
         loop {
             match event {
                 AppEvent::Key(key) => {

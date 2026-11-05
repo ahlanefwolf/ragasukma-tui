@@ -40,7 +40,7 @@ pub fn handle_agent_action(
                     });
                 }
                 agent.start_turn();
-                agent.messages.push(ChatMessage {
+                agent.push_message(ChatMessage {
                     role: MessageRole::User,
                     sender_name: "You".to_string(),
                     content: prompt,

@@ -48,10 +48,9 @@ pub fn init() -> Result<TuiTerminal> {
 
 /// Restore terminal to normal mode and leave alternate screen.
 pub fn restore() -> Result<()> {
-    if crossterm::terminal::is_raw_mode_enabled().unwrap_or(false) {
-        let mut out = stdout();
-        execute!(out, LeaveAlternateScreen, DisableMouseCapture, cursor::Show)?;
-        disable_raw_mode()?;
-    }
+    ratatui::restore();
+    let mut out = stdout();
+    let _ = execute!(out, LeaveAlternateScreen, DisableMouseCapture, cursor::Show);
+    let _ = disable_raw_mode();
     Ok(())
 }

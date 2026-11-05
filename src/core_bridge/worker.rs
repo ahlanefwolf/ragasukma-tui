@@ -10,63 +10,82 @@ use tokio::sync::mpsc;
 
 use super::types::{CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto, SessionDto};
 
+pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<CoreBridgeEvent> {
+    match event {
+        AgentSessionEvent::Delta { delta } => Some(CoreBridgeEvent::Delta {
+            session_id: sid.to_string(),
+            delta,
+        }),
+        AgentSessionEvent::ThoughtDelta { delta } => Some(CoreBridgeEvent::ThoughtDelta {
+            session_id: sid.to_string(),
+            thought: delta,
+        }),
+        AgentSessionEvent::StatusChange { status } => Some(CoreBridgeEvent::StatusChange {
+            session_id: Some(sid.to_string()),
+            status,
+        }),
+        AgentSessionEvent::StepInfo {
+            iteration,
+            action,
+            details,
+        } => Some(CoreBridgeEvent::StepInfo {
+            session_id: sid.to_string(),
+            iteration,
+            action,
+            details,
+        }),
+        AgentSessionEvent::Error { message } => Some(CoreBridgeEvent::Error(message)),
+        AgentSessionEvent::Done { reply: _ } => {
+            tracing::info!("Agent session turn stream finished for: {sid}");
+            None
+        }
+        _ => None,
+    }
+}
+
 pub fn spawn_session_subscriber(
     sub_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
     sub_sid: Arc<Mutex<String>>,
 ) {
     tokio::spawn(async move {
+        let mut active_sid = {
+            let guard = sub_sid.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            guard.clone()
+        };
+        let mut broadcast_rx = get_session_sender(&active_sid).subscribe();
+        let mut sync_interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
+
         loop {
-            let cur = {
-                let guard = sub_sid.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                guard.clone()
-            };
-            let mut broadcast_rx = get_session_sender(&cur).subscribe();
+            if sub_tx.is_closed() {
+                break;
+            }
+
             tokio::select! {
+                _ = sync_interval.tick() => {
+                    let cur = {
+                        let guard = sub_sid.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                        guard.clone()
+                    };
+                    if cur != active_sid {
+                        active_sid = cur;
+                        broadcast_rx = get_session_sender(&active_sid).subscribe();
+                    }
+                }
                 evt = broadcast_rx.recv() => {
-                    if let Ok(event) = evt {
-                        match event {
-                            AgentSessionEvent::Delta { delta } => {
-                                let _ = sub_tx.send(CoreBridgeEvent::Delta {
-                                    session_id: cur.clone(),
-                                    delta,
-                                });
+                    match evt {
+                        Ok(event) => {
+                            if let Some(bridge_evt) = map_core_event_to_bridge(&active_sid, event)
+                                && sub_tx.send(bridge_evt).is_err()
+                            {
+                                break;
                             }
-                            AgentSessionEvent::ThoughtDelta { delta } => {
-                                let _ = sub_tx.send(CoreBridgeEvent::ThoughtDelta {
-                                    session_id: cur.clone(),
-                                    thought: delta,
-                                });
-                            }
-                            AgentSessionEvent::StatusChange { status } => {
-                                let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
-                                    session_id: Some(cur.clone()),
-                                    status,
-                                });
-                            }
-                            AgentSessionEvent::StepInfo {
-                                iteration,
-                                action,
-                                details,
-                            } => {
-                                let _ = sub_tx.send(CoreBridgeEvent::StepInfo {
-                                    session_id: cur.clone(),
-                                    iteration,
-                                    action,
-                                    details,
-                                });
-                            }
-                            AgentSessionEvent::Done { reply } => {
-                                tracing::info!("Turn completed successfully");
-                                let _ = sub_tx.send(CoreBridgeEvent::TurnCompleted {
-                                    session_id: cur.clone(),
-                                    summary: reply,
-                                });
-                            }
-                            AgentSessionEvent::Error { message } => {
-                                tracing::error!("Agent session error: {message}");
-                                let _ = sub_tx.send(CoreBridgeEvent::Error(message));
-                            }
-                            _ => {}
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(missed)) => {
+                            tracing::warn!("Session broadcast subscriber lagged by {missed} events");
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            broadcast_rx = get_session_sender(&active_sid).subscribe();
                         }
                     }
                 }
@@ -114,6 +133,69 @@ async fn record_turn_usage(
     }
 }
 
+async fn execute_turn_pipeline(
+    session_id: String,
+    model_override: Option<String>,
+    prompt_for_usage: String,
+    pool: SqlitePool,
+    worker_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
+    is_retry: bool,
+) {
+    if is_retry {
+        tracing::info!("Retrying turn for session: {session_id}");
+    } else {
+        tracing::info!("Executing session turn for session: {session_id}");
+    }
+
+    let turn_start = std::time::Instant::now();
+    let res = ragasukma_core::agent::executor::execute_session_turn(
+        &session_id,
+        model_override.as_deref(),
+    )
+    .await;
+
+    let duration_ms = turn_start.elapsed().as_millis() as u64;
+    let chosen_model = model_override.as_deref().unwrap_or("antigravity");
+
+    match res {
+        Ok(reply) => {
+            record_turn_usage(
+                &pool,
+                chosen_model,
+                &prompt_for_usage,
+                &reply,
+                duration_ms,
+                "success",
+            )
+            .await;
+            let _ = worker_tx.send(CoreBridgeEvent::TurnCompleted {
+                session_id,
+                summary: reply,
+            });
+        }
+        Err(e) => {
+            if is_retry {
+                tracing::error!("Retry turn error: {e:?}");
+            } else {
+                tracing::error!("Execute session turn error: {e:?}");
+            }
+            record_turn_usage(
+                &pool,
+                chosen_model,
+                &prompt_for_usage,
+                "",
+                duration_ms,
+                "error",
+            )
+            .await;
+            let _ = worker_tx.send(CoreBridgeEvent::TurnFailed {
+                session_id,
+                error: e.to_string(),
+            });
+        }
+    }
+}
+
 pub fn spawn_core_bridge_worker(
     mut cmd_rx: mpsc::UnboundedReceiver<CoreBridgeCommand>,
     worker_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
@@ -126,113 +208,52 @@ pub fn spawn_core_bridge_worker(
         let pool_clone = db_pool.clone();
 
         // Spawn subscriber loop
-        spawn_session_subscriber(worker_tx.clone(), Arc::clone(&current_sid_clone));
+        spawn_session_subscriber(
+            worker_tx.clone(),
+            Arc::clone(&current_sid_clone),
+        );
 
-        let mut current_turn_handle: Option<tokio::task::JoinHandle<()>> = None;
+        let mut active_turns: std::collections::HashMap<String, tokio::task::JoinHandle<()>> =
+            std::collections::HashMap::new();
         let mut last_turn_request: Option<(String, Option<String>)> = None;
 
         while let Some(cmd) = cmd_rx.recv().await {
+            // Bersihkan task yang sudah selesai dari active_turns
+            active_turns.retain(|_, handle| !handle.is_finished());
+
             match cmd {
-                CoreBridgeCommand::CancelTurn { session_id: _ } => {
-                    if let Some(handle) = current_turn_handle.take() {
+                CoreBridgeCommand::CancelTurn { session_id } => {
+                    let sid = session_id.unwrap_or_else(|| {
+                        current_sid_clone
+                            .lock()
+                            .map(|g| g.clone())
+                            .unwrap_or_else(|p| p.into_inner().clone())
+                    });
+                    if let Some(handle) = active_turns.remove(&sid) {
                         handle.abort();
-                        let _ = worker_tx.send(CoreBridgeEvent::TurnCancelled {
-                            session_id: active_sid.clone(),
-                        });
                     }
                 }
                 CoreBridgeCommand::RetryTurn => {
                     if let Some((retry_prompt, model_override)) = last_turn_request.clone() {
                         let sid_exec = active_sid.clone();
-                        let sid_stream = sid_exec.clone();
                         let exec_tx = worker_tx.clone();
-                        let last_prompt = retry_prompt;
-
-                        let mut session_sub = ragasukma_core::agent::events::get_session_sender(&sid_exec).subscribe();
-                        let stream_tx = exec_tx.clone();
-                        let stream_forwarder = tokio::spawn(async move {
-                            while let Ok(evt) = session_sub.recv().await {
-                                match evt {
-                                    ragasukma_core::agent::models::AgentSessionEvent::Delta { delta } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::Delta {
-                                            session_id: sid_stream.clone(),
-                                            delta,
-                                        });
-                                    }
-                                    ragasukma_core::agent::models::AgentSessionEvent::ThoughtDelta { delta } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta {
-                                            session_id: sid_stream.clone(),
-                                            thought: delta,
-                                        });
-                                    }
-                                    ragasukma_core::agent::models::AgentSessionEvent::StatusChange { status } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::StatusChange {
-                                            session_id: Some(sid_stream.clone()),
-                                            status,
-                                        });
-                                    }
-                                    ragasukma_core::agent::models::AgentSessionEvent::StepInfo { iteration, action, details } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::StepInfo {
-                                            session_id: sid_stream.clone(),
-                                            iteration,
-                                            action,
-                                            details,
-                                        });
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        });
-
                         let pool_exec = pool_clone.clone();
+                        let sid_key = sid_exec.clone();
+
                         let handle = tokio::spawn(async move {
-                            tracing::info!("Retrying turn for session: {sid_exec}");
-                            let turn_start = std::time::Instant::now();
-                            let res = ragasukma_core::agent::executor::execute_session_turn(
-                                &sid_exec,
-                                model_override.as_deref(),
+                            execute_turn_pipeline(
+                                sid_exec,
+                                model_override,
+                                retry_prompt,
+                                pool_exec,
+                                exec_tx,
+                                true,
                             )
                             .await;
-
-                            stream_forwarder.abort();
-                            let duration_ms = turn_start.elapsed().as_millis() as u64;
-                            let chosen_model = model_override.as_deref().unwrap_or("antigravity");
-
-                            match res {
-                                Ok(reply) => {
-                                    record_turn_usage(
-                                        &pool_exec,
-                                        chosen_model,
-                                        &last_prompt,
-                                        &reply,
-                                        duration_ms,
-                                        "success",
-                                    )
-                                    .await;
-                                    let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted {
-                                        session_id: sid_exec.clone(),
-                                        summary: reply,
-                                    });
-                                }
-                                Err(e) => {
-                                    tracing::error!("Retry turn error: {e:?}");
-                                    record_turn_usage(
-                                        &pool_exec,
-                                        chosen_model,
-                                        &last_prompt,
-                                        "",
-                                        duration_ms,
-                                        "error",
-                                    )
-                                    .await;
-                                    let _ = exec_tx.send(CoreBridgeEvent::TurnFailed {
-                                        session_id: sid_exec,
-                                        error: e.to_string(),
-                                    });
-                                }
-                            }
                         });
-                        current_turn_handle = Some(handle);
+                        if let Some(old) = active_turns.insert(sid_key, handle) {
+                            old.abort();
+                        }
                     }
                 }
                 CoreBridgeCommand::CreateProject {
@@ -489,98 +510,27 @@ pub fn spawn_core_bridge_worker(
                     .await;
 
                     let sid_exec = current_turn_sid;
-                    let sid_stream = sid_exec.clone();
                     let exec_tx = worker_tx.clone();
 
                     last_turn_request = Some((prompt.clone(), model_override.clone()));
 
-                    // Realtime event streamer: subscribe to core agent session events
-                    let mut session_sub = ragasukma_core::agent::events::get_session_sender(&sid_exec).subscribe();
-                    let stream_tx = exec_tx.clone();
-                    let stream_forwarder = tokio::spawn(async move {
-                        while let Ok(evt) = session_sub.recv().await {
-                            match evt {
-                                ragasukma_core::agent::models::AgentSessionEvent::Delta { delta } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::Delta {
-                                        session_id: sid_stream.clone(),
-                                        delta,
-                                    });
-                                }
-                                ragasukma_core::agent::models::AgentSessionEvent::ThoughtDelta { delta } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta {
-                                        session_id: sid_stream.clone(),
-                                        thought: delta,
-                                    });
-                                }
-                                ragasukma_core::agent::models::AgentSessionEvent::StatusChange { status } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::StatusChange {
-                                        session_id: Some(sid_stream.clone()),
-                                        status,
-                                    });
-                                }
-                                ragasukma_core::agent::models::AgentSessionEvent::StepInfo { iteration, action, details } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::StepInfo {
-                                        session_id: sid_stream.clone(),
-                                        iteration,
-                                        action,
-                                        details,
-                                    });
-                                }
-                                _ => {}
-                            }
-                        }
-                    });
-
                     let pool_exec = pool_clone.clone();
                     let prompt_for_usage = prompt.clone();
+                    let sid_key = sid_exec.clone();
                     let handle = tokio::spawn(async move {
-                        tracing::info!("Executing session turn for session: {sid_exec}");
-                        let turn_start = std::time::Instant::now();
-                        let res = ragasukma_core::agent::executor::execute_session_turn(
-                            &sid_exec,
-                            model_override.as_deref(),
+                        execute_turn_pipeline(
+                            sid_exec,
+                            model_override,
+                            prompt_for_usage,
+                            pool_exec,
+                            exec_tx,
+                            false,
                         )
                         .await;
-
-                        stream_forwarder.abort();
-                        let duration_ms = turn_start.elapsed().as_millis() as u64;
-                        let chosen_model = model_override.as_deref().unwrap_or("antigravity");
-
-                        match res {
-                            Ok(reply) => {
-                                record_turn_usage(
-                                    &pool_exec,
-                                    chosen_model,
-                                    &prompt_for_usage,
-                                    &reply,
-                                    duration_ms,
-                                    "success",
-                                )
-                                .await;
-                                let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted {
-                                    session_id: sid_exec.clone(),
-                                    summary: reply,
-                                });
-                            }
-                            Err(e) => {
-                                tracing::error!("Execute session turn error: {e:?}");
-                                record_turn_usage(
-                                    &pool_exec,
-                                    chosen_model,
-                                    &prompt_for_usage,
-                                    "",
-                                    duration_ms,
-                                    "error",
-                                )
-                                .await;
-                                let _ = exec_tx.send(CoreBridgeEvent::TurnFailed {
-                                    session_id: sid_exec,
-                                    error: e.to_string(),
-                                });
-                            }
-                        }
                     });
-                    current_turn_handle = Some(handle);
+                    if let Some(old) = active_turns.insert(sid_key, handle) {
+                        old.abort();
+                    }
                 }
                 CoreBridgeCommand::RefreshQuota { provider } => {
                     let pool_ref = pool_clone.clone();

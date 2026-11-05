@@ -169,8 +169,39 @@ impl AgentWorkspaceState {
             KeyCode::Char(' ') if self.focus_area == AgentFocusArea::Files => {
                 Some(Action::AgentInsertSelectedFile)
             }
+            KeyCode::Char('a') if self.focus_area == AgentFocusArea::Folders => {
+                Some(Action::AgentOpenAddFolderModal)
+            }
+            KeyCode::Char('d') if self.focus_area == AgentFocusArea::Folders => {
+                Some(Action::AgentRemoveActiveFolder)
+            }
+            KeyCode::Char('o') if self.focus_area == AgentFocusArea::Folders => {
+                Some(Action::AgentOpenFolderInFileManager)
+            }
             KeyCode::Char('P') => Some(Action::AgentOpenProjectModal),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent_view::state::AgentWorkspaceState;
+
+    #[test]
+    fn test_folders_focus_hotkeys() {
+        let mut state = AgentWorkspaceState::default();
+        state.is_input_focused = false;
+        state.focus_area = AgentFocusArea::Folders;
+
+        let key_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        assert_eq!(state.handle_key(key_a), Some(Action::AgentOpenAddFolderModal));
+
+        let key_d = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
+        assert_eq!(state.handle_key(key_d), Some(Action::AgentRemoveActiveFolder));
+
+        let key_o = KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE);
+        assert_eq!(state.handle_key(key_o), Some(Action::AgentOpenFolderInFileManager));
     }
 }
