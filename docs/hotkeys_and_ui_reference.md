@@ -16,7 +16,6 @@ Berlaku di seluruh tab aplikasi saat pengguna tidak sedang mengetik di dalam tex
 | `4` | Switch ke **Tab 4: Claude** | Provider OAuth & Quota Claude |
 | `5` | Switch ke **Tab 5: Custom LLM** | Endpoint kustom OpenAI-compatible / Ollama |
 | `q` | **Quit Application** | Keluar dari aplikasi |
-| `?` atau `F1` | **Toggle Help Modal** | Membuka modal bantuan shortcut |
 | `Ctrl+c` | **Cancel Turn / Quit** | Menghentikan agent turn jika sedang `is_running`, atau quit aplikasi jika idle |
 
 ---
@@ -78,7 +77,7 @@ Navigasi fokus panel:
   - `a`: Membuka modal dialog **Add Folder to Workspace**.
   - `r`: Rescan / scan ulang isi direktori file tree.
   - `s`: Berpindah tab sidebar dari Files ke Tasks.
-  - `o`: Membuka path file/direktori di File Manager OS.
+  - `o`: Membuka path file/direktori terpilih di File Manager sistem OS.
 
 #### 4. Panel: `Chat` (`AgentFocusArea::Chat`)
 * **Footer Helper:**
@@ -262,3 +261,5 @@ Tab ini terbagi menjadi 2 kartu horizontal yang ditukar dengan tombol `Tab`:
 * **Daftar Hotkey Modal Hapus:**
   - `y` / `Enter`: Mengonfirmasi penghapusan custom provider beserta kredensial tersimpan.
   - `n` / `Esc`: Membatalkan penghapusan dan kembali ke kartu provider.
+
+

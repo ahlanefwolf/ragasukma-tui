@@ -161,20 +161,29 @@ impl AgentWorkspaceState {
                 AgentFocusArea::ModelTelemetry => None,
             },
             KeyCode::Enter => match self.focus_area {
+                AgentFocusArea::Tasks => Some(Action::AgentSwitchTask),
                 AgentFocusArea::Files => Some(Action::AgentToggleFileTreeExpand),
                 AgentFocusArea::Input => Some(Action::AgentSubmitPrompt),
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
                 _ => None,
             },
-            KeyCode::Char(' ') if self.focus_area == AgentFocusArea::Files => {
-                Some(Action::AgentInsertSelectedFile)
-            }
-            KeyCode::Char('a') if self.focus_area == AgentFocusArea::Folders => {
+            KeyCode::Char('a')
+                if self.focus_area == AgentFocusArea::Folders
+                    || self.focus_area == AgentFocusArea::Files =>
+            {
                 Some(Action::AgentOpenAddFolderModal)
             }
-            KeyCode::Char('d') if self.focus_area == AgentFocusArea::Folders => {
-                Some(Action::AgentRemoveActiveFolder)
+            KeyCode::Char('o')
+                if self.focus_area == AgentFocusArea::Folders
+                    || self.focus_area == AgentFocusArea::Files =>
+            {
+                Some(Action::AgentOpenFolderInFileManager)
             }
+            KeyCode::Char('d') => match self.focus_area {
+                AgentFocusArea::Folders => Some(Action::AgentRemoveActiveFolder),
+                AgentFocusArea::Tasks => Some(Action::AgentDeleteSelectedTask),
+                _ => None,
+            },
             KeyCode::Char('o') if self.focus_area == AgentFocusArea::Folders => {
                 Some(Action::AgentOpenFolderInFileManager)
             }
@@ -202,6 +211,11 @@ mod tests {
         assert_eq!(state.handle_key(key_d), Some(Action::AgentRemoveActiveFolder));
 
         let key_o = KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE);
+        assert_eq!(state.handle_key(key_o), Some(Action::AgentOpenFolderInFileManager));
+
+        // Test hotkeys in Files panel
+        state.focus_area = AgentFocusArea::Files;
+        assert_eq!(state.handle_key(key_a), Some(Action::AgentOpenAddFolderModal));
         assert_eq!(state.handle_key(key_o), Some(Action::AgentOpenFolderInFileManager));
     }
 }

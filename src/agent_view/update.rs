@@ -491,7 +491,28 @@ pub fn handle_agent_action(
             }
         }
         Action::AgentOpenFolderInFileManager => {
-            if let Some(folder) = agent.workspace_folders.get(agent.active_folder_idx) {
+            let target_path = if agent.focus_area == AgentFocusArea::Files {
+                if let Some(file_node) = agent.workspace_files.get(agent.selected_file_idx) {
+                    let p = std::path::Path::new(&file_node.path);
+                    if p.exists() {
+                        if p.is_dir() {
+                            Some(p.to_path_buf())
+                        } else {
+                            p.parent()
+                                .map(|parent| parent.to_path_buf())
+                                .or_else(|| Some(p.to_path_buf()))
+                        }
+                    } else {
+                        agent.workspace_folders.get(agent.active_folder_idx).cloned()
+                    }
+                } else {
+                    agent.workspace_folders.get(agent.active_folder_idx).cloned()
+                }
+            } else {
+                agent.workspace_folders.get(agent.active_folder_idx).cloned()
+            };
+
+            if let Some(folder) = target_path {
                 match ragasukma_core::agent::tools::open_path_in_file_manager(&folder.to_string_lossy()) {
                     Ok(()) => {
                         Some(format!("Opened file manager for {}", folder.display()))
