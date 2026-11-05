@@ -245,11 +245,19 @@ impl AgentWorkspaceState {
     pub fn finish_turn(&mut self) {
         self.is_running = false;
         self.active_turn_id = None;
+        if let Some(active_sid) = &self.active_session_id
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
+                s.is_running = false;
+            }
     }
 
     pub fn fail_turn(&mut self, _err: String) {
         self.is_running = false;
         self.active_turn_id = None;
+        if let Some(active_sid) = &self.active_session_id
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
+                s.is_running = false;
+            }
     }
 
     pub fn submit_prompt(&mut self) -> Option<String> {
@@ -493,15 +501,28 @@ impl AgentWorkspaceState {
         self.is_running = true;
         self.scroll_offset = 0;
         self.auto_scroll = true;
+        if let Some(active_sid) = &self.active_session_id
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
+                s.is_running = true;
+            }
     }
 
     pub fn cancel_turn(&mut self) {
         self.is_running = false;
         self.active_turn_id = None;
+        if let Some(active_sid) = &self.active_session_id
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
+                s.is_running = false;
+            }
     }
 
     pub fn tick_spinner(&mut self) {
         self.spinner_tick = (self.spinner_tick + 1) % 10;
+    }
+
+    pub fn spinner_char(&self) -> &'static str {
+        const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        FRAMES[self.spinner_tick % FRAMES.len()]
     }
 
     pub fn check_and_update_tag_query(&mut self) {

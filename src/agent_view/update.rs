@@ -205,6 +205,7 @@ pub fn handle_agent_action(
                     agent.active_model = m.clone();
                 }
                 agent.active_session_id = Some(sid.clone());
+                agent.is_running = s.is_running;
                 if let Some(tx) = bridge_cmd_tx {
                     let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
                 }
@@ -214,44 +215,48 @@ pub fn handle_agent_action(
             }
         }
         Action::AgentNextTask => {
-            agent.next_session();
-            if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
-                let sid = s.id.clone();
-                if let Some(ref m) = s.model {
-                    agent.active_model = m.clone();
-                }
-                agent.active_session_id = Some(sid.clone());
-                if let Some(tx) = bridge_cmd_tx {
-                    let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
-                }
-                Some(format!("Selected task: {}", s.title))
-            } else {
-                None
+        agent.next_session();
+        if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
+            let sid = s.id.clone();
+            if let Some(ref m) = s.model {
+                agent.active_model = m.clone();
             }
-        }
-        Action::AgentPrevTask => {
-            agent.prev_session();
-            if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
-                let sid = s.id.clone();
-                if let Some(ref m) = s.model {
-                    agent.active_model = m.clone();
-                }
-                agent.active_session_id = Some(sid.clone());
-                if let Some(tx) = bridge_cmd_tx {
-                    let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
-                }
-                Some(format!("Selected task: {}", s.title))
-            } else {
-                None
-            }
-        }
-        Action::AgentCancelTurn => {
+            agent.active_session_id = Some(sid.clone());
+            agent.is_running = s.is_running;
             if let Some(tx) = bridge_cmd_tx {
-                let _ = tx.send(CoreBridgeCommand::CancelTurn);
+                let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
             }
-            agent.cancel_turn();
-            Some("Cancelling turn...".to_string())
+            Some(format!("Selected task: {}", s.title))
+        } else {
+            None
         }
+    }
+    Action::AgentPrevTask => {
+        agent.prev_session();
+        if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
+            let sid = s.id.clone();
+            if let Some(ref m) = s.model {
+                agent.active_model = m.clone();
+            }
+            agent.active_session_id = Some(sid.clone());
+            agent.is_running = s.is_running;
+            if let Some(tx) = bridge_cmd_tx {
+                let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
+            }
+            Some(format!("Selected task: {}", s.title))
+        } else {
+            None
+        }
+    }
+    Action::AgentCancelTurn => {
+        if let Some(tx) = bridge_cmd_tx {
+            let _ = tx.send(CoreBridgeCommand::CancelTurn {
+                session_id: agent.active_session_id.clone(),
+            });
+        }
+        agent.cancel_turn();
+        Some("Cancelling turn...".to_string())
+    }
         Action::AgentRetryTurn => {
             if let Some(tx) = bridge_cmd_tx {
                 let _ = tx.send(CoreBridgeCommand::RetryTurn);

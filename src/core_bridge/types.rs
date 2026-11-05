@@ -110,19 +110,33 @@ pub enum CoreBridgeEvent {
         session_id: String,
         messages: Vec<PersistedMessageDto>,
     },
-    StatusChange(String),
-    Delta(String),
-    ThoughtDelta(String),
+    StatusChange {
+        session_id: Option<String>,
+        status: String,
+    },
+    Delta {
+        session_id: String,
+        delta: String,
+    },
+    ThoughtDelta {
+        session_id: String,
+        thought: String,
+    },
     StepInfo {
+        session_id: String,
         iteration: usize,
         action: String,
         details: Option<String>,
     },
     ToolCall {
+        session_id: String,
         name: String,
         args: String,
     },
-    TurnCompleted(String),
+    TurnCompleted {
+        session_id: String,
+        summary: String,
+    },
     TurnCancelled {
         session_id: String,
     },
@@ -190,6 +204,8 @@ pub enum CoreBridgeCommand {
     LoadHistory {
         session_id: String,
     },
-    CancelTurn,
+    CancelTurn {
+        session_id: Option<String>,
+    },
     RetryTurn,
 }

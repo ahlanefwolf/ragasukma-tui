@@ -329,15 +329,14 @@ pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<
                     for ch in word.chars() {
                         let ch_span = Span::raw(ch.to_string());
                         let ch_w = ch_span.width();
-                        if chunk_width + ch_w > available_width {
-                            if !chunk.is_empty() {
+                        if chunk_width + ch_w > available_width
+                            && !chunk.is_empty() {
                                 result.push(Line::from(vec![Span::styled(
                                     std::mem::take(&mut chunk),
                                     span_style,
                                 )]));
                                 chunk_width = 0;
                             }
-                        }
                         chunk.push(ch);
                         chunk_width += ch_w;
                     }

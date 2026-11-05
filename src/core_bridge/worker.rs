@@ -26,13 +26,22 @@ pub fn spawn_session_subscriber(
                     if let Ok(event) = evt {
                         match event {
                             AgentSessionEvent::Delta { delta } => {
-                                let _ = sub_tx.send(CoreBridgeEvent::Delta(delta));
+                                let _ = sub_tx.send(CoreBridgeEvent::Delta {
+                                    session_id: cur.clone(),
+                                    delta,
+                                });
                             }
                             AgentSessionEvent::ThoughtDelta { delta } => {
-                                let _ = sub_tx.send(CoreBridgeEvent::ThoughtDelta(delta));
+                                let _ = sub_tx.send(CoreBridgeEvent::ThoughtDelta {
+                                    session_id: cur.clone(),
+                                    thought: delta,
+                                });
                             }
                             AgentSessionEvent::StatusChange { status } => {
-                                let _ = sub_tx.send(CoreBridgeEvent::StatusChange(status));
+                                let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
+                                    session_id: Some(cur.clone()),
+                                    status,
+                                });
                             }
                             AgentSessionEvent::StepInfo {
                                 iteration,
@@ -40,6 +49,7 @@ pub fn spawn_session_subscriber(
                                 details,
                             } => {
                                 let _ = sub_tx.send(CoreBridgeEvent::StepInfo {
+                                    session_id: cur.clone(),
                                     iteration,
                                     action,
                                     details,
@@ -47,7 +57,10 @@ pub fn spawn_session_subscriber(
                             }
                             AgentSessionEvent::Done { reply } => {
                                 tracing::info!("Turn completed successfully");
-                                let _ = sub_tx.send(CoreBridgeEvent::TurnCompleted(reply));
+                                let _ = sub_tx.send(CoreBridgeEvent::TurnCompleted {
+                                    session_id: cur.clone(),
+                                    summary: reply,
+                                });
                             }
                             AgentSessionEvent::Error { message } => {
                                 tracing::error!("Agent session error: {message}");
@@ -120,7 +133,7 @@ pub fn spawn_core_bridge_worker(
 
         while let Some(cmd) = cmd_rx.recv().await {
             match cmd {
-                CoreBridgeCommand::CancelTurn => {
+                CoreBridgeCommand::CancelTurn { session_id: _ } => {
                     if let Some(handle) = current_turn_handle.take() {
                         handle.abort();
                         let _ = worker_tx.send(CoreBridgeEvent::TurnCancelled {
@@ -131,6 +144,7 @@ pub fn spawn_core_bridge_worker(
                 CoreBridgeCommand::RetryTurn => {
                     if let Some((retry_prompt, model_override)) = last_turn_request.clone() {
                         let sid_exec = active_sid.clone();
+                        let sid_stream = sid_exec.clone();
                         let exec_tx = worker_tx.clone();
                         let last_prompt = retry_prompt;
 
@@ -140,16 +154,30 @@ pub fn spawn_core_bridge_worker(
                             while let Ok(evt) = session_sub.recv().await {
                                 match evt {
                                     ragasukma_core::agent::models::AgentSessionEvent::Delta { delta } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::Delta(delta));
+                                        let _ = stream_tx.send(CoreBridgeEvent::Delta {
+                                            session_id: sid_stream.clone(),
+                                            delta,
+                                        });
                                     }
                                     ragasukma_core::agent::models::AgentSessionEvent::ThoughtDelta { delta } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta(delta));
+                                        let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta {
+                                            session_id: sid_stream.clone(),
+                                            thought: delta,
+                                        });
                                     }
                                     ragasukma_core::agent::models::AgentSessionEvent::StatusChange { status } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::StatusChange(status));
+                                        let _ = stream_tx.send(CoreBridgeEvent::StatusChange {
+                                            session_id: Some(sid_stream.clone()),
+                                            status,
+                                        });
                                     }
                                     ragasukma_core::agent::models::AgentSessionEvent::StepInfo { iteration, action, details } => {
-                                        let _ = stream_tx.send(CoreBridgeEvent::StepInfo { iteration, action, details });
+                                        let _ = stream_tx.send(CoreBridgeEvent::StepInfo {
+                                            session_id: sid_stream.clone(),
+                                            iteration,
+                                            action,
+                                            details,
+                                        });
                                     }
                                     _ => {}
                                 }
@@ -181,7 +209,10 @@ pub fn spawn_core_bridge_worker(
                                         "success",
                                     )
                                     .await;
-                                    let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
+                                    let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted {
+                                        session_id: sid_exec.clone(),
+                                        summary: reply,
+                                    });
                                 }
                                 Err(e) => {
                                     tracing::error!("Retry turn error: {e:?}");
@@ -458,6 +489,7 @@ pub fn spawn_core_bridge_worker(
                     .await;
 
                     let sid_exec = current_turn_sid;
+                    let sid_stream = sid_exec.clone();
                     let exec_tx = worker_tx.clone();
 
                     last_turn_request = Some((prompt.clone(), model_override.clone()));
@@ -469,16 +501,30 @@ pub fn spawn_core_bridge_worker(
                         while let Ok(evt) = session_sub.recv().await {
                             match evt {
                                 ragasukma_core::agent::models::AgentSessionEvent::Delta { delta } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::Delta(delta));
+                                    let _ = stream_tx.send(CoreBridgeEvent::Delta {
+                                        session_id: sid_stream.clone(),
+                                        delta,
+                                    });
                                 }
                                 ragasukma_core::agent::models::AgentSessionEvent::ThoughtDelta { delta } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta(delta));
+                                    let _ = stream_tx.send(CoreBridgeEvent::ThoughtDelta {
+                                        session_id: sid_stream.clone(),
+                                        thought: delta,
+                                    });
                                 }
                                 ragasukma_core::agent::models::AgentSessionEvent::StatusChange { status } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::StatusChange(status));
+                                    let _ = stream_tx.send(CoreBridgeEvent::StatusChange {
+                                        session_id: Some(sid_stream.clone()),
+                                        status,
+                                    });
                                 }
                                 ragasukma_core::agent::models::AgentSessionEvent::StepInfo { iteration, action, details } => {
-                                    let _ = stream_tx.send(CoreBridgeEvent::StepInfo { iteration, action, details });
+                                    let _ = stream_tx.send(CoreBridgeEvent::StepInfo {
+                                        session_id: sid_stream.clone(),
+                                        iteration,
+                                        action,
+                                        details,
+                                    });
                                 }
                                 _ => {}
                             }
@@ -511,7 +557,10 @@ pub fn spawn_core_bridge_worker(
                                     "success",
                                 )
                                 .await;
-                                let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted(reply));
+                                let _ = exec_tx.send(CoreBridgeEvent::TurnCompleted {
+                                    session_id: sid_exec.clone(),
+                                    summary: reply,
+                                });
                             }
                             Err(e) => {
                                 tracing::error!("Execute session turn error: {e:?}");
@@ -609,10 +658,10 @@ pub fn spawn_core_bridge_worker(
                             });
                         } else if let Some(err) = err_msg {
                             tracing::warn!("Failed to fetch quota for account {} ({}): {}", acc_id, prov, err);
-                            let _ = quota_tx.send(CoreBridgeEvent::StatusChange(format!(
-                                "Gagal memuat kuota {}: {}",
-                                prov, err
-                            )));
+                            let _ = quota_tx.send(CoreBridgeEvent::StatusChange {
+                                session_id: None,
+                                status: format!("Gagal memuat kuota {}: {}", prov, err),
+                            });
                         }
                     });
                 }

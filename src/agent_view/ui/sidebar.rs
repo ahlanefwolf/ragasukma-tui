@@ -153,16 +153,25 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                         let is_cursor = idx == sel && is_tasks_focused;
                         let is_current = state.active_session_id.as_deref() == Some(&s.id);
                         let cursor_str = if is_cursor { "▶ " } else { "  " };
-                        let marker = if is_current { "● " } else { "○ " };
-                        let marker_color = if s.is_running {
-                            Theme::CYAN_ACCENT
+                        let (marker, marker_color) = if s.is_running {
+                            (format!("{} ", state.spinner_char()), Theme::CYAN_ACCENT)
                         } else if is_current {
-                            Theme::GOLD_PRIMARY
+                            ("● ".to_string(), Theme::GOLD_PRIMARY)
                         } else {
-                            Theme::TEXT_SECONDARY
+                            ("○ ".to_string(), Theme::TEXT_SECONDARY)
                         };
 
-                        let status_tag = if s.is_running { " [Running]" } else { "" };
+                        let (status_tag, status_style) = if s.is_running {
+                            (
+                                " [Running]",
+                                Style::default()
+                                    .fg(Theme::CYAN_ACCENT)
+                                    .add_modifier(Modifier::BOLD),
+                            )
+                        } else {
+                            (" [Idle]", Style::default().fg(Theme::TEXT_MUTED))
+                        };
+
                         let total_tokens = s.total_tokens_input + s.total_tokens_output;
                         let token_tag = if total_tokens > 0 {
                             format!(" ({} tokens)", total_tokens)
@@ -182,7 +191,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                             Span::styled(cursor_str, Style::default().fg(Theme::GOLD_PRIMARY)),
                             Span::styled(marker, Style::default().fg(marker_color)),
                             Span::styled(&s.title, style),
-                            Span::styled(status_tag, Style::default().fg(Theme::CYAN_ACCENT)),
+                            Span::styled(status_tag, status_style),
                             Span::styled(token_tag, Style::default().fg(Theme::TEXT_SECONDARY)),
                         ]))
                     })

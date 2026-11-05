@@ -8,85 +8,119 @@ impl App {
             CoreBridgeEvent::Connected { session_id, .. } => {
                 self.set_status(format!("Agent siap (session {})", session_id));
             }
-            CoreBridgeEvent::StatusChange(msg) => {
-                self.set_status(msg);
-            }
-            CoreBridgeEvent::Delta(delta) => {
-                self.agent.append_chunk(&delta);
-            }
-            CoreBridgeEvent::ThoughtDelta(thought) => {
-                self.agent.append_thought(&thought);
-            }
-            CoreBridgeEvent::StepInfo { action, details, .. } => {
-                let det_str = details.unwrap_or_default();
-                tracing::debug!("Agent step: action='{action}', details='{det_str}'");
-                self.set_status(format!("[Step] {} - {}", action, det_str));
-            }
-            CoreBridgeEvent::ToolCall { name, args } => {
-                tracing::info!("Tool call received: name='{name}', args='{args}'");
-                if let Some(last) = self.agent.messages.last_mut() {
-                    last.tool_calls.push(ToolCallInfo {
-                        id: format!("call_{}", last.tool_calls.len() + 1),
-                        name,
-                        args_summary: args,
-                        output_summary: None,
-                        status: ToolExecutionStatus::Success,
-                        duration_ms: None,
-                        stdout: None,
-                        stderr: None,
-                        exit_code: None,
-                        diff_preview: None,
-                    });
+            CoreBridgeEvent::StatusChange { session_id, status } => {
+                if session_id.as_ref() == self.agent.active_session_id.as_ref() || session_id.is_none() {
+                    self.set_status(status);
                 }
             }
-            CoreBridgeEvent::TurnCompleted(msg) => {
-                tracing::info!("Turn completed: {msg}");
-                if !msg.trim().is_empty() {
-                    let mut found = false;
-                    if let Some(last) = self
-                        .agent
-                        .messages
-                        .last_mut()
-                        .filter(|m| m.role == crate::agent_view::types::MessageRole::Assistant && m.content.is_empty())
-                    {
-                        last.content = msg.clone();
-                        found = true;
-                    }
-                    if !found {
-                        self.agent.messages.push(crate::agent_view::types::ChatMessage {
-                            role: crate::agent_view::types::MessageRole::Assistant,
-                            sender_name: "Agent".to_string(),
-                            content: msg,
-                            timestamp: "now".to_string(),
-                            tool_calls: Vec::new(),
-                            reasoning: None,
+            CoreBridgeEvent::Delta { session_id, delta } => {
+                if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    self.agent.append_chunk(&delta);
+                }
+            }
+            CoreBridgeEvent::ThoughtDelta { session_id, thought } => {
+                if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    self.agent.append_thought(&thought);
+                }
+            }
+            CoreBridgeEvent::StepInfo { session_id, action, details, .. } => {
+                let det_str = details.unwrap_or_default();
+                tracing::debug!("Agent step: session={session_id}, action='{action}', details='{det_str}'");
+                if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    self.set_status(format!("[Step] {} - {}", action, det_str));
+                }
+            }
+            CoreBridgeEvent::ToolCall { session_id, name, args } => {
+                tracing::info!("Tool call received: session={session_id}, name='{name}', args='{args}'");
+                if Some(&session_id) == self.agent.active_session_id.as_ref()
+                    && let Some(last) = self.agent.messages.last_mut() {
+                        last.tool_calls.push(ToolCallInfo {
+                            id: format!("call_{}", last.tool_calls.len() + 1),
+                            name,
+                            args_summary: args,
+                            output_summary: None,
+                            status: ToolExecutionStatus::Success,
+                            duration_ms: None,
+                            stdout: None,
+                            stderr: None,
+                            exit_code: None,
+                            diff_preview: None,
                         });
                     }
+            }
+            CoreBridgeEvent::TurnCompleted { session_id, summary: msg } => {
+                tracing::info!("Turn completed for {session_id}: {msg}");
+                let is_active = Some(&session_id) == self.agent.active_session_id.as_ref();
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
+                    s.is_running = false;
                 }
-                self.agent.finish_turn();
-                self.set_status("Turn completed".to_string());
-                if let (Some(sid), Some(tx)) = (self.agent.active_session_id.as_ref(), self.bridge_cmd_tx.as_ref()) {
-                    let _ = tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
-                        session_id: sid.clone(),
-                    });
+                if is_active {
+                    if !msg.trim().is_empty() {
+                        let mut found = false;
+                        if let Some(last) = self
+                            .agent
+                            .messages
+                            .last_mut()
+                            .filter(|m| m.role == crate::agent_view::types::MessageRole::Assistant && m.content.is_empty())
+                        {
+                            last.content = msg.clone();
+                            found = true;
+                        }
+                        if !found {
+                            self.agent.messages.push(crate::agent_view::types::ChatMessage {
+                                role: crate::agent_view::types::MessageRole::Assistant,
+                                sender_name: "Agent".to_string(),
+                                content: msg,
+                                timestamp: "now".to_string(),
+                                tool_calls: Vec::new(),
+                                reasoning: None,
+                            });
+                        }
+                    }
+                    self.agent.finish_turn();
+                    self.set_status("Turn completed".to_string());
+                    if let Some(tx) = self.bridge_cmd_tx.as_ref() {
+                        let _ = tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
+                            session_id,
+                        });
+                    }
+                } else {
+                    let s_title = self
+                        .agent
+                        .sessions
+                        .iter()
+                        .find(|s| s.id == session_id)
+                        .map(|s| s.title.clone())
+                        .unwrap_or_else(|| "Task".to_string());
+                    self.set_status(format!("Task in '{}' completed", s_title));
                 }
             }
             CoreBridgeEvent::TurnCancelled { session_id } => {
                 tracing::warn!("Turn cancelled for session: {session_id}");
-                self.agent.cancel_turn();
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
+                    s.is_running = false;
+                }
+                if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    self.agent.cancel_turn();
+                }
                 self.set_status(format!("Turn cancelled for session: {}", session_id));
             }
             CoreBridgeEvent::TurnFailed { error, session_id } => {
                 tracing::error!("Turn failed for session {session_id}: {error}");
-                self.agent.messages.push(crate::agent_view::types::ChatMessage {
-                    role: crate::agent_view::types::MessageRole::Assistant,
-                    sender_name: "System Error".to_string(),
-                    content: format!("⚠️ Error: {}", error),
-                    timestamp: "now".to_string(),
-                    tool_calls: Vec::new(),
-                    reasoning: None,
-                });
-                self.agent.fail_turn(error.clone());
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
+                    s.is_running = false;
+                }
+                if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    self.agent.messages.push(crate::agent_view::types::ChatMessage {
+                        role: crate::agent_view::types::MessageRole::Assistant,
+                        sender_name: "System Error".to_string(),
+                        content: format!("⚠️ Error: {}", error),
+                        timestamp: "now".to_string(),
+                        tool_calls: Vec::new(),
+                        reasoning: None,
+                    });
+                    self.agent.fail_turn(error.clone());
+                }
                 self.set_status(format!("Turn failed: {}", error));
             }
             CoreBridgeEvent::QuotaUpdated {
