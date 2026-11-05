@@ -37,12 +37,21 @@ impl FormField {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CustomLlmFocus {
+    #[default]
+    Providers,
+    Models,
+}
+
 #[derive(Debug, Clone)]
 pub struct CustomLlmTabState {
     pub accounts: Vec<CustomLlmAccount>,
     pub selected_idx: usize,
     pub models: Vec<(String, String)>,
     pub is_fetching_models: bool,
+    pub focus: CustomLlmFocus,
+    pub selected_model_idx: usize,
 
     // Modal Form State (Add / Edit)
     pub is_form_open: bool,

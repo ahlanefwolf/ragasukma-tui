@@ -47,6 +47,8 @@ impl CustomLlmTabState {
             selected_idx: 0,
             models,
             is_fetching_models: false,
+            focus: super::types::CustomLlmFocus::Providers,
+            selected_model_idx: 0,
             is_form_open: false,
             editing_prefix: None,
             form_prefix: String::new(),
@@ -65,18 +67,60 @@ impl CustomLlmTabState {
         self.accounts.get(self.selected_idx)
     }
 
+    pub fn toggle_focus(&mut self) {
+        self.focus = match self.focus {
+            super::types::CustomLlmFocus::Providers => super::types::CustomLlmFocus::Models,
+            super::types::CustomLlmFocus::Models => super::types::CustomLlmFocus::Providers,
+        };
+    }
+
+    #[must_use]
+    pub fn current_models_count(&self) -> usize {
+        if let Some(acc) = self.selected_account() {
+            self.models_for_prefix(&acc.prefix).len()
+        } else {
+            self.models.len()
+        }
+    }
+
     pub fn select_next(&mut self) {
-        if !self.accounts.is_empty() {
-            self.selected_idx = (self.selected_idx + 1) % self.accounts.len();
+        match self.focus {
+            super::types::CustomLlmFocus::Providers => {
+                if !self.accounts.is_empty() {
+                    self.selected_idx = (self.selected_idx + 1) % self.accounts.len();
+                    self.selected_model_idx = 0;
+                }
+            }
+            super::types::CustomLlmFocus::Models => {
+                let count = self.current_models_count();
+                if count > 0 {
+                    self.selected_model_idx = (self.selected_model_idx + 1) % count;
+                }
+            }
         }
     }
 
     pub fn select_prev(&mut self) {
-        if !self.accounts.is_empty() {
-            if self.selected_idx == 0 {
-                self.selected_idx = self.accounts.len() - 1;
-            } else {
-                self.selected_idx -= 1;
+        match self.focus {
+            super::types::CustomLlmFocus::Providers => {
+                if !self.accounts.is_empty() {
+                    if self.selected_idx == 0 {
+                        self.selected_idx = self.accounts.len().saturating_sub(1);
+                    } else {
+                        self.selected_idx = self.selected_idx.saturating_sub(1);
+                    }
+                    self.selected_model_idx = 0;
+                }
+            }
+            super::types::CustomLlmFocus::Models => {
+                let count = self.current_models_count();
+                if count > 0 {
+                    if self.selected_model_idx == 0 {
+                        self.selected_model_idx = count.saturating_sub(1);
+                    } else {
+                        self.selected_model_idx = self.selected_model_idx.saturating_sub(1);
+                    }
+                }
             }
         }
     }
@@ -121,7 +165,9 @@ impl CustomLlmTabState {
     }
 
     pub fn refresh_models(&mut self) {
-        let fetched = ragasukma_core::llm::providers::custom::fetch_models();
+        let fetched = std::thread::spawn(ragasukma_core::llm::providers::custom::fetch_models)
+            .join()
+            .unwrap_or_default();
         if !fetched.is_empty() {
             self.models = fetched;
         }
@@ -262,6 +308,14 @@ impl CustomLlmTabState {
 
     #[must_use]
     pub fn models_for_prefix(&self, prefix: &str) -> Vec<&(String, String)> {
-        self.models.iter().filter(|(_, p)| p == prefix).collect()
+        let p_clean = prefix.trim();
+        self.models
+            .iter()
+            .filter(|(m_id, p)| {
+                p.eq_ignore_ascii_case(p_clean)
+                    || m_id.starts_with(&format!("{p_clean}/"))
+                    || m_id.eq_ignore_ascii_case(p_clean)
+            })
+            .collect()
     }
 }

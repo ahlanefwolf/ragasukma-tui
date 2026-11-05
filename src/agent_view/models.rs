@@ -61,6 +61,14 @@ fn fetch_models_internal() -> Vec<String> {
         }
     }
 
+    // 4. Custom LLM models
+    let custom_models = ragasukma_core::llm::providers::custom::fetch_models();
+    for (model_id, _) in custom_models {
+        if !collected.contains(&model_id) {
+            collected.push(model_id);
+        }
+    }
+
     if collected.is_empty() {
         get_default_models()
     } else {

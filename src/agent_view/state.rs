@@ -320,7 +320,7 @@ impl AgentWorkspaceState {
             self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_sub(1);
         } else {
             let max = self.chat_max_scroll.get();
-            self.scroll_offset = (self.scroll_offset.saturating_add(3)).min(max);
+            self.scroll_offset = (self.scroll_offset.saturating_add(2)).min(max);
             self.auto_scroll = false;
         }
     }
@@ -331,7 +331,7 @@ impl AgentWorkspaceState {
         } else {
             let max = self.chat_max_scroll.get();
             let current = self.scroll_offset.min(max);
-            self.scroll_offset = current.saturating_sub(3);
+            self.scroll_offset = current.saturating_sub(2);
             if self.scroll_offset == 0 {
                 self.auto_scroll = true;
             }
@@ -758,8 +758,9 @@ impl AgentWorkspaceState {
     pub fn add_workspace_folder(&mut self, path: PathBuf) -> Result<(), String> {
         let expanded = match path.strip_prefix("~") {
             Ok(rest) => {
-                if let Some(home) = std::env::var_os("HOME") {
-                    PathBuf::from(home).join(rest)
+                let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+                if let Some(home_path) = home {
+                    PathBuf::from(home_path).join(rest)
                 } else {
                     path.clone()
                 }
@@ -985,7 +986,7 @@ fn collect_recursive_tag_items(
             .strip_prefix(root)
             .unwrap_or(&path)
             .to_string_lossy()
-            .to_string();
+            .replace('\\', "/");
         let clean_path = if is_multi_root {
             format!("{}/{}/", root_name, rel_path)
         } else {
@@ -1006,7 +1007,7 @@ fn collect_recursive_tag_items(
             .strip_prefix(root)
             .unwrap_or(&path)
             .to_string_lossy()
-            .to_string();
+            .replace('\\', "/");
         let clean_path = if is_multi_root {
             format!("{}/{}", root_name, rel_path)
         } else {

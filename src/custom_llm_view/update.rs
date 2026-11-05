@@ -30,7 +30,7 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
                 }
                 Err(err) => {
                     tracing::warn!("Custom LLM form submit error: {err}");
-                    Some(Some(format!("Gagal: {err}")))
+                    Some(Some(format!("Failed: {err}")))
                 }
             }
         }
@@ -53,6 +53,34 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
             } else {
                 Some(None)
             }
+        }
+        Action::CustomLlmDelete => {
+            if state.open_delete_confirm() {
+                Some(Some("Konfirmasi hapus endpoint?".to_string()))
+            } else {
+                Some(None)
+            }
+        }
+        Action::CustomLlmConfirmDelete => {
+            let msg = state.confirm_delete();
+            Some(msg)
+        }
+        Action::CustomLlmCancelDelete => {
+            state.cancel_delete();
+            Some(Some("Penghapusan dibatalkan".to_string()))
+        }
+        Action::CustomLlmRefresh => {
+            state.refresh_models();
+            let count = state.models.len();
+            Some(Some(format!("Daftar model diperbarui ({count} model)")))
+        }
+        Action::CustomLlmToggleFocus => {
+            state.toggle_focus();
+            let msg = match state.focus {
+                super::types::CustomLlmFocus::Providers => "Fokus: List Provider (Tekan Tab untuk ganti)",
+                super::types::CustomLlmFocus::Models => "Fokus: List Models (Tekan Tab untuk ganti)",
+            };
+            Some(Some(msg.to_string()))
         }
         _ => None,
     }

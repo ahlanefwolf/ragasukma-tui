@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use crossterm::event::{Event as CrosstermEvent, EventStream, KeyEvent, MouseEvent};
+use crossterm::event::{Event as CrosstermEvent, EventStream, KeyEvent, KeyEventKind, MouseEvent};
 use futures_util::StreamExt;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -48,7 +48,12 @@ impl EventHandler {
                         match maybe_event {
                             Some(Ok(event)) => {
                                 let app_event = match event {
-                                    CrosstermEvent::Key(key) => AppEvent::Key(key),
+                                    CrosstermEvent::Key(key) => {
+                                        if key.kind == KeyEventKind::Release {
+                                            continue;
+                                        }
+                                        AppEvent::Key(key)
+                                    }
                                     CrosstermEvent::Mouse(mouse) => AppEvent::Mouse(mouse),
                                     CrosstermEvent::Resize(w, h) => AppEvent::Resize(w, h),
                                     _ => continue,

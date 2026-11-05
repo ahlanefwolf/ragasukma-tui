@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 
 use super::state::App;
 use super::types::Action;
@@ -15,6 +15,10 @@ impl App {
     }
 
     pub fn handle_key_event(&self, key: KeyEvent) -> Option<Action> {
+        if key.kind == KeyEventKind::Release {
+            return None;
+        }
+
         let code = key.code;
 
         // 1. Modals have exclusive input handling

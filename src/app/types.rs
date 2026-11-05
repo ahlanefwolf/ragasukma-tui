@@ -168,6 +168,11 @@ pub enum Action {
     CustomLlmAdd,
     CustomLlmEdit,
     CustomLlmToggle,
+    CustomLlmDelete,
+    CustomLlmConfirmDelete,
+    CustomLlmCancelDelete,
+    CustomLlmRefresh,
+    CustomLlmToggleFocus,
 
     ShowDiffPreview {
         file_path: String,

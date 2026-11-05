@@ -11,7 +11,7 @@ impl Theme {
     pub const BG_CANVAS: Color = Color::Rgb(15, 18, 24); // #0f1218 --gi-bg-canvas
     pub const BG_SURFACE: Color = Color::Rgb(24, 29, 38); // #181d26 --gi-bg-surface
     pub const BG_SURFACE_ELEVATED: Color = Color::Rgb(34, 41, 54); // #222936 --gi-bg-surface-elevated
-    pub const BORDER_SUBTLE: Color = Color::Rgb(112, 95, 65); // Warm neutral muted gold/bronze (inactive border)
+    pub const BORDER_SUBTLE: Color = Color::White; // White border for inactive / unfocused cards
     pub const BORDER_GOLD: Color = Color::Rgb(190, 155, 85); // Brighter active gold border
 
     // -------------------------------------------------------------

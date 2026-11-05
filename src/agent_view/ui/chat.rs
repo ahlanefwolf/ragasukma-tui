@@ -90,6 +90,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let p = Paragraph::new(chat_lines)
         .wrap(Wrap { trim: false })
         .scroll((effective_scroll as u16, 0));
+    frame.render_widget(chat_block, chunks[0]);
     frame.render_widget(p, chat_inner);
 
     if max_scroll > 0 && scrollbar_area.width > 0 {

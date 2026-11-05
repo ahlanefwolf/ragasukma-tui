@@ -6,22 +6,20 @@ use ratatui::{
     Frame,
 };
 
-use crate::custom_llm_view::types::{CustomLlmTabState, FormField};
+use crate::custom_llm_view::types::{CustomLlmFocus, CustomLlmTabState, FormField};
 use crate::theme::Theme;
 
 pub fn render_custom_llm_tab(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let chunks = Layout::default()
-        .direction(Direction::Vertical)
+        .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(4),
-            Constraint::Min(8),
-            Constraint::Length(10),
+            Constraint::Percentage(52),
+            Constraint::Percentage(48),
         ])
         .split(area);
 
-    render_header_banner(frame, chunks[0]);
-    render_accounts_table(frame, chunks[1], state);
-    render_bottom_panes(frame, chunks[2], state);
+    render_providers_card(frame, chunks[0], state);
+    render_models_card(frame, chunks[1], state);
 
     if state.is_form_open {
         render_form_modal(frame, area, state);
@@ -32,47 +30,31 @@ pub fn render_custom_llm_tab(frame: &mut Frame, area: Rect, state: &CustomLlmTab
     }
 }
 
-fn render_header_banner(frame: &mut Frame, area: Rect) {
-    let title = Line::from(vec![
-        Span::styled(" 🌐 CUSTOM LLM & OPENAI-COMPATIBLE ENDPOINTS ", Theme::header_title()),
-        Span::raw(" "),
-        Span::styled(
-            "[Groq, DeepSeek, Together, Ollama, vLLM, LMStudio, OpenRouter]",
-            Theme::text_secondary(),
-        ),
-    ]);
+fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
+    let is_focused = state.focus == CustomLlmFocus::Providers;
 
-    let shortcuts = Line::from(vec![
-        Span::styled(" [a] ", Theme::key_badge()),
-        Span::styled("Add Endpoint   ", Theme::text_gold()),
-        Span::styled(" [e] ", Theme::key_badge()),
-        Span::styled("Edit   ", Theme::text_gold()),
-        Span::styled(" [Space/t] ", Theme::key_badge()),
-        Span::styled("Toggle Active   ", Theme::text_gold()),
-        Span::styled(" [d] ", Theme::key_badge()),
-        Span::styled("Delete   ", Theme::status_danger()),
-        Span::styled(" [r] ", Theme::key_badge()),
-        Span::styled("Fetch Models", Theme::status_info()),
-    ]);
+    let title_spans = if is_focused {
+        vec![
+            Span::styled(format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()), Theme::badge_gold()),
+            Span::styled(" [● Active Card - Tab to switch] ", Theme::text_gold().add_modifier(Modifier::BOLD)),
+        ]
+    } else {
+        vec![
+            Span::styled(format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()), Theme::badge_gray()),
+            Span::styled(" [Tab to focus] ", Theme::text_secondary()),
+        ]
+    };
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Theme::border_gold())
-        .title(title);
+    let border_style = if is_focused {
+        Theme::border_focused()
+    } else {
+        Theme::border_subtle()
+    };
 
-    let paragraph = Paragraph::new(vec![Line::from(""), shortcuts])
-        .block(block)
-        .alignment(Alignment::Center);
-
-    frame.render_widget(paragraph, area);
-}
-
-fn render_accounts_table(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let header_cells = [
-        "Prefix / ID",
+        "Prefix",
         "Provider Name",
         "Base URL Endpoint",
-        "API Key",
         "Status",
     ]
     .iter()
@@ -89,7 +71,7 @@ fn render_accounts_table(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
             let prefix_cell = Cell::from(Span::styled(
                 format!(" /{}", acc.prefix),
                 if is_selected {
-                    Theme::header_title().add_modifier(Modifier::BOLD)
+                    Theme::text_cyan().add_modifier(Modifier::BOLD)
                 } else {
                     Theme::text_secondary()
                 },
@@ -106,35 +88,23 @@ fn render_accounts_table(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
 
             let url_cell = Cell::from(Span::styled(acc.base_url.clone(), Theme::text_secondary()));
 
-            let masked_key = if acc.api_key.is_empty() {
-                Span::styled("(none / local)", Theme::text_secondary())
-            } else if acc.api_key.len() > 8 {
-                let start = &acc.api_key[..4];
-                let end = &acc.api_key[acc.api_key.len() - 3..];
-                Span::styled(format!("{start}••••{end}"), Theme::text_secondary())
-            } else {
-                Span::styled("••••••••", Theme::text_secondary())
-            };
-            let key_cell = Cell::from(masked_key);
-
             let status_span = if acc.enabled {
-                Span::styled(" ● ENABLED ", Theme::status_success().add_modifier(Modifier::BOLD))
+                Span::styled("● ON", Theme::text_gold().add_modifier(Modifier::BOLD))
             } else {
-                Span::styled(" ○ DISABLED ", Theme::text_secondary())
+                Span::styled("○ OFF", Theme::text_secondary())
             };
             let status_cell = Cell::from(status_span);
 
             let row_style = if is_selected {
-                Theme::badge_gold().add_modifier(Modifier::BOLD)
+                ratatui::style::Style::default().bg(Theme::BG_SURFACE_ELEVATED)
             } else {
-                Theme::card_base()
+                ratatui::style::Style::default()
             };
 
             Row::new(vec![
                 prefix_cell,
                 name_cell,
                 url_cell,
-                key_cell,
                 status_cell,
             ])
             .style(row_style)
@@ -143,130 +113,127 @@ fn render_accounts_table(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
         .collect();
 
     let widths = [
+        Constraint::Length(12),
         Constraint::Length(16),
-        Constraint::Percentage(25),
-        Constraint::Percentage(35),
-        Constraint::Length(18),
-        Constraint::Length(16),
+        Constraint::Min(16),
+        Constraint::Length(8),
     ];
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(Line::from(title_spans))
+        .style(Theme::block_base());
 
     let table = Table::new(rows, widths)
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(if state.is_form_open {
-                    Theme::border_subtle()
-                } else {
-                    Theme::border_gold()
-                })
-                .title(Span::styled(
-                    format!(" Configured Providers ({}) ", state.accounts.len()),
-                    Theme::header_title(),
-                )),
-        );
+        .block(block);
 
     frame.render_widget(table, area);
 }
 
-fn render_bottom_panes(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(area);
+fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
+    let is_focused = state.focus == CustomLlmFocus::Models;
 
     let selected_acc = state.selected_account();
+    let prefix_models = selected_acc
+        .map(|acc| state.models_for_prefix(&acc.prefix))
+        .unwrap_or_default();
 
-    let details_text = if let Some(acc) = selected_acc {
+    let title_prefix = selected_acc
+        .map(|a| format!(" 📦 Models for /{prefix} ({count}) ", prefix = a.prefix, count = prefix_models.len()))
+        .unwrap_or_else(|| " 📦 Models Catalog ".to_string());
+
+    let title_spans = if is_focused {
         vec![
-            Line::from(vec![
-                Span::styled("Name:         ", Theme::text_secondary()),
-                Span::styled(&acc.name, Theme::text_gold().add_modifier(Modifier::BOLD)),
-            ]),
-            Line::from(vec![
-                Span::styled("Model Prefix: ", Theme::text_secondary()),
-                Span::styled(
-                    format!("{}/<model_name>", acc.prefix),
-                    Theme::status_info().add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(vec![
-                Span::styled("Endpoint:     ", Theme::text_secondary()),
-                Span::styled(&acc.base_url, Theme::text_primary()),
-            ]),
-            Line::from(vec![
-                Span::styled("Status:       ", Theme::text_secondary()),
-                if acc.enabled {
-                    Span::styled("Active & Available for Agent routing", Theme::status_success())
-                } else {
-                    Span::styled("Inactive (Toggle with [Space])", Theme::text_secondary())
-                },
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("Usage Example: ", Theme::header_title()),
-                Span::styled(
-                    format!("ragasukma run --model {}/llama-3.3-70b-versatile", acc.prefix),
-                    Theme::key_badge(),
-                ),
-            ]),
+            Span::styled(title_prefix, Theme::badge_gold()),
+            Span::styled(" [● Active Card - Tab to switch] ", Theme::text_gold().add_modifier(Modifier::BOLD)),
         ]
     } else {
-        vec![Line::from(Span::styled(
-            "No custom provider selected. Press 'a' to add a new one.",
-            Theme::text_secondary(),
-        ))]
+        vec![
+            Span::styled(title_prefix, Theme::badge_gray()),
+            Span::styled(" [Tab to focus] ", Theme::text_secondary()),
+        ]
     };
 
-    let details_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Theme::border_gold())
-        .title(Span::styled(" Selected Provider Configuration ", Theme::header_title()));
-
-    let details_para = Paragraph::new(details_text)
-        .block(details_block)
-        .wrap(Wrap { trim: true });
-    frame.render_widget(details_para, chunks[0]);
-
-    let models_text = if let Some(acc) = selected_acc {
-        let prefix_models = state.models_for_prefix(&acc.prefix);
-        if prefix_models.is_empty() {
-            vec![
-                Line::from(Span::styled(
-                    "No cached models found for this prefix.",
-                    Theme::text_secondary(),
-                )),
-                Line::from(""),
-                Line::from(Span::styled(
-                    "Press [r] to fetch/probe remote models via /models endpoint",
-                    Theme::status_info(),
-                )),
-            ]
-        } else {
-            prefix_models
-                .iter()
-                .map(|(m, _)| {
-                    Line::from(vec![
-                        Span::styled(" ✔ ", Theme::status_success()),
-                        Span::styled(m, Theme::text_primary()),
-                    ])
-                })
-                .collect()
-        }
+    let border_style = if is_focused {
+        Theme::border_focused()
     } else {
-        vec![Line::from(Span::styled(
-            "Select a provider to inspect its registered models",
-            Theme::text_secondary(),
-        ))]
+        Theme::border_subtle()
     };
 
-    let models_block = Block::default()
+    let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Theme::border_subtle())
-        .title(Span::styled(" Registered Model Catalog ", Theme::header_title()));
+        .border_style(border_style)
+        .title(Line::from(title_spans))
+        .style(Theme::block_base());
 
-    let models_para = Paragraph::new(models_text).block(models_block);
-    frame.render_widget(models_para, chunks[1]);
+    let inner_area = block.inner(area);
+    frame.render_widget(block, area);
+
+    if selected_acc.is_none() {
+        let para = Paragraph::new(vec![
+            Line::from(""),
+            Line::from(Span::styled("  No custom provider selected.", Theme::text_secondary())),
+            Line::from(Span::styled("  Press [a] to add a custom endpoint.", Theme::text_secondary())),
+        ]);
+        frame.render_widget(para, inner_area);
+        return;
+    }
+
+    if prefix_models.is_empty() {
+        let para = Paragraph::new(vec![
+            Line::from(""),
+            Line::from(Span::styled("  No cached models found for this provider prefix.", Theme::text_secondary())),
+            Line::from(""),
+            Line::from(Span::styled("  Press [r] to fetch remote models from /models endpoint.", Theme::text_cyan())),
+        ]);
+        frame.render_widget(para, inner_area);
+        return;
+    }
+
+    let visible_height = inner_area.height as usize;
+    let total_models = prefix_models.len();
+    let selected_model = state.selected_model_idx.min(total_models.saturating_sub(1));
+
+    let scroll_offset = if total_models <= visible_height {
+        0
+    } else if selected_model >= visible_height {
+        selected_model + 1 - visible_height
+    } else {
+        0
+    };
+
+    let lines: Vec<Line> = prefix_models
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(visible_height)
+        .map(|(idx, (model_id, _))| {
+            let is_selected = idx == selected_model;
+            if is_selected && is_focused {
+                Line::from(vec![
+                    Span::styled(" ▶ ", Theme::text_gold().add_modifier(Modifier::BOLD)),
+                    Span::styled(model_id.clone(), Theme::text_gold().add_modifier(Modifier::BOLD)),
+                ])
+                .style(ratatui::style::Style::default().bg(Theme::BG_SURFACE_ELEVATED))
+            } else if is_selected {
+                Line::from(vec![
+                    Span::styled(" ▷ ", Theme::text_cyan()),
+                    Span::styled(model_id.clone(), Theme::text_primary()),
+                ])
+                .style(ratatui::style::Style::default().bg(Theme::BG_SURFACE_ELEVATED))
+            } else {
+                Line::from(vec![
+                    Span::styled("   ", Theme::text_secondary()),
+                    Span::styled(model_id.clone(), Theme::text_secondary()),
+                ])
+            }
+        })
+        .collect();
+
+    let para = Paragraph::new(lines);
+    frame.render_widget(para, inner_area);
 }
 
 fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
@@ -282,8 +249,9 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
 
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Theme::border_gold())
-        .title(Span::styled(title, Theme::header_title().add_modifier(Modifier::BOLD)));
+        .border_style(Theme::border_focused())
+        .title(Span::styled(title, Theme::badge_gold().add_modifier(Modifier::BOLD)))
+        .style(Theme::block_base());
     frame.render_widget(outer_block, popup_area);
 
     let inner = Layout::default()
@@ -300,49 +268,119 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         ])
         .split(popup_area);
 
+    let prefix_focused = state.focused_field == FormField::Prefix;
     let prefix_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(field_label_style(state.focused_field == FormField::Prefix))
-        .title(" Model Prefix (lowercase, e.g. groq, vllm) ");
-    let prefix_para = Paragraph::new(state.form_prefix.as_str()).block(prefix_block);
+        .border_style(field_label_style(prefix_focused))
+        .title(Span::styled(
+            " Model Prefix (lowercase, e.g. groq, vllm) ",
+            if prefix_focused {
+                Theme::badge_gold()
+            } else {
+                Theme::text_secondary()
+            },
+        ))
+        .style(Theme::block_base());
+    let prefix_para = Paragraph::new(Span::styled(
+        state.form_prefix.as_str(),
+        if prefix_focused {
+            Theme::text_gold()
+        } else {
+            Theme::text_primary()
+        },
+    ))
+    .block(prefix_block);
     frame.render_widget(prefix_para, inner[0]);
 
+    let name_focused = state.focused_field == FormField::Name;
     let name_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(field_label_style(state.focused_field == FormField::Name))
-        .title(" Display Name (e.g. Groq Cloud LPU) ");
-    let name_para = Paragraph::new(state.form_name.as_str()).block(name_block);
+        .border_style(field_label_style(name_focused))
+        .title(Span::styled(
+            " Display Name (e.g. Groq Cloud LPU) ",
+            if name_focused {
+                Theme::badge_gold()
+            } else {
+                Theme::text_secondary()
+            },
+        ))
+        .style(Theme::block_base());
+    let name_para = Paragraph::new(Span::styled(
+        state.form_name.as_str(),
+        if name_focused {
+            Theme::text_gold()
+        } else {
+            Theme::text_primary()
+        },
+    ))
+    .block(name_block);
     frame.render_widget(name_para, inner[1]);
 
+    let url_focused = state.focused_field == FormField::BaseUrl;
     let url_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(field_label_style(state.focused_field == FormField::BaseUrl))
-        .title(" OpenAI Base URL (e.g. https://api.groq.com/openai/v1) ");
-    let url_para = Paragraph::new(state.form_base_url.as_str()).block(url_block);
+        .border_style(field_label_style(url_focused))
+        .title(Span::styled(
+            " OpenAI Base URL (e.g. https://api.groq.com/openai/v1) ",
+            if url_focused {
+                Theme::badge_gold()
+            } else {
+                Theme::text_secondary()
+            },
+        ))
+        .style(Theme::block_base());
+    let url_para = Paragraph::new(Span::styled(
+        state.form_base_url.as_str(),
+        if url_focused {
+            Theme::text_gold()
+        } else {
+            Theme::text_primary()
+        },
+    ))
+    .block(url_block);
     frame.render_widget(url_para, inner[2]);
 
+    let key_focused = state.focused_field == FormField::ApiKey;
     let key_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(field_label_style(state.focused_field == FormField::ApiKey))
-        .title(" API Key (leave empty for local Ollama) ");
-    let masked_input: String = if state.focused_field == FormField::ApiKey {
+        .border_style(field_label_style(key_focused))
+        .title(Span::styled(
+            " API Key (leave empty for local Ollama) ",
+            if key_focused {
+                Theme::badge_gold()
+            } else {
+                Theme::text_secondary()
+            },
+        ))
+        .style(Theme::block_base());
+    let masked_input: String = if key_focused {
         state.form_api_key.clone()
     } else {
         "•".repeat(state.form_api_key.len())
     };
-    let key_para = Paragraph::new(masked_input).block(key_block);
+    let key_para = Paragraph::new(Span::styled(
+        masked_input,
+        if key_focused {
+            Theme::text_gold()
+        } else {
+            Theme::text_primary()
+        },
+    ))
+    .block(key_block);
     frame.render_widget(key_para, inner[3]);
 
     let enabled_text = if state.form_enabled {
-        "[X] Provider Enabled for auto-routing"
+        " [✔] Provider Enabled for auto-routing "
     } else {
-        "[ ] Provider Disabled"
+        " [ ] Provider Disabled "
     };
     let enabled_para = Paragraph::new(Line::from(vec![
         Span::styled(
             enabled_text,
             if state.focused_field == FormField::Enabled {
-                Theme::header_title().add_modifier(Modifier::BOLD)
+                Theme::badge_gold().add_modifier(Modifier::BOLD)
+            } else if state.form_enabled {
+                Theme::text_gold()
             } else {
                 Theme::text_secondary()
             },
@@ -354,8 +392,8 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
 
     if let Some(err) = &state.form_error {
         let err_para = Paragraph::new(Line::from(vec![
-            Span::styled(" ⚠ ", Theme::status_danger()),
-            Span::styled(err, Theme::status_danger()),
+            Span::styled(" ⚠ ", Theme::text_gold()),
+            Span::styled(err, Theme::text_gold()),
         ]));
         frame.render_widget(err_para, inner[5]);
     }
@@ -363,12 +401,12 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let save_style = if state.focused_field == FormField::SaveBtn {
         Theme::badge_gold().add_modifier(Modifier::BOLD)
     } else {
-        Theme::header_title()
+        Theme::key_badge()
     };
     let cancel_style = if state.focused_field == FormField::CancelBtn {
         Theme::badge_gold().add_modifier(Modifier::BOLD)
     } else {
-        Theme::text_secondary()
+        Theme::key_badge()
     };
 
     let btns = Line::from(vec![
@@ -387,23 +425,24 @@ fn render_delete_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
     let prefix = state.delete_confirm_prefix.as_deref().unwrap_or("unknown");
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Theme::status_danger())
-        .title(Span::styled(" ⚠ Confirm Deletion ", Theme::status_danger()));
+        .border_style(Theme::text_gold())
+        .title(Span::styled(" ⚠ Confirm Deletion ", Theme::text_gold().add_modifier(Modifier::BOLD)))
+        .style(Theme::block_base());
     frame.render_widget(outer_block, popup_area);
 
     let text = vec![
         Line::from(""),
         Line::from(vec![
             Span::styled("Are you sure you want to delete custom provider '", Theme::text_primary()),
-            Span::styled(prefix, Theme::status_danger().add_modifier(Modifier::BOLD)),
+            Span::styled(prefix, Theme::text_gold().add_modifier(Modifier::BOLD)),
             Span::styled("'?", Theme::text_primary()),
         ]),
         Line::from("This will remove stored API credentials for this endpoint."),
         Line::from(""),
         Line::from(vec![
-            Span::styled(" [y / Enter] Confirm Delete ", Theme::status_danger().add_modifier(Modifier::BOLD)),
+            Span::styled(" [y / Enter] Confirm Delete ", Theme::text_gold().add_modifier(Modifier::BOLD)),
             Span::raw("    "),
-            Span::styled(" [n / Esc] Cancel ", Theme::text_primary()),
+            Span::styled(" [n / Esc] Cancel ", Theme::key_badge()),
         ]),
     ];
 
@@ -423,7 +462,7 @@ fn render_delete_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
 
 fn field_label_style(is_focused: bool) -> ratatui::style::Style {
     if is_focused {
-        Theme::border_gold()
+        Theme::border_focused()
     } else {
         Theme::border_subtle()
     }
@@ -441,16 +480,20 @@ pub fn get_footer_key_hints(state: &CustomLlmTabState) -> Vec<Span<'static>> {
         ]
     } else {
         vec![
+            Span::styled(" [Tab] ", Theme::key_badge()),
+            Span::raw("Switch Focus "),
             Span::styled(" [j/k] ", Theme::key_badge()),
             Span::raw("Select "),
             Span::styled(" [a] ", Theme::key_badge()),
-            Span::raw("Add Model "),
+            Span::raw("Add Provider "),
             Span::styled(" [e] ", Theme::key_badge()),
             Span::raw("Edit "),
+            Span::styled(" [Space] ", Theme::key_badge()),
+            Span::raw("Toggle "),
             Span::styled(" [d] ", Theme::key_badge()),
             Span::raw("Delete "),
-            Span::styled(" [Space] ", Theme::key_badge()),
-            Span::raw("Toggle Active "),
+            Span::styled(" [r] ", Theme::key_badge()),
+            Span::raw("Fetch Models "),
             Span::styled(" [1-5] ", Theme::key_badge()),
             Span::raw("Tabs "),
             Span::styled(" [?] ", Theme::key_badge()),
@@ -466,44 +509,52 @@ pub fn get_help_lines(state: &CustomLlmTabState) -> Vec<Line<'static>> {
     if state.is_form_open {
         lines.push(Line::from(vec![
             Span::styled("   Tab / ↓        : ", Theme::badge_cyan()),
-            Span::raw("Pindah ke field input berikutnya"),
+            Span::raw("Move to next input field"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   Shift+Tab / ↑  : ", Theme::badge_cyan()),
-            Span::raw("Pindah ke field input sebelumnya"),
+            Span::raw("Move to previous input field"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   Space          : ", Theme::badge_cyan()),
-            Span::raw("Toggle checkbox enable/disable pada field provider"),
+            Span::raw("Toggle enable/disable checkbox on provider field"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   Enter          : ", Theme::badge_cyan()),
-            Span::raw("Simpan konfigurasi custom LLM endpoint"),
+            Span::raw("Save custom LLM endpoint configuration"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   Esc            : ", Theme::badge_cyan()),
-            Span::raw("Batal dan tutup form dialog"),
+            Span::raw("Cancel and close form dialog"),
         ]));
     } else {
         lines.push(Line::from(vec![
+            Span::styled("   Tab            : ", Theme::badge_cyan()),
+            Span::raw("Switch focus between Providers and Models card"),
+        ]));
+        lines.push(Line::from(vec![
             Span::styled("   j / k (↓ / ↑)  : ", Theme::badge_cyan()),
-            Span::raw("Pilih provider LLM kustom dari daftar"),
+            Span::raw("Navigate items inside the active card"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   a              : ", Theme::badge_cyan()),
-            Span::raw("Tambah provider LLM kustom baru (OpenAI-compatible)"),
+            Span::raw("Add new custom LLM provider (OpenAI-compatible)"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   e              : ", Theme::badge_cyan()),
-            Span::raw("Edit konfigurasi model & base URL yang dipilih"),
+            Span::raw("Edit selected custom LLM provider configuration"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   Space          : ", Theme::badge_cyan()),
-            Span::raw("Aktifkan / nonaktifkan provider yang dipilih"),
+            Span::raw("Enable / disable selected provider"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("   d              : ", Theme::badge_cyan()),
-            Span::raw("Hapus endpoint custom LLM terpilih"),
+            Span::raw("Delete selected custom LLM endpoint"),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("   r              : ", Theme::badge_cyan()),
+            Span::raw("Probe / fetch remote model list from /models endpoint"),
         ]));
     }
     lines
