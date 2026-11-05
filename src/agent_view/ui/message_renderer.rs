@@ -165,12 +165,52 @@ pub fn render_message_to_lines<'a>(
         }
     } else {
         // Pesan User / Assistant biasa
+        let mut in_code_block = false;
+
         for raw_line in msg.content.lines() {
             let clean = sanitize_terminal_line(raw_line, config.tab_size);
-
-            // Styling sederhana untuk Markdown Code blocks atau Quotes
             let trimmed = clean.trim_start();
-            let style = if trimmed.starts_with("```") || trimmed.starts_with('#') {
+
+            // Cek tag code block markdown ```
+            if trimmed.starts_with("```") {
+                if in_code_block {
+                    // Penutup code block
+                    in_code_block = false;
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled("╰──────────────────────────────────────────", Theme::text_muted()),
+                    ]));
+                } else {
+                    // Pembuka code block
+                    in_code_block = true;
+                    let code_lang = trimmed.trim_start_matches('`').trim();
+                    let lang_display = if code_lang.is_empty() {
+                        "code"
+                    } else {
+                        code_lang
+                    };
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(
+                            format!("╭─ [ {} ]", lang_display),
+                            Style::default()
+                                .fg(Theme::GOLD_PRIMARY)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
+                continue;
+            }
+
+            if in_code_block {
+                lines.push(Line::from(vec![
+                    Span::styled("    │ ", Theme::dim()),
+                    Span::styled(clean, Style::default().fg(Theme::CYAN_ACCENT)),
+                ]));
+                continue;
+            }
+
+            let style = if trimmed.starts_with('#') {
                 Style::default()
                     .fg(Theme::GOLD_PRIMARY)
                     .add_modifier(Modifier::BOLD)
@@ -185,6 +225,19 @@ pub fn render_message_to_lines<'a>(
             lines.push(Line::from(vec![
                 Span::raw("  "),
                 Span::styled(clean, style),
+            ]));
+        }
+
+        // Jika stream masih di tengah-tengah code block tanpa tanda ``` penutup
+        if in_code_block {
+            lines.push(Line::from(vec![
+                Span::styled("    │ ", Theme::dim()),
+                Span::styled(
+                    "▊ (streaming code...)",
+                    Style::default()
+                        .fg(Theme::GOLD_PRIMARY)
+                        .add_modifier(Modifier::ITALIC),
+                ),
             ]));
         }
     }
@@ -222,47 +275,107 @@ pub fn render_message_to_lines<'a>(
     lines
 }
 
+/// Memecah kumpulan `Line` menjadi baris-baris visual yang sesuai dengan `available_width`.
+/// Setiap baris hasil dijamin memiliki lebar visual <= `available_width`, sehingga
+/// jumlah baris `result.len()` identik secara 1:1 dengan baris fisik di terminal.
+pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<Line<'static>> {
+    if available_width == 0 {
+        return lines.into_iter().map(|l| {
+            let static_spans: Vec<Span<'static>> = l.spans.into_iter().map(|s| {
+                Span::styled(s.content.into_owned(), s.style)
+            }).collect();
+            Line::from(static_spans)
+        }).collect();
+    }
+
+    let mut result = Vec::with_capacity(lines.len() * 2);
+
+    for line in lines {
+        if line.width() <= available_width {
+            let static_spans: Vec<Span<'static>> = line.spans.into_iter().map(|s| {
+                Span::styled(s.content.into_owned(), s.style)
+            }).collect();
+            result.push(Line::from(static_spans));
+            continue;
+        }
+
+        let mut current_line_spans: Vec<Span<'static>> = Vec::new();
+        let mut current_line_width = 0;
+
+        for span in line.spans {
+            let span_style = span.style;
+            let text = span.content.into_owned();
+
+            for word in text.split_inclusive(' ') {
+                let word_span = Span::styled(word.to_string(), span_style);
+                let word_width = word_span.width();
+
+                if word_width == 0 {
+                    continue;
+                }
+
+                if current_line_width + word_width <= available_width {
+                    current_line_spans.push(word_span);
+                    current_line_width += word_width;
+                } else if word_width > available_width {
+                    // Kata tunggal lebih panjang dari lebar layar - potong per karakter
+                    if !current_line_spans.is_empty() {
+                        result.push(Line::from(std::mem::take(&mut current_line_spans)));
+                        current_line_width = 0;
+                    }
+
+                    let mut chunk = String::new();
+                    let mut chunk_width = 0;
+                    for ch in word.chars() {
+                        let ch_span = Span::raw(ch.to_string());
+                        let ch_w = ch_span.width();
+                        if chunk_width + ch_w > available_width {
+                            if !chunk.is_empty() {
+                                result.push(Line::from(vec![Span::styled(
+                                    std::mem::take(&mut chunk),
+                                    span_style,
+                                )]));
+                                chunk_width = 0;
+                            }
+                        }
+                        chunk.push(ch);
+                        chunk_width += ch_w;
+                    }
+                    if !chunk.is_empty() {
+                        current_line_spans.push(Span::styled(chunk, span_style));
+                        current_line_width = chunk_width;
+                    }
+                } else {
+                    // Pindah ke baris baru
+                    if !current_line_spans.is_empty() {
+                        result.push(Line::from(std::mem::take(&mut current_line_spans)));
+                    }
+                    current_line_spans.push(word_span);
+                    current_line_width = word_width;
+                }
+            }
+        }
+
+        if !current_line_spans.is_empty() {
+            result.push(Line::from(current_line_spans));
+        }
+    }
+
+    result
+}
+
 /// Menghitung visual line height dari kumpulan Line dengan memperhatikan `available_width`.
-/// Menggunakan pembungkusan kata (word-wrap) yang selaras dengan Paragraph::wrap di Ratatui.
 pub fn calculate_total_visual_lines(lines: &[Line], available_width: usize) -> usize {
     if available_width == 0 {
         return lines.len();
     }
-
-    let mut total = 0;
-    for l in lines {
-        let content_str: String = l.spans.iter().map(|s| s.content.as_ref()).collect();
-        if content_str.is_empty() {
-            total += 1;
-            continue;
-        }
-
-        let mut current_line_len = 0;
-        let mut visual_lines = 1;
-
-        for word in content_str.split_inclusive(' ') {
-            let word_len = word.chars().count();
-            if word_len == 0 {
-                continue;
-            }
-
-            if current_line_len + word_len <= available_width {
-                current_line_len += word_len;
-            } else if word_len > available_width {
-                if current_line_len > 0 {
-                    visual_lines += 1;
-                }
-                visual_lines += word_len.div_ceil(available_width).saturating_sub(1);
-                current_line_len = word_len % available_width;
-            } else {
-                visual_lines += 1;
-                current_line_len = word_len;
-            }
-        }
-
-        total += visual_lines;
-    }
-    total
+    let cloned: Vec<Line> = lines.iter().map(|l| {
+        let spans: Vec<Span> = l.spans.iter().map(|s| {
+            Span::styled(s.content.to_string(), s.style)
+        }).collect();
+        Line::from(spans)
+    }).collect();
+    wrap_lines_to_width(cloned, available_width).len()
 }
 
 #[cfg(test)]

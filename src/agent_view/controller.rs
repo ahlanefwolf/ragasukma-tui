@@ -94,6 +94,14 @@ impl AgentWorkspaceState {
                 }
             }
 
+            if key.modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c') {
+                if self.is_running {
+                    return Some(Action::AgentCancelTurn);
+                } else {
+                    return Some(Action::Quit);
+                }
+            }
+
             return match code {
                 KeyCode::Esc => Some(Action::AgentUnfocusInput),
                 KeyCode::Enter => Some(Action::AgentSubmitPrompt),

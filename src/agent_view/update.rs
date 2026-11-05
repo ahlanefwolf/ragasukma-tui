@@ -39,6 +39,7 @@ pub fn handle_agent_action(
                         model_override: None,
                     });
                 }
+                agent.start_turn();
                 agent.messages.push(ChatMessage {
                     role: MessageRole::User,
                     sender_name: "You".to_string(),

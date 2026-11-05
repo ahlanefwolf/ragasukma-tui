@@ -142,6 +142,16 @@ impl Theme {
     }
 
     #[must_use]
+    pub fn badge_red() -> Style {
+        Self::status_danger()
+    }
+
+    #[must_use]
+    pub fn dim() -> Style {
+        Style::default().fg(Self::TEXT_SECONDARY)
+    }
+
+    #[must_use]
     pub fn status_danger() -> Style {
         Style::default()
             .fg(Self::STATUS_DANGER)

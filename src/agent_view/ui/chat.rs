@@ -3,12 +3,12 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
     },
     Frame,
 };
 
-use super::message_renderer::{calculate_total_visual_lines, render_message_standard};
+use super::message_renderer::{render_message_standard, wrap_lines_to_width};
 use crate::agent_view::state::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
@@ -42,34 +42,67 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let text_width = chat_inner.width.saturating_sub(1) as usize;
     let inner_height = chat_inner.height as usize;
 
-    let mut chat_lines = Vec::new();
-    if state.messages.is_empty() {
-        chat_lines.push(Line::from(vec![
-            Span::styled("Welcome to ", Style::default().fg(Theme::TEXT_SECONDARY)),
-            Span::styled(
-                "Ragasukma AI Agent",
-                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                "! Type your message below or press @ to attach files.",
-                Style::default().fg(Theme::TEXT_SECONDARY),
-            ),
-        ]));
-    } else {
-        for msg in &state.messages {
-            chat_lines.extend(render_message_standard(msg));
+    let message_count = state.messages.len();
+    let last_content_len = state.messages.last().map(|m| m.content.len()).unwrap_or(0);
+    let is_running = state.is_running;
+    let expanded_tools_len = state.expanded_tools.len();
+
+    let mut cache = state.chat_layout_cache.borrow_mut();
+    let is_cache_valid = cache.width == text_width
+        && cache.message_count == message_count
+        && cache.last_content_len == last_content_len
+        && cache.is_running == is_running
+        && cache.expanded_tools_len == expanded_tools_len
+        && !cache.lines.is_empty();
+
+    if !is_cache_valid {
+        let mut chat_lines = Vec::new();
+        if state.messages.is_empty() {
+            chat_lines.push(Line::from(vec![
+                Span::styled("Welcome to ", Style::default().fg(Theme::TEXT_SECONDARY)),
+                Span::styled(
+                    "Ragasukma AI Agent",
+                    Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "! Type your message below or press @ to attach files.",
+                    Style::default().fg(Theme::TEXT_SECONDARY),
+                ),
+            ]));
+        } else {
+            for msg in &state.messages {
+                chat_lines.extend(render_message_standard(msg));
+            }
         }
-        // Berikan overscroll lines (scroll beyond last line ala terminal modern)
-        // agar pesan terbawah 100% tidak pernah kepotong dan pengguna bisa loss-in scroll ke bawah
-        let overscroll_lines = (inner_height / 2).max(6);
-        for _ in 0..overscroll_lines {
+
+        // Indikator Loading di paling bawah agent conversation saat agent aktif
+        if state.is_running {
+            chat_lines.push(Line::from(vec![
+                Span::styled("  ⚡ ", Style::default().fg(Theme::GOLD_PRIMARY)),
+                Span::styled(
+                    "Agent is thinking & generating response...",
+                    Style::default()
+                        .fg(Theme::CYAN_ACCENT)
+                        .add_modifier(Modifier::BOLD | Modifier::ITALIC),
+                ),
+            ]));
+        }
+
+        // Spacer padding 1 baris di akhir agar teks terbawah tidak menempel ke border
+        if !chat_lines.is_empty() {
             chat_lines.push(Line::from(""));
         }
+
+        // Pre-wrap semua baris ke lebar area chat agar total baris persis 1:1 dengan baris visual layar
+        cache.lines = wrap_lines_to_width(chat_lines, text_width);
+        cache.width = text_width;
+        cache.message_count = message_count;
+        cache.last_content_len = last_content_len;
+        cache.is_running = is_running;
+        cache.expanded_tools_len = expanded_tools_len;
     }
 
-    let calculated_visual = calculate_total_visual_lines(&chat_lines, text_width);
-    // Tambahkan buffer toleransi word wrap agar rendering Ratatui tidak pernah terpotong
-    let total_visual_lines = calculated_visual.max(chat_lines.len()) + 4;
+    let total_visual_lines = cache.lines.len();
 
     let max_scroll = total_visual_lines.saturating_sub(inner_height);
     state.chat_max_scroll.set(max_scroll);
@@ -87,11 +120,16 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         height: chat_inner.height,
     };
 
-    let p = Paragraph::new(chat_lines)
-        .wrap(Wrap { trim: false })
-        .scroll((effective_scroll as u16, 0));
+    let text_area = Rect {
+        x: chat_inner.x,
+        y: chat_inner.y,
+        width: chat_inner.width.saturating_sub(1),
+        height: chat_inner.height,
+    };
+
+    let p = Paragraph::new(cache.lines.clone()).scroll((effective_scroll as u16, 0));
     frame.render_widget(chat_block, chunks[0]);
-    frame.render_widget(p, chat_inner);
+    frame.render_widget(p, text_area);
 
     if max_scroll > 0 && scrollbar_area.width > 0 {
         let mut scrollbar_state =

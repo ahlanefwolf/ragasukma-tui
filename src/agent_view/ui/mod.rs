@@ -311,8 +311,13 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             }
         }
         AgentFocusArea::Input if state.is_input_focused => {
-            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-            hints.push(Span::raw("Send Prompt "));
+            if state.is_running {
+                hints.push(Span::styled(" [Ctrl+C] ", Theme::badge_red()));
+                hints.push(Span::raw("Stop Agent "));
+            } else {
+                hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+                hints.push(Span::raw("Send Prompt "));
+            }
             hints.push(Span::styled(" [@] ", Theme::key_badge()));
             hints.push(Span::raw("Tag File/Folder "));
             hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
@@ -321,6 +326,10 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::raw("Clear "));
         }
         AgentFocusArea::Input => {
+            if state.is_running {
+                hints.push(Span::styled(" [Ctrl+C] ", Theme::badge_red()));
+                hints.push(Span::raw("Stop Agent "));
+            }
             hints.push(Span::styled(" [i/Enter] ", Theme::key_badge()));
             hints.push(Span::raw("Insert Mode "));
             hints.push(Span::styled(" [m] ", Theme::key_badge()));

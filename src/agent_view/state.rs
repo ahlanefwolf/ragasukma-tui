@@ -1,6 +1,17 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use ratatui::text::Line;
+
+#[derive(Debug, Clone, Default)]
+pub struct ChatLayoutCache {
+    pub width: usize,
+    pub message_count: usize,
+    pub last_content_len: usize,
+    pub is_running: bool,
+    pub expanded_tools_len: usize,
+    pub lines: Vec<Line<'static>>,
+}
 
 use super::types::{
     AddFolderModalState, AgentFocusArea, AgentSidebarTab, ApprovalRequest, ChatMessage,
@@ -67,6 +78,9 @@ pub struct AgentWorkspaceState {
     pub is_sidebar_visible: bool,
     pub is_inspector_visible: bool,
     pub inspector_scroll_offset: usize,
+
+    // Chat Layout Cache to avoid re-wrapping on scroll
+    pub chat_layout_cache: RefCell<ChatLayoutCache>,
 }
 
 impl Default for AgentWorkspaceState {
@@ -121,6 +135,7 @@ impl Default for AgentWorkspaceState {
             project_modal: ProjectSwitcherModalState::default(),
             create_project_modal: CreateProjectModalState::default(),
             model_modal: ModelSelectorModalState::default(),
+            chat_layout_cache: RefCell::new(ChatLayoutCache::default()),
         }
     }
 }
@@ -320,7 +335,7 @@ impl AgentWorkspaceState {
             self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_sub(1);
         } else {
             let max = self.chat_max_scroll.get();
-            self.scroll_offset = (self.scroll_offset.saturating_add(2)).min(max);
+            self.scroll_offset = (self.scroll_offset.saturating_add(1)).min(max);
             self.auto_scroll = false;
         }
     }
@@ -331,7 +346,7 @@ impl AgentWorkspaceState {
         } else {
             let max = self.chat_max_scroll.get();
             let current = self.scroll_offset.min(max);
-            self.scroll_offset = current.saturating_sub(2);
+            self.scroll_offset = current.saturating_sub(1);
             if self.scroll_offset == 0 {
                 self.auto_scroll = true;
             }
