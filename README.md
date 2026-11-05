@@ -1,5 +1,9 @@
 # Ragasukma TUI 🖥️⚡
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-F2B5D4?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Linux_%7C_Windows_%7C_macOS-2F3B46?style=flat-square)](https://github.com/ahlanefwolf/ragasukma-tui/releases)
+[![Donate](https://img.shields.io/badge/Donate-SociaBuzz-FF7043?style=flat-square&logo=coffeescript&logoColor=white)](https://sociabuzz.com/ahlanefwolf)
+
 > A smart Terminal User Interface (TUI) for coding alongside AI agents, managing multi-account LLMs (Claude, ChatGPT/Codex, Google Antigravity), and monitoring quota usage directly from your terminal.
 
 ---
@@ -53,3 +57,12 @@ cargo run --bin ragasukma-tui
 cargo build --release --bin ragasukma-tui
 ```
 The compiled binary will be available at `target/release/ragasukma-tui`.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE) — see the [LICENSE](LICENSE) file for details.
+
+Created by **Ahlan Saputra** ([@ahlanefwolf](https://github.com/ahlanefwolf)).  
+Copyright © 2026 Ahlan Saputra.
