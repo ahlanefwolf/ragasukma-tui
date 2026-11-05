@@ -9,17 +9,31 @@ impl App {
                 self.set_status(format!("Agent ready (session {})", session_id));
             }
             CoreBridgeEvent::StatusChange { session_id, status } => {
+                if let Some(ref sid) = session_id
+                    && status == "running"
+                    && let Some(s) = self.agent.sessions.iter_mut().find(|s| &s.id == sid)
+                {
+                    s.is_running = true;
+                }
                 if session_id.as_ref() == self.agent.active_session_id.as_ref() || session_id.is_none() {
                     self.set_status(status);
                 }
             }
             CoreBridgeEvent::Delta { session_id, delta } => {
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
+                    s.is_running = true;
+                }
                 if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    self.agent.is_running = true;
                     self.agent.append_chunk(&delta);
                 }
             }
             CoreBridgeEvent::ThoughtDelta { session_id, thought } => {
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
+                    s.is_running = true;
+                }
                 if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    self.agent.is_running = true;
                     self.agent.append_thought(&thought);
                 }
             }

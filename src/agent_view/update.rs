@@ -534,6 +534,9 @@ pub fn handle_agent_action(
                 let target_id = target.id.clone();
                 let target_name = target.name.clone();
                 agent.project_modal.is_open = false;
+                agent.is_running = false;
+                agent.messages.clear();
+                agent.active_session_id = None;
                 if let Some(tx) = bridge_cmd_tx {
                     let _ = tx.send(CoreBridgeCommand::SwitchProject {
                         project_id: target_id,

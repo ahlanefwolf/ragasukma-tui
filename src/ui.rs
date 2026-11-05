@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::theme::Theme;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap},
     Frame,
@@ -48,7 +48,6 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
         .constraints([
             Constraint::Length(22),
             Constraint::Min(35),
-            Constraint::Length(20),
         ])
         .split(area);
 
@@ -75,38 +74,16 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
         " [4] Claude ",
         " [5] Custom LLM ",
     ];
-    let tabs_widget = Tabs::new(tab_titles)
+    let tabs = Tabs::new(tab_titles)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Theme::border_subtle())
                 .style(Theme::block_base()),
         )
-        .select(app.active_tab)
-        .style(Theme::tab_inactive())
         .highlight_style(Theme::tab_active())
-        .divider(Span::styled("│", Theme::border_subtle()));
-    frame.render_widget(tabs_widget, header_chunks[1]);
-
-    // Status Pill Block
-    let (dot_style, label) = if app.agent.is_running {
-        (Theme::status_warning(), "BUSY")
-    } else {
-        (Theme::status_success(), "READY")
-    };
-    let status_line = Line::from(vec![
-        Span::styled("● ", dot_style),
-        Span::styled(label, Style::default().fg(Theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)),
-    ]);
-    let status_widget = Paragraph::new(status_line)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Theme::border_subtle())
-                .style(Theme::block_base()),
-        )
-        .alignment(Alignment::Center);
-    frame.render_widget(status_widget, header_chunks[2]);
+        .select(app.active_tab);
+    frame.render_widget(tabs, header_chunks[1]);
 }
 
 fn render_body(frame: &mut Frame, area: Rect, app: &App) {
