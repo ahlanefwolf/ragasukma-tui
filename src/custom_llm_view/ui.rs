@@ -237,7 +237,7 @@ fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) 
 }
 
 fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
-    let popup_area = centered_rect(65, 60, area);
+    let popup_area = centered_rect(70, 85, area);
     frame.render_widget(Clear, popup_area);
 
     let is_edit = state.editing_prefix.is_some();
@@ -252,122 +252,74 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         .border_style(Theme::border_focused())
         .title(Span::styled(title, Theme::badge_gold().add_modifier(Modifier::BOLD)))
         .style(Theme::block_base());
+    let inner_area = outer_block.inner(popup_area);
     frame.render_widget(outer_block, popup_area);
-
     let inner = Layout::default()
         .direction(Direction::Vertical)
-        .margin(2)
         .constraints([
-            Constraint::Length(3), // Prefix
-            Constraint::Length(3), // Name
-            Constraint::Length(3), // Base URL
-            Constraint::Length(3), // API Key
-            Constraint::Length(2), // Enabled Checkbox
-            Constraint::Length(2), // Error message if any
-            Constraint::Length(3), // Action buttons
+            Constraint::Length(1), // 0: Top Spacer (jarak dari header modal)
+            Constraint::Length(3), // 1: Prefix
+            Constraint::Length(1), // 2: Spacer
+            Constraint::Length(3), // 3: Name
+            Constraint::Length(1), // 4: Spacer
+            Constraint::Length(3), // 5: Base URL
+            Constraint::Length(1), // 6: Spacer
+            Constraint::Length(3), // 7: API Key
+            Constraint::Length(1), // 8: Spacer
+            Constraint::Length(2), // 9: Enabled Checkbox
+            Constraint::Length(1), // 10: Error message if any
+            Constraint::Length(2), // 11: Action buttons
         ])
-        .split(popup_area);
+        .split(inner_area);
 
     let prefix_focused = state.focused_field == FormField::Prefix;
-    let prefix_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(field_label_style(prefix_focused))
-        .title(Span::styled(
-            " Model Prefix (lowercase, e.g. groq, vllm) ",
-            if prefix_focused {
-                Theme::badge_gold()
-            } else {
-                Theme::text_secondary()
-            },
-        ))
-        .style(Theme::block_base());
-    let prefix_para = Paragraph::new(Span::styled(
+    render_text_field(
+        frame,
+        inner[1],
+        "Model Prefix",
+        "🏷️",
         state.form_prefix.as_str(),
-        if prefix_focused {
-            Theme::text_gold()
-        } else {
-            Theme::text_primary()
-        },
-    ))
-    .block(prefix_block);
-    frame.render_widget(prefix_para, inner[0]);
+        prefix_focused,
+        "e.g. groq, vllm, ollama",
+    );
 
     let name_focused = state.focused_field == FormField::Name;
-    let name_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(field_label_style(name_focused))
-        .title(Span::styled(
-            " Display Name (e.g. Groq Cloud LPU) ",
-            if name_focused {
-                Theme::badge_gold()
-            } else {
-                Theme::text_secondary()
-            },
-        ))
-        .style(Theme::block_base());
-    let name_para = Paragraph::new(Span::styled(
+    render_text_field(
+        frame,
+        inner[3],
+        "Display Name",
+        "📝",
         state.form_name.as_str(),
-        if name_focused {
-            Theme::text_gold()
-        } else {
-            Theme::text_primary()
-        },
-    ))
-    .block(name_block);
-    frame.render_widget(name_para, inner[1]);
+        name_focused,
+        "e.g. Groq Cloud LPU",
+    );
 
     let url_focused = state.focused_field == FormField::BaseUrl;
-    let url_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(field_label_style(url_focused))
-        .title(Span::styled(
-            " OpenAI Base URL (e.g. https://api.groq.com/openai/v1) ",
-            if url_focused {
-                Theme::badge_gold()
-            } else {
-                Theme::text_secondary()
-            },
-        ))
-        .style(Theme::block_base());
-    let url_para = Paragraph::new(Span::styled(
+    render_text_field(
+        frame,
+        inner[5],
+        "Base URL",
+        "🌐",
         state.form_base_url.as_str(),
-        if url_focused {
-            Theme::text_gold()
-        } else {
-            Theme::text_primary()
-        },
-    ))
-    .block(url_block);
-    frame.render_widget(url_para, inner[2]);
+        url_focused,
+        "e.g. https://api.groq.com/openai/v1",
+    );
 
     let key_focused = state.focused_field == FormField::ApiKey;
-    let key_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(field_label_style(key_focused))
-        .title(Span::styled(
-            " API Key (leave empty for local Ollama) ",
-            if key_focused {
-                Theme::badge_gold()
-            } else {
-                Theme::text_secondary()
-            },
-        ))
-        .style(Theme::block_base());
-    let masked_input: String = if key_focused {
+    let masked_key: String = if key_focused {
         state.form_api_key.clone()
     } else {
         "•".repeat(state.form_api_key.len())
     };
-    let key_para = Paragraph::new(Span::styled(
-        masked_input,
-        if key_focused {
-            Theme::text_gold()
-        } else {
-            Theme::text_primary()
-        },
-    ))
-    .block(key_block);
-    frame.render_widget(key_para, inner[3]);
+    render_text_field(
+        frame,
+        inner[7],
+        "API Key",
+        "🔑",
+        &masked_key,
+        key_focused,
+        "e.g. gsk_... (leave empty for local)",
+    );
 
     let enabled_text = if state.form_enabled {
         " [✔] Provider Enabled for auto-routing "
@@ -388,14 +340,14 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         Span::raw(" "),
         Span::styled("(Press Space to toggle)", Theme::text_secondary()),
     ]));
-    frame.render_widget(enabled_para, inner[4]);
+    frame.render_widget(enabled_para, inner[9]);
 
     if let Some(err) = &state.form_error {
         let err_para = Paragraph::new(Line::from(vec![
             Span::styled(" ⚠ ", Theme::text_gold()),
             Span::styled(err, Theme::text_gold()),
         ]));
-        frame.render_widget(err_para, inner[5]);
+        frame.render_widget(err_para, inner[10]);
     }
 
     let save_style = if state.focused_field == FormField::SaveBtn {
@@ -415,7 +367,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         Span::styled(" [ Cancel (Esc) ] ", cancel_style),
     ]);
     let btn_para = Paragraph::new(btns).alignment(Alignment::Center);
-    frame.render_widget(btn_para, inner[6]);
+    frame.render_widget(btn_para, inner[11]);
 }
 
 fn render_delete_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
@@ -460,11 +412,81 @@ fn render_delete_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
     frame.render_widget(para, inner_area);
 }
 
-fn field_label_style(is_focused: bool) -> ratatui::style::Style {
-    if is_focused {
-        Theme::border_focused()
+fn render_text_field(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    icon: &str,
+    value: &str,
+    is_focused: bool,
+    placeholder: &str,
+) {
+    let title_text = if is_focused {
+        format!(" {icon} {title} [Active] ")
     } else {
-        Theme::border_subtle()
+        format!(" {icon} {title} ")
+    };
+
+    let title_span = if is_focused {
+        Span::styled(title_text, Theme::badge_gold())
+    } else {
+        Span::styled(title_text, Theme::badge_gray())
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(if is_focused {
+            Theme::border_focused()
+        } else {
+            Theme::border_subtle()
+        })
+        .title(title_span)
+        .style(Theme::block_base());
+
+    let prompt_prefix = if is_focused {
+        Span::styled(
+            "❯ ",
+            ratatui::style::Style::default()
+                .fg(Theme::GOLD_PRIMARY)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled("❯ ", Theme::text_secondary())
+    };
+
+    let prompt_width = 2usize;
+    let available_width = (area.width.saturating_sub(2) as usize).saturating_sub(prompt_width);
+
+    let content_span = if value.is_empty() {
+        Span::styled(
+            placeholder,
+            Theme::text_secondary().add_modifier(Modifier::ITALIC),
+        )
+    } else {
+        let total_chars = value.chars().count();
+        let scroll_offset = if total_chars > available_width && available_width > 0 {
+            total_chars - available_width
+        } else {
+            0
+        };
+        let visible_slice: String = value.chars().skip(scroll_offset).collect();
+        if is_focused {
+            Span::styled(visible_slice, Theme::text_gold())
+        } else {
+            Span::styled(visible_slice, Theme::text_primary())
+        }
+    };
+
+    let para = Paragraph::new(Line::from(vec![prompt_prefix, content_span])).block(block);
+    frame.render_widget(para, area);
+
+    if is_focused {
+        let prompt_width_u16 = 2u16; // "❯ "
+        let cursor_offset = (value.chars().count() as u16).min(available_width as u16);
+        let cursor_x = (area.x + 1 + prompt_width_u16 + cursor_offset)
+            .min(area.x + area.width.saturating_sub(2));
+        let cursor_y = area.y + 1;
+        frame.set_cursor_position((cursor_x, cursor_y));
     }
 }
 

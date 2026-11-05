@@ -141,7 +141,7 @@ impl CustomLlmTabState {
         self.editing_prefix = None;
         self.form_prefix.clear();
         self.form_name.clear();
-        self.form_base_url = "https://".to_string();
+        self.form_base_url.clear();
         self.form_api_key.clear();
         self.form_enabled = true;
         self.focused_field = FormField::Prefix;
