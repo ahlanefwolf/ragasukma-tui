@@ -308,7 +308,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         }
         AgentFocusArea::Input if state.is_input_focused => {
             if state.is_running {
-                hints.push(Span::styled(" [Ctrl+C] ", Theme::badge_red()));
+                hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
                 hints.push(Span::raw("Stop Agent "));
             } else {
                 hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
@@ -321,7 +321,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         }
         AgentFocusArea::Input => {
             if state.is_running {
-                hints.push(Span::styled(" [Ctrl+C] ", Theme::badge_red()));
+                hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
                 hints.push(Span::raw("Stop Agent "));
             }
             hints.push(Span::styled(" [i/Enter] ", Theme::key_badge()));

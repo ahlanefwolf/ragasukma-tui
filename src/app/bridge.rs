@@ -133,6 +133,11 @@ impl App {
                     self.agent.cancel_turn();
                 }
                 self.set_status(format!("Turn cancelled for session: {}", session_id));
+                if let Some(tx) = self.bridge_cmd_tx.as_ref() {
+                    let _ = tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
+                        session_id,
+                    });
+                }
             }
             CoreBridgeEvent::TurnFailed { error, session_id } => {
                 tracing::error!("Turn failed for session {session_id}: {error}");
@@ -151,6 +156,11 @@ impl App {
                     self.agent.fail_turn(error.clone());
                 }
                 self.set_status(format!("Turn failed: {}", error));
+                if let Some(tx) = self.bridge_cmd_tx.as_ref() {
+                    let _ = tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
+                        session_id,
+                    });
+                }
             }
             CoreBridgeEvent::QuotaUpdated {
                 provider,

@@ -154,7 +154,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
     let popup_height = (visible_items + 3).min(anchor_area.y + anchor_area.height);
     let popup_width = (anchor_area.width.saturating_sub(4)).clamp(38, 72);
 
-    let popup_y = anchor_area.y.saturating_sub(popup_height);
+    let popup_y = anchor_area.y.saturating_sub(popup_height + 3);
     let popup_x = anchor_area.x + 2;
 
     let popup_area = Rect {

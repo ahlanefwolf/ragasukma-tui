@@ -13,15 +13,6 @@ use crate::agent_view::types::{AgentFocusArea, AgentSidebarTab};
 use crate::theme::Theme;
 
 pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(4),
-            Constraint::Length(3),
-            Constraint::Min(8),
-        ])
-        .split(area);
-
     let is_folders_focused = state.focus_area == AgentFocusArea::Folders;
 
     // 1. Header Workspace Folders Bar (Card 1: Folders)
@@ -55,33 +46,64 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
         })
         .style(Theme::block_base());
 
-    let mut folder_spans = Vec::new();
-    for (idx, folder) in state.workspace_folders.iter().enumerate() {
-        let is_active = idx == state.active_folder_idx;
-        let name = folder
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| folder.to_string_lossy().to_string());
+    let inner_width = area.width.saturating_sub(2).max(10) as usize;
+    let mut folder_lines: Vec<Line> = Vec::new();
+    let mut current_line_spans: Vec<Span> = Vec::new();
+    let mut current_line_width: usize = 0;
 
-        if is_active {
-            folder_spans.push(Span::styled(
-                format!(" [{}] ", name),
-                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
-            ));
-        } else {
-            folder_spans.push(Span::styled(
-                format!(" {} ", name),
-                Style::default().fg(Theme::TEXT_SECONDARY),
-            ));
-        }
-    }
-    if folder_spans.is_empty() {
-        folder_spans.push(Span::styled(
+    if state.workspace_folders.is_empty() {
+        folder_lines.push(Line::from(vec![Span::styled(
             " (No attached workspaces) ",
             Style::default().fg(Theme::TEXT_SECONDARY),
-        ));
+        )]));
+    } else {
+        for (idx, folder) in state.workspace_folders.iter().enumerate() {
+            let is_active = idx == state.active_folder_idx;
+            let name = folder
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| folder.to_string_lossy().to_string());
+
+            let text = if is_active {
+                format!(" [{}] ", name)
+            } else {
+                format!(" {} ", name)
+            };
+            let style = if is_active {
+                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Theme::TEXT_SECONDARY)
+            };
+
+            let tag_len = text.chars().count();
+            if current_line_width > 0 && current_line_width + tag_len > inner_width {
+                folder_lines.push(Line::from(std::mem::take(&mut current_line_spans)));
+                current_line_width = 0;
+            }
+
+            current_line_width += tag_len;
+            current_line_spans.push(Span::styled(text, style));
+        }
+
+        if !current_line_spans.is_empty() {
+            folder_lines.push(Line::from(current_line_spans));
+        }
     }
-    frame.render_widget(Paragraph::new(Line::from(folder_spans)).block(folder_block), chunks[0]);
+
+    let folder_lines_count = folder_lines.len().max(1);
+    let max_folder_height = (area.height / 3).clamp(3, 8);
+    let folder_card_height = ((folder_lines_count + 2) as u16).min(max_folder_height).max(3);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(folder_card_height),
+            Constraint::Length(3),
+            Constraint::Min(8),
+        ])
+        .split(area);
+
+    frame.render_widget(Paragraph::new(folder_lines).block(folder_block), chunks[0]);
 
     // 2. Sidebar Tab Switcher
     let is_tasks_active = state.sidebar_tab == AgentSidebarTab::Tasks;
@@ -174,9 +196,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
 
                         let total_tokens = s.total_tokens_input + s.total_tokens_output;
                         let token_tag = if total_tokens > 0 {
-                            format!(" [{} reqs • {} tokens]", s.total_requests, super::helpers::format_compact_number(total_tokens as usize))
-                        } else if s.total_requests > 0 {
-                            format!(" [{} reqs]", s.total_requests)
+                            format!(" [{} tokens]", super::helpers::format_compact_number(total_tokens as usize))
                         } else {
                             String::new()
                         };

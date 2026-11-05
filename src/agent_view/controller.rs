@@ -58,15 +58,16 @@ impl AgentWorkspaceState {
 
         // When the input textarea is focused
         if self.is_input_focused {
+            if key.modifiers.contains(KeyModifiers::ALT) && code == KeyCode::Char('s') {
+                if self.is_running {
+                    return Some(Action::AgentCancelTurn);
+                }
+                return None;
+            }
+
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 return match code {
-                    KeyCode::Char('c') => {
-                        if self.is_running {
-                            Some(Action::AgentCancelTurn)
-                        } else {
-                            Some(Action::Quit)
-                        }
-                    }
+                    KeyCode::Char('c') => Some(Action::Quit),
                     KeyCode::Char('a') => Some(Action::AgentInputCursorHome),
                     KeyCode::Char('e') => Some(Action::AgentInputCursorEnd),
                     _ => None,
@@ -118,16 +119,18 @@ impl AgentWorkspaceState {
             _ => {}
         }
 
+        // Alt shortcuts
+        if key.modifiers.contains(KeyModifiers::ALT) && code == KeyCode::Char('s') {
+            if self.is_running {
+                return Some(Action::AgentCancelTurn);
+            }
+            return None;
+        }
+
         // Control shortcuts
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             return match code {
-                KeyCode::Char('c') => {
-                    if self.is_running {
-                        Some(Action::AgentCancelTurn)
-                    } else {
-                        Some(Action::Quit)
-                    }
-                }
+                KeyCode::Char('c') => Some(Action::Quit),
                 _ => None,
             };
         }

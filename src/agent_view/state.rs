@@ -1095,10 +1095,6 @@ impl AgentWorkspaceState {
             .and_then(|aid| self.sessions.iter().find(|s| &s.id == aid))
             .or_else(|| self.sessions.get(self.selected_session_idx));
 
-        let is_actively_running = self.is_running
-            || cur_session.map(|s| s.is_running).unwrap_or(false);
-        let active_request_increment = if is_actively_running { 1 } else { 0 };
-
         let completed_requests = assistant_turns + total_tool_calls;
         let (stored_in, stored_out, stored_requests) = if let Some(s) = cur_session {
             (s.total_tokens_input as usize, s.total_tokens_output as usize, s.total_requests)
@@ -1108,28 +1104,13 @@ impl AgentWorkspaceState {
 
         let base_requests = completed_requests.max(stored_requests);
         let task_requests = if base_requests > 0 {
-            base_requests + active_request_increment
+            base_requests
         } else {
-            user_prompts.max(active_request_increment)
-        };
-
-        // If actively running, ensure real-time stream token accumulation is included
-        let live_stream_tokens = if is_actively_running {
-            self.messages
-                .last()
-                .filter(|m| m.role == MessageRole::Assistant)
-                .map(|m| {
-                    let content_tok = m.content.len() / 4;
-                    let thought_tok = m.reasoning.as_ref().map(|r| r.len() / 4).unwrap_or(0);
-                    (content_tok + thought_tok).max(1)
-                })
-                .unwrap_or(1)
-        } else {
-            0
+            user_prompts
         };
 
         let task_input_tokens = stored_in.max(msg_in_tokens);
-        let task_output_tokens = stored_out.max(msg_out_tokens) + live_stream_tokens;
+        let task_output_tokens = stored_out.max(msg_out_tokens);
 
         TokenBreakdown {
             system_tokens: 1500,
