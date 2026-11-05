@@ -15,7 +15,7 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(6), Constraint::Min(5)])
+        .constraints([Constraint::Length(7), Constraint::Min(5)])
         .split(area);
 
     let is_model_focused = state.focus_area == AgentFocusArea::ModelTelemetry;
@@ -38,11 +38,42 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
     let breakdown = state.calculate_token_breakdown();
     let total_task = breakdown.total_task_tokens();
 
+    let cur_session = state
+        .active_session_id
+        .as_ref()
+        .and_then(|aid| state.sessions.iter().find(|s| &s.id == aid))
+        .or_else(|| state.sessions.get(state.selected_session_idx));
+    let is_live_turn = state.is_running
+        || cur_session
+            .map(|s| s.is_running)
+            .unwrap_or(false);
+    let live_badge = if is_live_turn { " ⚡ live" } else { "" };
+
+    let model_name = cur_session
+        .and_then(|s| s.model.as_deref())
+        .filter(|m| !m.is_empty())
+        .unwrap_or(&state.active_model);
+
+    let active_secs = state.session_start_instant.elapsed().as_secs();
+    let hrs = active_secs / 3600;
+    let mins = (active_secs % 3600) / 60;
+    let secs = active_secs % 60;
+    let dur_str = if hrs > 0 {
+        format!("{}h {:02}m {:02}s", hrs, mins, secs)
+    } else {
+        format!("{}m {:02}s", mins, secs)
+    };
+
+    let in_formatted = super::helpers::format_compact_number(breakdown.task_input_tokens);
+    let out_formatted = super::helpers::format_compact_number(breakdown.task_output_tokens);
+    let total_formatted = super::helpers::format_compact_number(total_task);
+    let total_exact = super::helpers::format_comma_number(total_task);
+
     let lines_model = vec![
         Line::from(vec![
             Span::styled("Model   : ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
-                format!("[◈ {}]", state.active_model),
+                format!("[◈ {}]", model_name),
                 Style::default()
                     .fg(Theme::GOLD_PRIMARY)
                     .add_modifier(Modifier::BOLD),
@@ -51,29 +82,54 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
         Line::from(vec![
             Span::styled("Requests: ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
-                format!("{} req{}", breakdown.task_requests, if breakdown.task_requests == 1 { "" } else { "s" }),
-                Style::default().fg(Theme::CYAN_ACCENT),
+                format!("{} req{}{}", breakdown.task_requests, if breakdown.task_requests == 1 { "" } else { "s" }, live_badge),
+                if is_live_turn {
+                    Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Theme::CYAN_ACCENT)
+                },
             ),
         ]),
         Line::from(vec![
             Span::styled("Tokens  : ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
-                format!("▲ {} in", breakdown.task_input_tokens),
+                format!("▲ {} in", in_formatted),
                 Style::default().fg(Theme::TEXT_PRIMARY),
             ),
             Span::styled("  •  ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
-                format!("▼ {} out", breakdown.task_output_tokens),
-                Style::default().fg(Theme::TEXT_PRIMARY),
+                format!("▼ {} out", out_formatted),
+                if is_live_turn {
+                    Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Theme::TEXT_PRIMARY)
+                },
             ),
         ]),
         Line::from(vec![
             Span::styled("Total   : ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
-                format!("{} tokens", total_task),
+                format!("{} tokens ({})", total_formatted, total_exact),
                 Style::default()
                     .fg(Theme::GOLD_PRIMARY)
                     .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Session : ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled(
+                if is_live_turn { "RUNNING" } else { "IDLE" },
+                if is_live_turn {
+                    Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Theme::TEXT_MUTED)
+                },
+            ),
+            Span::styled("  •  ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled("Uptime: ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled(
+                dur_str,
+                Style::default().fg(Theme::TEXT_PRIMARY),
             ),
         ]),
     ];

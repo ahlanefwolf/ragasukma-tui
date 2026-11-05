@@ -16,9 +16,44 @@ pub fn handle_agent_action(
             agent.check_and_update_tag_query();
             None
         }
+        Action::AgentPaste(text) => {
+            agent.paste(&text);
+            None
+        }
         Action::AgentBackspace => {
             agent.backspace();
-            agent.check_and_update_tag_query();
+            None
+        }
+        Action::AgentInputDelete => {
+            agent.delete_forward();
+            None
+        }
+        Action::AgentInputNewline => {
+            agent.insert_newline();
+            None
+        }
+        Action::AgentInputCursorLeft => {
+            agent.cursor_left();
+            None
+        }
+        Action::AgentInputCursorRight => {
+            agent.cursor_right();
+            None
+        }
+        Action::AgentInputCursorUp => {
+            agent.cursor_up();
+            None
+        }
+        Action::AgentInputCursorDown => {
+            agent.cursor_down();
+            None
+        }
+        Action::AgentInputCursorHome => {
+            agent.cursor_home();
+            None
+        }
+        Action::AgentInputCursorEnd => {
+            agent.cursor_end();
             None
         }
         Action::AgentClearInput => {

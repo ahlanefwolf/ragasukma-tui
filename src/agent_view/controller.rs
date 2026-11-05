@@ -67,6 +67,8 @@ impl AgentWorkspaceState {
                             Some(Action::Quit)
                         }
                     }
+                    KeyCode::Char('a') => Some(Action::AgentInputCursorHome),
+                    KeyCode::Char('e') => Some(Action::AgentInputCursorEnd),
                     _ => None,
                 };
             }
@@ -82,10 +84,22 @@ impl AgentWorkspaceState {
                 }
             }
 
+            // Newline on Alt+Enter only
+            if code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::ALT) {
+                return Some(Action::AgentInputNewline);
+            }
+
             return match code {
                 KeyCode::Esc => Some(Action::AgentUnfocusInput),
                 KeyCode::Enter => Some(Action::AgentSubmitPrompt),
                 KeyCode::Backspace => Some(Action::AgentBackspace),
+                KeyCode::Delete => Some(Action::AgentInputDelete),
+                KeyCode::Left => Some(Action::AgentInputCursorLeft),
+                KeyCode::Right => Some(Action::AgentInputCursorRight),
+                KeyCode::Up => Some(Action::AgentInputCursorUp),
+                KeyCode::Down => Some(Action::AgentInputCursorDown),
+                KeyCode::Home => Some(Action::AgentInputCursorHome),
+                KeyCode::End => Some(Action::AgentInputCursorEnd),
                 KeyCode::Tab => Some(Action::AgentFocusNextPanel),
                 KeyCode::BackTab => Some(Action::AgentFocusPrevPanel),
                 KeyCode::Char(c) => Some(Action::AgentInsertChar(c)),

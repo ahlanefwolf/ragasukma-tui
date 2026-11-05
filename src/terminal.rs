@@ -1,7 +1,6 @@
 use color_eyre::Result;
 use crossterm::{
-    cursor,
-    event::{DisableMouseCapture, EnableMouseCapture},
+    event::{DisableBracketedPaste, EnableBracketedPaste},
     execute,
     terminal::{
         disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -24,9 +23,10 @@ pub fn install_panic_hook() {
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("ragasukma-tui.log")
+            .open("tui_panic.log")
         {
-            let _ = std::io::Write::write_all(&mut file, panic_msg.as_bytes());
+            use std::io::Write;
+            let _ = file.write_all(panic_msg.as_bytes());
         }
         original_hook(panic_info);
     }));
@@ -38,7 +38,7 @@ pub fn init() -> Result<TuiTerminal> {
 
     enable_raw_mode()?;
     let mut out = stdout();
-    execute!(out, EnterAlternateScreen, EnableMouseCapture, cursor::Hide)?;
+    execute!(out, EnterAlternateScreen, EnableBracketedPaste)?;
 
     let backend = CrosstermBackend::new(out);
     let terminal = Terminal::new(backend)?;
@@ -50,7 +50,7 @@ pub fn init() -> Result<TuiTerminal> {
 pub fn restore() -> Result<()> {
     ratatui::restore();
     let mut out = stdout();
-    let _ = execute!(out, LeaveAlternateScreen, DisableMouseCapture, cursor::Show);
+    let _ = execute!(out, LeaveAlternateScreen, DisableBracketedPaste);
     let _ = disable_raw_mode();
     Ok(())
 }

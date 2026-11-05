@@ -82,6 +82,7 @@ pub struct TaskSessionItem {
     pub total_tokens_output: i64,
     pub updated_at: i64,
     pub is_running: bool,
+    pub total_requests: usize,
 }
 
 #[derive(Debug, Clone)]

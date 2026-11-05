@@ -16,7 +16,7 @@ use crate::theme::Theme;
 pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(6), Constraint::Length(3)])
+        .constraints([Constraint::Min(6), Constraint::Length(5)])
         .split(area);
 
     let is_chat_focused = state.focus_area == AgentFocusArea::Chat;
@@ -175,10 +175,17 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
             .add_modifier(Modifier::BOLD),
     );
 
-    let input_line = if state.input_buffer.is_empty() {
+    let prompt_width = 2usize; // "❯ "
+    let available_width = (chunks[1].width as usize).saturating_sub(2 + prompt_width).max(5);
+    state.input_wrap_width.set(available_width);
+
+    let vlines = state.compute_visual_lines(available_width);
+    let (cursor_row, cursor_col) = state.get_cursor_visual_position(available_width);
+
+    let visible_lines: Vec<Line> = if state.input_buffer.is_empty() {
         let placeholder = if is_input_focused {
             Span::styled(
-                "Type a prompt, or @ to attach file context... (Enter to send)",
+                "Type a prompt, or @ to attach file context... (Enter: send, Alt+Enter: newline)",
                 Style::default().fg(Theme::TEXT_SECONDARY).add_modifier(Modifier::ITALIC),
             )
         } else {
@@ -187,41 +194,67 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
                 Style::default().fg(Theme::TEXT_SECONDARY),
             )
         };
-        Line::from(vec![prompt_prefix, placeholder])
+        vec![Line::from(vec![prompt_prefix, placeholder])]
     } else {
-        // Dynamic syntax highlighting for @file tags in input buffer
-        let mut spans = vec![prompt_prefix];
-        let mut current_idx = 0;
-        let buf = &state.input_buffer;
+        let start_line = state.input_scroll_line;
+        let end_line = (start_line + 3).min(vlines.len());
+        let mut rendered = Vec::new();
 
-        while let Some(at_idx) = buf[current_idx..].find('@') {
-            let actual_at = current_idx + at_idx;
-            if actual_at > current_idx {
+        for (line_idx, vl) in vlines.iter().enumerate().take(end_line).skip(start_line) {
+            let line_prefix = if vl.is_paragraph_start {
+                if line_idx == 0 {
+                    prompt_prefix.clone()
+                } else {
+                    Span::styled("❯ ", Style::default().fg(Theme::TEXT_SECONDARY))
+                }
+            } else {
+                Span::styled("  ", Style::default().fg(Theme::TEXT_SECONDARY))
+            };
+
+            let visible_slice = if vl.start_byte < vl.end_byte
+                && vl.end_byte <= state.input_buffer.len()
+                && state.input_buffer.is_char_boundary(vl.start_byte)
+                && state.input_buffer.is_char_boundary(vl.end_byte)
+            {
+                &state.input_buffer[vl.start_byte..vl.end_byte]
+            } else {
+                ""
+            };
+
+            let mut spans = vec![line_prefix];
+            let mut current_idx = 0;
+            let buf = visible_slice;
+
+            while let Some(at_idx) = buf[current_idx..].find('@') {
+                let actual_at = current_idx + at_idx;
+                if actual_at > current_idx {
+                    spans.push(Span::styled(
+                        buf[current_idx..actual_at].to_string(),
+                        Style::default().fg(Theme::TEXT_PRIMARY),
+                    ));
+                }
+                let rest = &buf[actual_at..];
+                let end_idx = rest.find(|c: char| c.is_whitespace()).unwrap_or(rest.len());
                 spans.push(Span::styled(
-                    &buf[current_idx..actual_at],
+                    buf[actual_at..actual_at + end_idx].to_string(),
+                    Style::default()
+                        .fg(Theme::CYAN_ACCENT)
+                        .add_modifier(Modifier::BOLD),
+                ));
+                current_idx = actual_at + end_idx;
+            }
+
+            if current_idx < buf.len() {
+                spans.push(Span::styled(
+                    buf[current_idx..].to_string(),
                     Style::default().fg(Theme::TEXT_PRIMARY),
                 ));
             }
-            // Find end of token (whitespace or end of string)
-            let rest = &buf[actual_at..];
-            let end_idx = rest.find(|c: char| c.is_whitespace()).unwrap_or(rest.len());
-            spans.push(Span::styled(
-                &buf[actual_at..actual_at + end_idx],
-                Style::default()
-                    .fg(Theme::CYAN_ACCENT)
-                    .add_modifier(Modifier::BOLD),
-            ));
-            current_idx = actual_at + end_idx;
+
+            rendered.push(Line::from(spans));
         }
 
-        if current_idx < buf.len() {
-            spans.push(Span::styled(
-                &buf[current_idx..],
-                Style::default().fg(Theme::TEXT_PRIMARY),
-            ));
-        }
-
-        Line::from(spans)
+        rendered
     };
 
     let model_tag_span = Span::styled(
@@ -231,23 +264,30 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
             .add_modifier(Modifier::BOLD),
     );
 
+    let input_hint = Span::styled(
+        " [Enter] Send • [Alt+Enter] Newline ",
+        Style::default().fg(Theme::TEXT_MUTED),
+    );
+
     let input_block = Block::default()
         .title(input_title)
         .title_top(Line::from(model_tag_span).right_aligned())
+        .title_bottom(Line::from(input_hint).right_aligned())
         .borders(Borders::ALL)
         .border_style(input_border)
         .style(Theme::block_base());
 
-    let input_p = Paragraph::new(input_line).block(input_block);
+    let input_p = Paragraph::new(visible_lines).block(input_block);
     frame.render_widget(input_p, chunks[1]);
 
     // Position terminal cursor when input is focused for intuitive typing UX
     if is_input_focused {
-        let prompt_width = 2u16; // "❯ "
-        let cursor_offset = state.input_buffer[..state.cursor_pos].chars().count() as u16;
-        let cursor_x = (chunks[1].x + 1 + prompt_width + cursor_offset)
+        let visual_row = cursor_row.saturating_sub(state.input_scroll_line) as u16;
+        let visual_col = cursor_col as u16;
+        let cursor_x = (chunks[1].x + 1 + prompt_width as u16 + visual_col)
             .min(chunks[1].x + chunks[1].width.saturating_sub(2));
-        let cursor_y = chunks[1].y + 1;
+        let cursor_y = (chunks[1].y + 1 + visual_row)
+            .min(chunks[1].y + chunks[1].height.saturating_sub(2));
         frame.set_cursor_position((cursor_x, cursor_y));
     }
 }

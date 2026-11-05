@@ -10,6 +10,7 @@ use crate::core_bridge::CoreBridgeEvent;
 #[derive(Clone, Debug)]
 pub enum AppEvent {
     Key(KeyEvent),
+    Paste(String),
     Mouse(MouseEvent),
     Resize(u16, u16),
     Tick,
@@ -54,6 +55,7 @@ impl EventHandler {
                                         }
                                         AppEvent::Key(key)
                                     }
+                                    CrosstermEvent::Paste(text) => AppEvent::Paste(text),
                                     CrosstermEvent::Mouse(mouse) => AppEvent::Mouse(mouse),
                                     CrosstermEvent::Resize(w, h) => AppEvent::Resize(w, h),
                                     _ => continue,

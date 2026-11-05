@@ -174,7 +174,9 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
 
                         let total_tokens = s.total_tokens_input + s.total_tokens_output;
                         let token_tag = if total_tokens > 0 {
-                            format!(" ({} tokens)", total_tokens)
+                            format!(" [{} reqs • {} tokens]", s.total_requests, super::helpers::format_compact_number(total_tokens as usize))
+                        } else if s.total_requests > 0 {
+                            format!(" [{} reqs]", s.total_requests)
                         } else {
                             String::new()
                         };

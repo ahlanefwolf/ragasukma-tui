@@ -32,3 +32,30 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1]
 }
+
+/// Format integer with thousand commas (e.g. 1,234,567)
+pub fn format_comma_number(n: usize) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    let chars: Vec<char> = s.chars().collect();
+    let len = chars.len();
+    for (i, c) in chars.iter().enumerate() {
+        if i > 0 && (len - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(*c);
+    }
+    out
+}
+
+/// Format tokens compactly (e.g. 1.2M, 45.6K, 950)
+pub fn format_compact_number(n: usize) -> String {
+    if n >= 1_000_000 {
+        format!("{:.2}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
+    }
+}
+

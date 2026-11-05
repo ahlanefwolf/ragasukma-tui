@@ -46,8 +46,22 @@ impl App {
             }
             CoreBridgeEvent::ToolCall { session_id, name, args } => {
                 tracing::info!("Tool call received: session={session_id}, name='{name}', args='{args}'");
-                if Some(&session_id) == self.agent.active_session_id.as_ref()
-                    && let Some(last) = self.agent.messages.last_mut() {
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
+                    s.total_requests += 1;
+                }
+                if Some(&session_id) == self.agent.active_session_id.as_ref() {
+                    let needs_new_assistant_msg = self.agent.messages.last().map(|m| m.role != crate::agent_view::types::MessageRole::Assistant).unwrap_or(true);
+                    if needs_new_assistant_msg {
+                        self.agent.push_message(crate::agent_view::types::ChatMessage {
+                            role: crate::agent_view::types::MessageRole::Assistant,
+                            sender_name: "Agent".to_string(),
+                            content: String::new(),
+                            timestamp: "now".to_string(),
+                            tool_calls: Vec::new(),
+                            reasoning: None,
+                        });
+                    }
+                    if let Some(last) = self.agent.messages.last_mut() {
                         last.tool_calls.push(ToolCallInfo {
                             id: format!("call_{}", last.tool_calls.len() + 1),
                             name,
@@ -61,6 +75,7 @@ impl App {
                             diff_preview: None,
                         });
                     }
+                }
             }
             CoreBridgeEvent::TurnCompleted { session_id, summary: msg } => {
                 tracing::info!("Turn completed for {session_id}: {msg}");
@@ -282,6 +297,7 @@ impl App {
                             total_tokens_output: s.total_tokens_output,
                             updated_at: s.updated_at,
                             is_running,
+                            total_requests: s.total_requests,
                         }
                     })
                     .collect();
@@ -301,12 +317,16 @@ impl App {
                 self.agent.active_session_id = Some(session_id.clone());
                 let sum_in: i64 = messages.iter().map(|m| m.token_usage_input.unwrap_or(0)).sum();
                 let sum_out: i64 = messages.iter().map(|m| m.token_usage_output.unwrap_or(0)).sum();
+                let asst_count = messages.iter().filter(|m| m.role == "assistant").count();
+                let tool_count = messages.iter().filter(|m| m.role == "tool").count();
+                let req_count = asst_count + tool_count;
                 if let Some(pos) = self.agent.sessions.iter().position(|s| s.id == session_id) {
                     self.agent.selected_session_idx = pos;
                     if sum_in > 0 || sum_out > 0 {
                         self.agent.sessions[pos].total_tokens_input = sum_in;
                         self.agent.sessions[pos].total_tokens_output = sum_out;
                     }
+                    self.agent.sessions[pos].total_requests = self.agent.sessions[pos].total_requests.max(req_count);
                     if let Some(ref m) = self.agent.sessions[pos].model {
                         self.agent.active_model = m.clone();
                     }
@@ -324,6 +344,7 @@ impl App {
                     total_tokens_output: 0,
                     updated_at: 0,
                     is_running: false,
+                    total_requests: 0,
                 };
                 self.agent.sessions.insert(0, session_item);
                 self.agent.selected_session_idx = 0;

@@ -26,6 +26,8 @@ pub struct AgentWorkspaceState {
     pub messages: Vec<ChatMessage>,
     pub input_buffer: String,
     pub cursor_pos: usize,
+    pub input_scroll_line: usize,
+    pub input_wrap_width: Cell<usize>,
     pub scroll_offset: usize,
     pub chat_max_scroll: Cell<usize>,
     pub is_input_focused: bool,
@@ -64,6 +66,7 @@ pub struct AgentWorkspaceState {
     pub total_prompt_tokens: usize,
     pub total_completion_tokens: usize,
     pub max_context_limit: usize,
+    pub session_start_instant: std::time::Instant,
 
     // Projects (Database SQLite migrations/0004)
     pub projects: Vec<ProjectItem>,
@@ -95,6 +98,8 @@ impl Default for AgentWorkspaceState {
             messages: Vec::new(),
             input_buffer: String::new(),
             cursor_pos: 0,
+            input_scroll_line: 0,
+            input_wrap_width: Cell::new(80),
             scroll_offset: 0,
             chat_max_scroll: Cell::new(0),
             inspector_scroll_offset: 0,
@@ -128,6 +133,7 @@ impl Default for AgentWorkspaceState {
             total_prompt_tokens: 0,
             total_completion_tokens: 0,
             max_context_limit: 128_000,
+            session_start_instant: std::time::Instant::now(),
             projects: Vec::new(),
             selected_project_idx: 0,
             active_project_id: None,
@@ -205,25 +211,364 @@ impl AgentWorkspaceState {
         self.tag_query = None;
     }
 
-    pub fn insert_char(&mut self, c: char) {
-        let prefix = &self.input_buffer[..self.cursor_pos];
-        let suffix = &self.input_buffer[self.cursor_pos..];
-        self.input_buffer = format!("{}{}{}", prefix, c, suffix);
-        self.cursor_pos += c.len_utf8();
-        self.check_and_update_tag_query();
+    pub fn ensure_valid_cursor(&mut self) {
+        if self.cursor_pos > self.input_buffer.len() {
+            self.cursor_pos = self.input_buffer.len();
+        }
+        while !self.input_buffer.is_char_boundary(self.cursor_pos) && self.cursor_pos > 0 {
+            self.cursor_pos -= 1;
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputVisualLine {
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub is_paragraph_start: bool,
+}
+
+impl AgentWorkspaceState {
+    pub fn compute_visual_lines(&self, wrap_width: usize) -> Vec<InputVisualLine> {
+        let wrap = wrap_width.max(5);
+        if self.input_buffer.is_empty() {
+            return vec![InputVisualLine {
+                start_byte: 0,
+                end_byte: 0,
+                is_paragraph_start: true,
+            }];
+        }
+
+        let mut vlines = Vec::new();
+        let mut phys_start = 0;
+        let total_len = self.input_buffer.len();
+
+        while phys_start <= total_len {
+            let phys_end = match self.input_buffer[phys_start..].find('\n') {
+                Some(idx) => phys_start + idx,
+                None => total_len,
+            };
+
+            let phys_str = &self.input_buffer[phys_start..phys_end];
+            let char_count = phys_str.chars().count();
+
+            if char_count == 0 {
+                vlines.push(InputVisualLine {
+                    start_byte: phys_start,
+                    end_byte: phys_end,
+                    is_paragraph_start: true,
+                });
+            } else {
+                let mut seg_start_byte = phys_start;
+                let mut is_first = true;
+                let mut current_seg_chars = 0;
+
+                for (b_offset, _) in phys_str.char_indices() {
+                    if current_seg_chars == wrap {
+                        let seg_end_byte = phys_start + b_offset;
+                        vlines.push(InputVisualLine {
+                            start_byte: seg_start_byte,
+                            end_byte: seg_end_byte,
+                            is_paragraph_start: is_first,
+                        });
+                        is_first = false;
+                        seg_start_byte = seg_end_byte;
+                        current_seg_chars = 0;
+                    }
+                    current_seg_chars += 1;
+                }
+
+                // Push last segment of this physical line
+                vlines.push(InputVisualLine {
+                    start_byte: seg_start_byte,
+                    end_byte: phys_end,
+                    is_paragraph_start: is_first,
+                });
+
+                // If this physical line filled the width completely and cursor is at end,
+                // wrap automatically to a new visual line below
+                if char_count > 0 && char_count.is_multiple_of(wrap) && self.cursor_pos == phys_end {
+                    vlines.push(InputVisualLine {
+                        start_byte: phys_end,
+                        end_byte: phys_end,
+                        is_paragraph_start: false,
+                    });
+                }
+            }
+
+            if phys_end == total_len {
+                break;
+            }
+            phys_start = phys_end + 1; // skip '\n'
+        }
+
+        if vlines.is_empty() {
+            vlines.push(InputVisualLine {
+                start_byte: 0,
+                end_byte: 0,
+                is_paragraph_start: true,
+            });
+        }
+
+        vlines
     }
 
-    pub fn backspace(&mut self) {
+    pub fn get_cursor_visual_position(&self, wrap_width: usize) -> (usize, usize) {
+        let vlines = self.compute_visual_lines(wrap_width);
+        if vlines.is_empty() {
+            return (0, 0);
+        }
+        let safe_pos = self.cursor_pos.min(self.input_buffer.len());
+
+        for (idx, vl) in vlines.iter().enumerate() {
+            // When cursor is at the right edge boundary of a wrapped line,
+            // automatically prefer the start of the next line below (wrap downwards)
+            if safe_pos == vl.end_byte
+                && idx + 1 < vlines.len()
+                && vlines[idx + 1].start_byte == vl.end_byte
+            {
+                continue;
+            }
+
+            if safe_pos >= vl.start_byte && safe_pos <= vl.end_byte {
+                let col = self.input_buffer[vl.start_byte..safe_pos].chars().count();
+                return (idx, col);
+            }
+        }
+
+        let last_idx = vlines.len() - 1;
+        let last_vl = &vlines[last_idx];
+        let col = self.input_buffer[last_vl.start_byte..safe_pos.max(last_vl.start_byte)]
+            .chars()
+            .count();
+        (last_idx, col)
+    }
+
+    pub fn get_cursor_row_col(&self) -> (usize, usize) {
+        let wrap = self.input_wrap_width.get().max(5);
+        self.get_cursor_visual_position(wrap)
+    }
+
+    pub fn adjust_input_scroll(&mut self) {
+        let (row, _) = self.get_cursor_row_col();
+        if row < self.input_scroll_line {
+            self.input_scroll_line = row;
+        } else if row >= self.input_scroll_line + 3 {
+            self.input_scroll_line = row - 3 + 1;
+        }
+    }
+
+    pub fn cursor_left(&mut self) {
+        self.ensure_valid_cursor();
         if self.cursor_pos > 0 {
-            let prev = self.input_buffer[..self.cursor_pos]
+            let prev_len = self.input_buffer[..self.cursor_pos]
                 .chars()
                 .last()
                 .map(|c| c.len_utf8())
                 .unwrap_or(1);
-            let start = self.cursor_pos - prev;
-            let end = self.cursor_pos;
-            self.input_buffer.replace_range(start..end, "");
-            self.cursor_pos = start;
+            self.cursor_pos = self.cursor_pos.saturating_sub(prev_len);
+            self.ensure_valid_cursor();
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn cursor_right(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos < self.input_buffer.len() {
+            let next_len = self.input_buffer[self.cursor_pos..]
+                .chars()
+                .next()
+                .map(|c| c.len_utf8())
+                .unwrap_or(1);
+            self.cursor_pos = (self.cursor_pos + next_len).min(self.input_buffer.len());
+            self.ensure_valid_cursor();
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn cursor_home(&mut self) {
+        self.ensure_valid_cursor();
+        let wrap = self.input_wrap_width.get().max(5);
+        let vlines = self.compute_visual_lines(wrap);
+        let (row, _) = self.get_cursor_visual_position(wrap);
+        if let Some(vl) = vlines.get(row) {
+            self.cursor_pos = vl.start_byte;
+        }
+        self.ensure_valid_cursor();
+        self.adjust_input_scroll();
+        self.check_and_update_tag_query();
+    }
+
+    pub fn cursor_end(&mut self) {
+        self.ensure_valid_cursor();
+        let wrap = self.input_wrap_width.get().max(5);
+        let vlines = self.compute_visual_lines(wrap);
+        let (row, _) = self.get_cursor_visual_position(wrap);
+        if let Some(vl) = vlines.get(row) {
+            self.cursor_pos = vl.end_byte;
+        }
+        self.ensure_valid_cursor();
+        self.adjust_input_scroll();
+        self.check_and_update_tag_query();
+    }
+
+    pub fn cursor_up(&mut self) {
+        self.ensure_valid_cursor();
+        let wrap = self.input_wrap_width.get().max(5);
+        let vlines = self.compute_visual_lines(wrap);
+        let (row, col) = self.get_cursor_visual_position(wrap);
+        if row == 0 {
+            self.cursor_home();
+            return;
+        }
+
+        if let Some(prev_vl) = vlines.get(row - 1) {
+            let prev_str = &self.input_buffer[prev_vl.start_byte..prev_vl.end_byte];
+            let prev_char_count = prev_str.chars().count();
+            let target_col = col.min(prev_char_count);
+            let col_byte_offset: usize = prev_str
+                .chars()
+                .take(target_col)
+                .map(|c| c.len_utf8())
+                .sum();
+            self.cursor_pos = prev_vl.start_byte + col_byte_offset;
+            self.ensure_valid_cursor();
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn cursor_down(&mut self) {
+        self.ensure_valid_cursor();
+        let wrap = self.input_wrap_width.get().max(5);
+        let vlines = self.compute_visual_lines(wrap);
+        let (row, col) = self.get_cursor_visual_position(wrap);
+        if row + 1 >= vlines.len() {
+            self.cursor_end();
+            return;
+        }
+
+        if let Some(next_vl) = vlines.get(row + 1) {
+            let next_str = &self.input_buffer[next_vl.start_byte..next_vl.end_byte];
+            let next_char_count = next_str.chars().count();
+            let target_col = col.min(next_char_count);
+            let col_byte_offset: usize = next_str
+                .chars()
+                .take(target_col)
+                .map(|c| c.len_utf8())
+                .sum();
+            self.cursor_pos = next_vl.start_byte + col_byte_offset;
+            self.ensure_valid_cursor();
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn insert_newline(&mut self) {
+        self.insert_char('\n');
+        self.adjust_input_scroll();
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        self.ensure_valid_cursor();
+        let prefix = &self.input_buffer[..self.cursor_pos];
+        let suffix = &self.input_buffer[self.cursor_pos..];
+        self.input_buffer = format!("{}{}{}", prefix, c, suffix);
+        self.cursor_pos += c.len_utf8();
+        self.adjust_input_scroll();
+        self.check_and_update_tag_query();
+    }
+
+    pub fn sanitize_pasted_text(text: &str) -> String {
+        let text = text.replace('\r', "");
+        let raw_lines: Vec<&str> = text.split('\n').collect();
+        if raw_lines.len() <= 1 {
+            return text.replace('\t', "    ");
+        }
+
+        let mut lines = Vec::new();
+        let mut i = 0;
+        while i < raw_lines.len() {
+            let line = raw_lines[i];
+            let trimmed_end = line.trim_end();
+            if let Some(stripped) = trimmed_end.strip_suffix('\\') {
+                // Shell line continuation: merge with next line
+                let mut merged = stripped.trim_end().to_string();
+                i += 1;
+                while i < raw_lines.len() {
+                    let next_line = raw_lines[i].trim();
+                    if let Some(next_stripped) = next_line.strip_suffix('\\') {
+                        merged.push(' ');
+                        merged.push_str(next_stripped.trim_end());
+                        i += 1;
+                    } else {
+                        if !next_line.is_empty() {
+                            merged.push(' ');
+                            merged.push_str(next_line);
+                        }
+                        break;
+                    }
+                }
+                lines.push(merged);
+            } else {
+                lines.push(line.replace('\t', "    "));
+            }
+            i += 1;
+        }
+
+        lines.join("\n")
+    }
+
+    pub fn paste(&mut self, text: &str) {
+        self.ensure_valid_cursor();
+        let sanitized = Self::sanitize_pasted_text(text);
+        let prefix = &self.input_buffer[..self.cursor_pos];
+        let suffix = &self.input_buffer[self.cursor_pos..];
+        self.input_buffer = format!("{}{}{}", prefix, sanitized, suffix);
+        self.cursor_pos += sanitized.len();
+        self.adjust_input_scroll();
+        self.check_and_update_tag_query();
+    }
+
+    pub fn backspace(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos > 0 {
+            let prev_len = self.input_buffer[..self.cursor_pos]
+                .chars()
+                .last()
+                .map(|c| c.len_utf8())
+                .unwrap_or(0);
+            if prev_len > 0 && prev_len <= self.cursor_pos {
+                let start = self.cursor_pos - prev_len;
+                let end = self.cursor_pos;
+                if self.input_buffer.is_char_boundary(start) && self.input_buffer.is_char_boundary(end) {
+                    self.input_buffer.replace_range(start..end, "");
+                    self.cursor_pos = start;
+                }
+            }
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn delete_forward(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos < self.input_buffer.len() {
+            let next_len = self.input_buffer[self.cursor_pos..]
+                .chars()
+                .next()
+                .map(|c| c.len_utf8())
+                .unwrap_or(0);
+            if next_len > 0 {
+                let start = self.cursor_pos;
+                let end = self.cursor_pos + next_len;
+                if self.input_buffer.is_char_boundary(start) && self.input_buffer.is_char_boundary(end) {
+                    self.input_buffer.replace_range(start..end, "");
+                }
+            }
+            self.adjust_input_scroll();
             self.check_and_update_tag_query();
         }
     }
@@ -549,10 +894,15 @@ impl AgentWorkspaceState {
     }
 
     pub fn check_and_update_tag_query(&mut self) {
+        self.ensure_valid_cursor();
         if let Some(at_pos) = self.input_buffer[..self.cursor_pos].rfind('@') {
             let slice_between = &self.input_buffer[at_pos + 1..self.cursor_pos];
-            // If user typed space after '@', tag query autocomplete has ended
-            if slice_between.contains(' ') || slice_between.contains('\t') {
+            // If user typed space, tab, newline after '@', or query is unreasonably long (e.g. pasted code/email)
+            if slice_between.contains(' ')
+                || slice_between.contains('\t')
+                || slice_between.contains('\n')
+                || slice_between.len() > 64
+            {
                 self.tag_query = None;
                 return;
             }
@@ -657,6 +1007,7 @@ impl AgentWorkspaceState {
         if !self.sessions.is_empty() {
             self.selected_session_idx = (self.selected_session_idx + 1) % self.sessions.len();
             self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
+            self.session_start_instant = std::time::Instant::now();
         }
     }
 
@@ -668,6 +1019,7 @@ impl AgentWorkspaceState {
                 self.selected_session_idx -= 1;
             }
             self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
+            self.session_start_instant = std::time::Instant::now();
         }
     }
 
@@ -683,10 +1035,12 @@ impl AgentWorkspaceState {
             total_tokens_output: 0,
             updated_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
             is_running: false,
+            total_requests: 0,
         };
         self.sessions.push(new_task);
         self.selected_session_idx = self.sessions.len() - 1;
         self.active_session_id = Some(id);
+        self.session_start_instant = std::time::Instant::now();
     }
 
     pub fn delete_selected_task(&mut self) {
@@ -696,6 +1050,7 @@ impl AgentWorkspaceState {
                 self.selected_session_idx = self.sessions.len() - 1;
             }
             self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
+            self.session_start_instant = std::time::Instant::now();
         }
     }
 
@@ -727,24 +1082,54 @@ impl AgentWorkspaceState {
             }
         }
 
+        // Each tool call executed by the agent constitutes a full API round-trip cycle to the model.
+        let total_tool_calls: usize = self.messages.iter().map(|m| m.tool_calls.len()).sum();
+
         // Calculate total LLM interaction turns (requests to model):
-        // Each assistant response represents 1 completed LLM API call cycle.
-        // If request is currently active or user just sent prompt without assistant response yet,
-        // user prompt is counted as an ongoing request.
-        let task_requests = if assistant_turns > 0 {
-            assistant_turns
+        // Each assistant response and tool execution represents a completed LLM API call cycle.
+        // In addition, any ongoing turn (is_running) counts as an active live request (+1).
+        // Determine current session either by active_session_id or selected_session_idx
+        let cur_session = self
+            .active_session_id
+            .as_ref()
+            .and_then(|aid| self.sessions.iter().find(|s| &s.id == aid))
+            .or_else(|| self.sessions.get(self.selected_session_idx));
+
+        let is_actively_running = self.is_running
+            || cur_session.map(|s| s.is_running).unwrap_or(false);
+        let active_request_increment = if is_actively_running { 1 } else { 0 };
+
+        let completed_requests = assistant_turns + total_tool_calls;
+        let (stored_in, stored_out, stored_requests) = if let Some(s) = cur_session {
+            (s.total_tokens_input as usize, s.total_tokens_output as usize, s.total_requests)
         } else {
-            user_prompts
+            (0, 0, 0)
         };
 
-        let (stored_in, stored_out) = if let Some(s) = self.sessions.get(self.selected_session_idx) {
-            (s.total_tokens_input as usize, s.total_tokens_output as usize)
+        let base_requests = completed_requests.max(stored_requests);
+        let task_requests = if base_requests > 0 {
+            base_requests + active_request_increment
         } else {
-            (0, 0)
+            user_prompts.max(active_request_increment)
+        };
+
+        // If actively running, ensure real-time stream token accumulation is included
+        let live_stream_tokens = if is_actively_running {
+            self.messages
+                .last()
+                .filter(|m| m.role == MessageRole::Assistant)
+                .map(|m| {
+                    let content_tok = m.content.len() / 4;
+                    let thought_tok = m.reasoning.as_ref().map(|r| r.len() / 4).unwrap_or(0);
+                    (content_tok + thought_tok).max(1)
+                })
+                .unwrap_or(1)
+        } else {
+            0
         };
 
         let task_input_tokens = stored_in.max(msg_in_tokens);
-        let task_output_tokens = stored_out.max(msg_out_tokens);
+        let task_output_tokens = stored_out.max(msg_out_tokens) + live_stream_tokens;
 
         TokenBreakdown {
             system_tokens: 1500,
@@ -1183,6 +1568,116 @@ mod tests {
         assert_eq!(state.messages.len(), MAX_CHAT_MESSAGES);
         assert_eq!(state.messages[0].content, "Message 50");
         assert_eq!(state.messages[MAX_CHAT_MESSAGES - 1].content, format!("Message {}", MAX_CHAT_MESSAGES + 49));
+    }
+
+    #[test]
+    fn test_bracketed_paste_multiline() {
+        let mut state = AgentWorkspaceState::default();
+        state.insert_char('a');
+        let pasted_text = "line 1\r\nline 2\nline 3";
+        state.paste(pasted_text);
+        assert_eq!(state.input_buffer, "aline 1\nline 2\nline 3");
+        assert_eq!(state.cursor_pos, "aline 1\nline 2\nline 3".len());
+
+        // Backspace should delete the last character safely
+        state.backspace();
+        assert_eq!(state.input_buffer, "aline 1\nline 2\nline ");
+        assert_eq!(state.cursor_pos, "aline 1\nline 2\nline ".len());
+    }
+
+    #[test]
+    fn test_paste_multiline_bash_command_and_backspace() {
+        let mut state = AgentWorkspaceState::default();
+        let cmd = "cargo clippy --bin ragasukma -- \\\n  -W dead_code \\\n  -W unused \\\n  -W clippy::redundant_clone \\\n  -W clippy::await_holding_lock \\\n  -W clippy::mutex_atomic \\\n  -W clippy::rc_buffer \\\n  -W clippy::panic \\\n  -W clippy::unwrap_used";
+        state.paste(cmd);
+        let expected = "cargo clippy --bin ragasukma -- -W dead_code -W unused -W clippy::redundant_clone -W clippy::await_holding_lock -W clippy::mutex_atomic -W clippy::rc_buffer -W clippy::panic -W clippy::unwrap_used";
+        assert_eq!(state.input_buffer, expected);
+        assert_eq!(state.cursor_pos, expected.len());
+
+        // Backspacing 'd' from unwrap_used
+        state.backspace();
+        assert_eq!(
+            state.input_buffer,
+            "cargo clippy --bin ragasukma -- -W dead_code -W unused -W clippy::redundant_clone -W clippy::await_holding_lock -W clippy::mutex_atomic -W clippy::rc_buffer -W clippy::panic -W clippy::unwrap_use"
+        );
+        assert_eq!(state.cursor_pos, expected.len() - 1);
+    }
+
+    #[test]
+    fn test_paste_with_at_symbol_no_freeze() {
+        let mut state = AgentWorkspaceState::default();
+        state.paste("const fn = @decorator\nfunction test() {}");
+        assert!(state.tag_query.is_none());
+        state.backspace();
+        assert_eq!(state.input_buffer, "const fn = @decorator\nfunction test() {");
+    }
+
+    #[test]
+    fn test_2d_cursor_navigation_and_scroll() {
+        let mut state = AgentWorkspaceState::default();
+        // Insert 5 lines
+        state.paste("line 1\nline 2\nline 3\nline 4\nline 5");
+        assert_eq!(state.get_cursor_row_col(), (4, 6)); // Line 4, col 6 ("line 5")
+        // Scroll line must be 2 (showing lines 2, 3, 4 in 3-line window)
+        assert_eq!(state.input_scroll_line, 2);
+
+        // Move cursor UP
+        state.cursor_up();
+        assert_eq!(state.get_cursor_row_col(), (3, 6));
+
+        state.cursor_up();
+        assert_eq!(state.get_cursor_row_col(), (2, 6));
+
+        state.cursor_up();
+        assert_eq!(state.get_cursor_row_col(), (1, 6));
+        // Viewport should scroll up to show line 1
+        assert_eq!(state.input_scroll_line, 1);
+
+        state.cursor_up();
+        assert_eq!(state.get_cursor_row_col(), (0, 6));
+        assert_eq!(state.input_scroll_line, 0);
+
+        // Home and End
+        state.cursor_home();
+        assert_eq!(state.get_cursor_row_col(), (0, 0));
+
+        state.cursor_end();
+        assert_eq!(state.get_cursor_row_col(), (0, 6));
+
+        // Move cursor DOWN
+        state.cursor_down();
+        assert_eq!(state.get_cursor_row_col(), (1, 6));
+
+        // Insert newline
+        state.insert_newline();
+        assert_eq!(state.get_cursor_row_col(), (2, 0));
+    }
+
+    #[test]
+    fn test_auto_wrap_to_newline_on_right_edge() {
+        let mut state = AgentWorkspaceState::default();
+        // Set wrap width to 10
+        state.input_wrap_width.set(10);
+
+        // Type 10 characters "0123456789"
+        for c in "0123456789".chars() {
+            state.insert_char(c);
+        }
+        // At 10 chars, it hits the right edge boundary and automatically wraps downwards to next line (line 1, col 0)
+        assert_eq!(state.get_cursor_row_col(), (1, 0));
+
+        // Type the 11th character
+        state.insert_char('A');
+        assert_eq!(state.get_cursor_row_col(), (1, 1));
+        assert_eq!(state.input_buffer, "0123456789A");
+
+        // Cursor UP moves back to first line
+        state.cursor_up();
+        assert_eq!(state.get_cursor_row_col(), (0, 1));
+
+        // Cursor DOWN moves back to second line
+        state.cursor_down();
+        assert_eq!(state.get_cursor_row_col(), (1, 1));
     }
 
     #[test]

@@ -130,37 +130,24 @@ pub fn render_message_to_lines<'a>(
 
     // 3. Render Message Content
     if msg.role == MessageRole::Tool {
-        // For Tool output which might contain thousands of lines: apply window truncation
-        let raw_lines: Vec<&str> = msg.content.lines().collect();
-        let total_tool_lines = raw_lines.len();
+        // Tool output is not displayed in full; only execution status (success or failure) is shown
+        let is_failed = msg.content.starts_with("Error:")
+            || msg.content.starts_with("Failed:")
+            || msg.content.contains("\"is_error\": true")
+            || msg.content.contains("\"is_error\":true")
+            || msg.content.to_lowercase().starts_with("error");
 
-        let display_lines = if total_tool_lines > config.max_tool_lines {
-            &raw_lines[..config.max_tool_lines]
-        } else {
-            &raw_lines[..]
-        };
-
-        for raw_line in display_lines {
-            let clean = sanitize_terminal_line(raw_line, config.tab_size);
+        if is_failed {
+            let error_summary = msg.content.lines().next().unwrap_or("Execution encountered an error");
             lines.push(Line::from(vec![
-                Span::styled("    │ ", Theme::dim()),
-                Span::styled(clean, Style::default().fg(Theme::TEXT_MUTED)),
+                Span::styled("    ✗ ", Style::default().fg(Theme::STATUS_ERROR).add_modifier(Modifier::BOLD)),
+                Span::styled("Tool execution failed", Style::default().fg(Theme::STATUS_ERROR).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(": {}", error_summary), Style::default().fg(Theme::TEXT_MUTED)),
             ]));
-        }
-
-        if total_tool_lines > config.max_tool_lines {
-            let hidden_count = total_tool_lines - config.max_tool_lines;
+        } else {
             lines.push(Line::from(vec![
-                Span::styled("    │ ", Theme::dim()),
-                Span::styled(
-                    format!(
-                        "⚡ [... {} other lines of tool output hidden for TUI performance ...]",
-                        hidden_count
-                    ),
-                    Style::default()
-                        .fg(Theme::GOLD_PRIMARY)
-                        .add_modifier(Modifier::ITALIC),
-                ),
+                Span::styled("    ✓ ", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
+                Span::styled("Tool execution succeeded", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
             ]));
         }
     } else {
@@ -430,7 +417,7 @@ mod tests {
             content.push_str(&format!("line {}\n", i));
         }
 
-        let msg = ChatMessage {
+        let msg_success = ChatMessage {
             role: MessageRole::Tool,
             sender_name: "tool".to_string(),
             content,
@@ -444,8 +431,26 @@ mod tests {
             max_tool_lines: 20,
         };
 
-        let lines = render_message_to_lines(&msg, &config);
-        // 1 header + 20 lines + 1 footer truncation + 1 blank line = 23 lines
-        assert_eq!(lines.len(), 23);
+        let lines_success = render_message_to_lines(&msg_success, &config);
+        // Header + 1 status line (Success) + 1 blank spacing line = 3 lines
+        assert_eq!(lines_success.len(), 3);
+        let joined_success = lines_success.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        assert!(joined_success.contains("Tool execution succeeded"));
+        assert!(!joined_success.contains("line 50"));
+
+        let msg_failed = ChatMessage {
+            role: MessageRole::Tool,
+            sender_name: "tool".to_string(),
+            content: "Error: file not found".to_string(),
+            timestamp: "12:00:00".to_string(),
+            tool_calls: vec![],
+            reasoning: None,
+        };
+
+        let lines_failed = render_message_to_lines(&msg_failed, &config);
+        assert_eq!(lines_failed.len(), 3);
+        let joined_failed = lines_failed.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        assert!(joined_failed.contains("Tool execution failed"));
+        assert!(joined_failed.contains("file not found"));
     }
 }

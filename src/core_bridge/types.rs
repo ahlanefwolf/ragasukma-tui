@@ -28,6 +28,7 @@ pub struct SessionDto {
     pub total_tokens_input: i64,
     pub total_tokens_output: i64,
     pub updated_at: i64,
+    pub total_requests: usize,
 }
 
 impl From<ragasukma_core::agent::models::Session> for SessionDto {
@@ -40,6 +41,7 @@ impl From<ragasukma_core::agent::models::Session> for SessionDto {
             total_tokens_input: s.total_tokens_input.unwrap_or(0),
             total_tokens_output: s.total_tokens_output.unwrap_or(0),
             updated_at: s.updated_at,
+            total_requests: s.total_requests.unwrap_or(0).max(0) as usize,
         }
     }
 }

@@ -91,6 +91,11 @@ async fn run_app(
                         app.update(act);
                     }
                 }
+                AppEvent::Paste(text) => {
+                    if let Some(act) = app.handle_paste_event(text) {
+                        app.update(act);
+                    }
+                }
                 AppEvent::CoreEvent(evt) => {
                     app.handle_bridge_event(evt);
                 }

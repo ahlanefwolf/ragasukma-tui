@@ -96,4 +96,11 @@ impl App {
             _ => None,
         }
     }
+
+    pub fn handle_paste_event(&self, text: String) -> Option<Action> {
+        if self.active_tab == 0 && self.agent.is_input_focused {
+            return Some(Action::AgentPaste(text));
+        }
+        None
+    }
 }
