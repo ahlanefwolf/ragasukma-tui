@@ -697,17 +697,17 @@ impl AgentWorkspaceState {
                     msg_out_tokens += tok;
                 }
                 crate::agent_view::types::MessageRole::Tool => {
-                    // Tool output diumpankan kembali sebagai input context ke pemanggilan model berikutnya
+                    // Tool output is fed back as input context to the next model call
                     msg_in_tokens += tok;
                 }
                 _ => {}
             }
         }
 
-        // Hitung total LLM interaction turns (request ke model):
-        // Setiap respon assistant merepresentasikan 1 kali siklus panggilan LLM API yang selesai dieksekusi.
-        // Jika request sedang aktif atau user baru mengirim prompt dan belum ada respon assistant,
-        // minimal prompt user dihitung sebagai request berjalan.
+        // Calculate total LLM interaction turns (requests to model):
+        // Each assistant response represents 1 completed LLM API call cycle.
+        // If request is currently active or user just sent prompt without assistant response yet,
+        // user prompt is counted as an ongoing request.
         let task_requests = if assistant_turns > 0 {
             assistant_turns
         } else {

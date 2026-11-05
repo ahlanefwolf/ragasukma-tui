@@ -88,12 +88,12 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
             ]));
         }
 
-        // Spacer padding 1 baris di akhir agar teks terbawah tidak menempel ke border
+        // Spacer padding of 1 line at the bottom so bottom text does not stick to border
         if !chat_lines.is_empty() {
             chat_lines.push(Line::from(""));
         }
 
-        // Pre-wrap semua baris ke lebar area chat agar total baris persis 1:1 dengan baris visual layar
+        // Pre-wrap all lines to chat area width so total lines map 1:1 to visual screen lines
         cache.lines = wrap_lines_to_width(chat_lines, text_width);
         cache.width = text_width;
         cache.message_count = message_count;

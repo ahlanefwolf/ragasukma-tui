@@ -98,14 +98,14 @@ async fn run_app(
                         app.codex = ragasukma_tui::provider_view::codex::load_codex_tab();
                     }
                     app.set_status(format!(
-                        "OAuth Login Berhasil! Akun {} ({}) terhubung.",
+                        "OAuth Login Successful! Account {} ({}) connected.",
                         email, provider
                     ));
                 }
                 AppEvent::OAuthFailed { provider, error } => {
                     tracing::error!("OAuth login failed: provider='{provider}', error='{error}'");
                     term.clear()?;
-                    app.set_status(format!("OAuth Login Gagal [{}]: {}", provider, error));
+                    app.set_status(format!("OAuth Login Failed [{}]: {}", provider, error));
                 }
                 AppEvent::Tick => {
                     app.on_tick();

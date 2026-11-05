@@ -6,7 +6,7 @@ use ratatui::{
 use crate::agent_view::types::{ChatMessage, MessageRole, ToolExecutionStatus};
 use crate::theme::Theme;
 
-/// Standar konfigurasi formatting teks Ratatui untuk pesan chat/tool.
+/// Standard Ratatui text formatting configuration for chat/tool messages.
 pub struct MessageRenderConfig {
     pub tab_size: usize,
     pub max_tool_lines: usize,
@@ -21,9 +21,9 @@ impl Default for MessageRenderConfig {
     }
 }
 
-/// Standar sanitasi string untuk terminal Ratatui:
-/// 1. Mengubah tab (`\t`) menjadi jumlah spasi yang konsisten (menghindari desinkronisasi terminal cursor vs Ratatui cell).
-/// 2. Menghilangkan carriage return (`\r`) dan non-printable control characters.
+/// Standard string sanitization for Ratatui terminal:
+/// 1. Converts tabs (`\t`) to a consistent number of spaces (prevents terminal cursor vs Ratatui cell desync).
+/// 2. Strips carriage returns (`\r`) and non-printable control characters.
 pub fn sanitize_terminal_line(input: &str, tab_size: usize) -> String {
     let spaces = " ".repeat(tab_size);
     let mut out = String::with_capacity(input.len());
@@ -38,8 +38,8 @@ pub fn sanitize_terminal_line(input: &str, tab_size: usize) -> String {
     out
 }
 
-/// Format string timestamp mentah (Unix Epoch dalam detik/milidetik, "now", dsb.)
-/// menjadi format ringkas waktu lokal: `MM/DD HH:MM` (contoh: `04/04 14:03`).
+/// Formats raw timestamp string (Unix Epoch in seconds/milliseconds, "now", etc.)
+/// into a compact local time format: `MM/DD HH:MM` (e.g. `04/04 14:03`).
 pub fn format_message_timestamp(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -47,7 +47,7 @@ pub fn format_message_timestamp(raw: &str) -> String {
     }
 
     if let Ok(ts) = trimmed.parse::<i64>() {
-        // Jika angka unix epoch: deteksi detik vs milidetik
+        // If unix epoch number: detect seconds vs milliseconds
         let dt = if ts > 100_000_000_000 {
             chrono::DateTime::from_timestamp_millis(ts)
         } else {
@@ -64,24 +64,24 @@ pub fn format_message_timestamp(raw: &str) -> String {
         return chrono::Local::now().format("%m/%d %H:%M").to_string();
     }
 
-    // Jika sudah diformat atau format lain, kembalikan apa adanya
+    // If already formatted or other format, return as is
     trimmed.to_string()
 }
 
-/// Helper default untuk render `ChatMessage` dengan konfigurasi standar.
+/// Default helper to render `ChatMessage` with standard configuration.
 pub fn render_message_standard<'a>(msg: &'a ChatMessage) -> Vec<Line<'a>> {
     let config = MessageRenderConfig::default();
     render_message_to_lines(msg, &config)
 }
 
-/// Merender pesan chat/tool menjadi kumpulan `Line` Ratatui yang terstandarisasi dan aman.
+/// Renders a chat/tool message into a standardized and safe collection of Ratatui `Line`s.
 pub fn render_message_to_lines<'a>(
     msg: &'a ChatMessage,
     config: &MessageRenderConfig,
 ) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
 
-    // 1. Render Header / Badge Pesan
+    // 1. Render Message Header / Badge
     let (badge, badge_style) = match msg.role {
         MessageRole::User => (" You ", Theme::badge_info()),
         MessageRole::Assistant => (" Assistant ", Theme::badge_gold()),
@@ -100,7 +100,7 @@ pub fn render_message_to_lines<'a>(
         ),
     ]));
 
-    // 2. Render Reasoning (jika ada)
+    // 2. Render Reasoning (if present)
     if let Some(reasoning) = &msg.reasoning
         && !reasoning.is_empty()
     {
@@ -128,9 +128,9 @@ pub fn render_message_to_lines<'a>(
         lines.push(Line::from(""));
     }
 
-    // 3. Render Konten Pesan
+    // 3. Render Message Content
     if msg.role == MessageRole::Tool {
-        // Khusus pesan Tool yang bisa bernilai ribuan baris: terapkan window truncation
+        // For Tool output which might contain thousands of lines: apply window truncation
         let raw_lines: Vec<&str> = msg.content.lines().collect();
         let total_tool_lines = raw_lines.len();
 
@@ -143,19 +143,19 @@ pub fn render_message_to_lines<'a>(
         for raw_line in display_lines {
             let clean = sanitize_terminal_line(raw_line, config.tab_size);
             lines.push(Line::from(vec![
-                Span::raw("  "),
-                Span::styled(clean, Style::default().fg(Theme::CYAN_ACCENT)),
+                Span::styled("    │ ", Theme::dim()),
+                Span::styled(clean, Style::default().fg(Theme::TEXT_MUTED)),
             ]));
         }
 
         if total_tool_lines > config.max_tool_lines {
-            let collapsed_count = total_tool_lines - config.max_tool_lines;
+            let hidden_count = total_tool_lines - config.max_tool_lines;
             lines.push(Line::from(vec![
-                Span::raw("  "),
+                Span::styled("    │ ", Theme::dim()),
                 Span::styled(
                     format!(
-                        "⚡ [... {} baris output tool lainnya disembunyikan untuk performa TUI ...]",
-                        collapsed_count
+                        "⚡ [... {} other lines of tool output hidden for TUI performance ...]",
+                        hidden_count
                     ),
                     Style::default()
                         .fg(Theme::GOLD_PRIMARY)
@@ -164,24 +164,24 @@ pub fn render_message_to_lines<'a>(
             ]));
         }
     } else {
-        // Pesan User / Assistant biasa
+        // Standard message formatting with markdown code block support
         let mut in_code_block = false;
 
         for raw_line in msg.content.lines() {
             let clean = sanitize_terminal_line(raw_line, config.tab_size);
             let trimmed = clean.trim_start();
 
-            // Cek tag code block markdown ```
+            // Check markdown code block ``` tag
             if trimmed.starts_with("```") {
                 if in_code_block {
-                    // Penutup code block
+                    // Close code block
                     in_code_block = false;
                     lines.push(Line::from(vec![
                         Span::raw("    "),
                         Span::styled("╰──────────────────────────────────────────", Theme::text_muted()),
                     ]));
                 } else {
-                    // Pembuka code block
+                    // Open code block
                     in_code_block = true;
                     let code_lang = trimmed.trim_start_matches('`').trim();
                     let lang_display = if code_lang.is_empty() {
@@ -228,7 +228,7 @@ pub fn render_message_to_lines<'a>(
             ]));
         }
 
-        // Jika stream masih di tengah-tengah code block tanpa tanda ``` penutup
+        // If stream is still inside code block without closing ```
         if in_code_block {
             lines.push(Line::from(vec![
                 Span::styled("    │ ", Theme::dim()),
@@ -242,7 +242,7 @@ pub fn render_message_to_lines<'a>(
         }
     }
 
-    // 4. Render Tool Calls (jika ada)
+    // 4. Render Tool Calls (if present)
     for tc in &msg.tool_calls {
         let status_icon = match tc.status {
             ToolExecutionStatus::Running => "⏳ Running...",
@@ -270,14 +270,14 @@ pub fn render_message_to_lines<'a>(
         ]));
     }
 
-    // Spacer antar-pesan
+    // Spacer between messages
     lines.push(Line::from(""));
     lines
 }
 
-/// Memecah kumpulan `Line` menjadi baris-baris visual yang sesuai dengan `available_width`.
-/// Setiap baris hasil dijamin memiliki lebar visual <= `available_width`, sehingga
-/// jumlah baris `result.len()` identik secara 1:1 dengan baris fisik di terminal.
+/// Wraps a collection of `Line`s into visual lines respecting `available_width`.
+/// Each line is guaranteed to have visual width <= `available_width`, so that
+/// `result.len()` maps 1:1 with physical terminal lines.
 pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<Line<'static>> {
     if available_width == 0 {
         return lines.into_iter().map(|l| {
@@ -318,7 +318,7 @@ pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<
                     current_line_spans.push(word_span);
                     current_line_width += word_width;
                 } else if word_width > available_width {
-                    // Kata tunggal lebih panjang dari lebar layar - potong per karakter
+                    // Single word longer than screen width - split by character
                     if !current_line_spans.is_empty() {
                         result.push(Line::from(std::mem::take(&mut current_line_spans)));
                         current_line_width = 0;
@@ -345,7 +345,7 @@ pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<
                         current_line_width = chunk_width;
                     }
                 } else {
-                    // Pindah ke baris baru
+                    // Move to new line
                     if !current_line_spans.is_empty() {
                         result.push(Line::from(std::mem::take(&mut current_line_spans)));
                     }
@@ -363,7 +363,7 @@ pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<
     result
 }
 
-/// Menghitung visual line height dari kumpulan Line dengan memperhatikan `available_width`.
+/// Computes visual line height from a slice of `Line`s taking `available_width` into account.
 pub fn calculate_total_visual_lines(lines: &[Line], available_width: usize) -> usize {
     if available_width == 0 {
         return lines.len();

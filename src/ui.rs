@@ -89,11 +89,14 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(tabs_widget, header_chunks[1]);
 
     // Status Pill Block
+    let (dot_style, label) = if app.agent.is_running {
+        (Theme::status_warning(), "BUSY")
+    } else {
+        (Theme::status_success(), "READY")
+    };
     let status_line = Line::from(vec![
-        Span::styled("● ", Theme::status_success()),
-        Span::styled("READY", Style::default().fg(Theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)),
-        Span::raw(" | "),
-        Span::styled(format!("T:{}", app.tick_count), Style::default().fg(Theme::CYAN_ACCENT)),
+        Span::styled("● ", dot_style),
+        Span::styled(label, Style::default().fg(Theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)),
     ]);
     let status_widget = Paragraph::new(status_line)
         .block(

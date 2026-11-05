@@ -1,9 +1,9 @@
 use crate::app::types::Action;
 use super::types::CustomLlmTabState;
 
-/// Menangani action yang berkaitan dengan Custom LLM tab.
-/// Mengembalikan Some(Option<status_message>) jika action dikenali & ditangani,
-/// atau None jika action bukan milik Custom LLM.
+/// Handles actions related to the Custom LLM tab.
+/// Returns Some(Option<status_message>) if action was recognized & handled,
+/// or None if action does not belong to Custom LLM.
 pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) -> Option<Option<String>> {
     match action {
         Action::FormChar(c) => {
@@ -40,25 +40,25 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
         }
         Action::CustomLlmAdd => {
             state.open_add_form();
-            Some(Some("Tambah Custom LLM Endpoint".to_string()))
+            Some(Some("Add Custom LLM Endpoint".to_string()))
         }
         Action::CustomLlmEdit => {
-            state.open_edit_form();
-            Some(Some("Edit Custom LLM Endpoint".to_string()))
+            if state.selected_account().is_some() {
+                state.open_edit_form();
+                Some(Some("Edit Custom LLM Endpoint".to_string()))
+            } else {
+                Some(Some("No provider selected".to_string()))
+            }
         }
         Action::CustomLlmToggle => {
-            if let Some(msg) = state.toggle_enabled() {
-                tracing::info!("{msg}");
-                Some(Some(msg))
-            } else {
-                Some(None)
-            }
+            let msg = state.toggle_enabled();
+            Some(msg)
         }
         Action::CustomLlmDelete => {
             if state.open_delete_confirm() {
-                Some(Some("Konfirmasi hapus endpoint?".to_string()))
+                Some(Some("Confirm delete endpoint?".to_string()))
             } else {
-                Some(None)
+                Some(Some("No provider selected to delete".to_string()))
             }
         }
         Action::CustomLlmConfirmDelete => {
@@ -67,18 +67,18 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
         }
         Action::CustomLlmCancelDelete => {
             state.cancel_delete();
-            Some(Some("Penghapusan dibatalkan".to_string()))
+            Some(Some("Deletion canceled".to_string()))
         }
         Action::CustomLlmRefresh => {
             state.refresh_models();
             let count = state.models.len();
-            Some(Some(format!("Daftar model diperbarui ({count} model)")))
+            Some(Some(format!("Model list refreshed ({count} models)")))
         }
         Action::CustomLlmToggleFocus => {
             state.toggle_focus();
             let msg = match state.focus {
-                super::types::CustomLlmFocus::Providers => "Fokus: List Provider (Tekan Tab untuk ganti)",
-                super::types::CustomLlmFocus::Models => "Fokus: List Models (Tekan Tab untuk ganti)",
+                super::types::CustomLlmFocus::Providers => "Focus: Provider List (Press Tab to switch)",
+                super::types::CustomLlmFocus::Models => "Focus: Models List (Press Tab to switch)",
             };
             Some(Some(msg.to_string()))
         }

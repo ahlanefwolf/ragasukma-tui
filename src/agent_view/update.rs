@@ -125,27 +125,27 @@ pub fn handle_agent_action(
         }
         Action::AgentToggleReasoning => {
             agent.toggle_reasoning();
-            let label = if agent.reasoning_expanded { "ditampilkan" } else { "disembunyikan" };
+            let label = if agent.reasoning_expanded { "expanded" } else { "collapsed" };
             Some(format!("Reasoning {}", label))
         }
         Action::AgentScrollToTop => {
             agent.scroll_to_top();
-            Some("Scroll ke paling atas".to_string())
+            Some("Scrolled to top".to_string())
         }
         Action::AgentScrollToBottom => {
             agent.scroll_to_bottom();
-            Some("Scroll ke paling bawah".to_string())
+            Some("Scrolled to bottom".to_string())
         }
         Action::AgentApprovePending => {
             if let Some(req) = agent.approve_pending() {
-                Some(format!("Eksekusi disetujui: {}", req.tool_name))
+                Some(format!("Execution approved: {}", req.tool_name))
             } else {
                 None
             }
         }
         Action::AgentRejectPending => {
             if let Some(req) = agent.reject_pending() {
-                Some(format!("Eksekusi ditolak: {}", req.tool_name))
+                Some(format!("Execution rejected: {}", req.tool_name))
             } else {
                 None
             }
@@ -506,7 +506,7 @@ pub fn handle_agent_action(
         }
         Action::AgentOpenProjectModal => {
             agent.project_modal.is_open = true;
-            Some("Project Switcher dibuka. Pilih project atau tekan 'n' untuk buat baru.".to_string())
+            Some("Project switcher opened. Select a project or press 'n' to create new.".to_string())
         }
         Action::AgentCloseProjectModal => {
             agent.project_modal.is_open = false;

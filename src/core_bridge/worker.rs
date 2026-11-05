@@ -660,7 +660,7 @@ pub fn spawn_core_bridge_worker(
                             tracing::warn!("Failed to fetch quota for account {} ({}): {}", acc_id, prov, err);
                             let _ = quota_tx.send(CoreBridgeEvent::StatusChange {
                                 session_id: None,
-                                status: format!("Gagal memuat kuota {}: {}", prov, err),
+                                status: format!("Failed to load quota for {}: {}", prov, err),
                             });
                         }
                     });

@@ -112,7 +112,7 @@ impl CoreBridge {
                 prompt: prompt.to_string(),
                 model_override,
             })
-            .map_err(|e| anyhow::anyhow!("Gagal mengirim prompt ke core bridge: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to send prompt to core bridge: {}", e))
     }
 
     pub fn switch_session(&self, session_id: &str) -> Result<()> {
@@ -120,7 +120,7 @@ impl CoreBridge {
             .send(CoreBridgeCommand::SwitchSession {
                 session_id: session_id.to_string(),
             })
-            .map_err(|e| anyhow::anyhow!("Gagal switch session: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to switch session: {}", e))
     }
 
     pub fn create_project(
@@ -135,7 +135,7 @@ impl CoreBridge {
                 description,
                 root_path,
             })
-            .map_err(|e| anyhow::anyhow!("Gagal membuat project baru: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to create new project: {}", e))
     }
 
     pub fn update_project_folders(
@@ -148,7 +148,7 @@ impl CoreBridge {
                 project_id: project_id.to_string(),
                 folders,
             })
-            .map_err(|e| anyhow::anyhow!("Gagal update project folders: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to update project folders: {}", e))
     }
 
     pub fn switch_project(&self, project_id: &str) -> Result<()> {
@@ -156,7 +156,7 @@ impl CoreBridge {
             .send(CoreBridgeCommand::SwitchProject {
                 project_id: project_id.to_string(),
             })
-            .map_err(|e| anyhow::anyhow!("Gagal switch project: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to switch project: {}", e))
     }
 
     pub fn delete_project(&self, project_id: &str) -> Result<()> {
@@ -164,7 +164,7 @@ impl CoreBridge {
             .send(CoreBridgeCommand::DeleteProject {
                 project_id: project_id.to_string(),
             })
-            .map_err(|e| anyhow::anyhow!("Gagal menghapus project: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to delete project: {}", e))
     }
 
     pub fn create_session(&self, title: &str, model: Option<String>) -> Result<()> {
@@ -173,7 +173,7 @@ impl CoreBridge {
                 title: title.to_string(),
                 model,
             })
-            .map_err(|e| anyhow::anyhow!("Gagal membuat session baru: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to create new session: {}", e))
     }
 
     pub fn update_session_model(&self, session_id: &str, model: &str) -> Result<()> {
@@ -182,7 +182,7 @@ impl CoreBridge {
                 session_id: session_id.to_string(),
                 model: model.to_string(),
             })
-            .map_err(|e| anyhow::anyhow!("Gagal update session model: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to update session model: {}", e))
     }
 
     pub fn delete_session(&self, session_id: &str) -> Result<()> {
@@ -190,7 +190,7 @@ impl CoreBridge {
             .send(CoreBridgeCommand::DeleteSession {
                 session_id: session_id.to_string(),
             })
-            .map_err(|e| anyhow::anyhow!("Gagal menghapus session: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to delete session: {}", e))
     }
 
     pub fn refresh_quota(&self, provider: &str) -> Result<()> {
@@ -198,6 +198,6 @@ impl CoreBridge {
             .send(CoreBridgeCommand::RefreshQuota {
                 provider: provider.to_string(),
             })
-            .map_err(|e| anyhow::anyhow!("Gagal mengirim refresh quota: {}", e))
+            .map_err(|e| anyhow::anyhow!("Failed to send refresh quota: {}", e))
     }
 }

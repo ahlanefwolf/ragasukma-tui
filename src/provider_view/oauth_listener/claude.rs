@@ -14,10 +14,10 @@ pub async fn exchange_claude_token(
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .context("Gagal inisialisasi HTTP client")?;
+            .context("Failed to initialize HTTP client")?;
 
         let verifier = ragasukma_core::llm::providers::claude::oauth::take_oauth_state(&state)
-            .context("OAuth verifier tidak ditemukan atau sudah expired")?;
+            .context("OAuth verifier not found or expired")?;
         ragasukma_core::llm::providers::claude::oauth::complete_oauth_flow(
             &client,
             &code,
@@ -36,7 +36,7 @@ pub async fn exchange_claude_token(
         let mut provider = ragasukma_core::llm::providers::claude::ClaudeProvider::new();
         provider
             .add_oauth_account(account)
-            .map_err(|e| format!("Gagal menyimpan akun Claude: {e}"))?;
+            .map_err(|e| format!("Failed to save Claude account: {e}"))?;
         Ok(())
     })
     .await
