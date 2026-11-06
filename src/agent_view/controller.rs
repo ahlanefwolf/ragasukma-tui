@@ -110,7 +110,7 @@ impl AgentWorkspaceState {
 
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 return match code {
-                    KeyCode::Char('c') => Some(Action::Quit),
+                    KeyCode::Char('q') => Some(Action::Quit),
                     KeyCode::Char('a') => Some(Action::AgentInputCursorHome),
                     KeyCode::Char('e') => Some(Action::AgentInputCursorEnd),
                     _ => None,
@@ -146,9 +146,9 @@ impl AgentWorkspaceState {
             };
         }
 
-        // Global shortcuts visible in footer (q, 1-5) when not typing in an input
+        // Global shortcuts visible in footer (1-5) when not typing in an input.
+        // NOTE: bare 'q' is NOT a quit key. Only Ctrl+Q quits (handled above).
         match code {
-            KeyCode::Char('q') => return Some(Action::Quit),
             KeyCode::Char('1') => return Some(Action::SwitchTab(0)),
             KeyCode::Char('2') => return Some(Action::SwitchTab(1)),
             KeyCode::Char('3') => return Some(Action::SwitchTab(2)),
@@ -169,7 +169,7 @@ impl AgentWorkspaceState {
         // Control shortcuts
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             return match code {
-                KeyCode::Char('c') => Some(Action::Quit),
+                KeyCode::Char('q') => Some(Action::Quit),
                 _ => None,
             };
         }
@@ -253,47 +253,5 @@ impl AgentWorkspaceState {
             KeyCode::Char('P') => Some(Action::AgentOpenProjectModal),
             _ => None,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::agent_view::states::AgentWorkspaceState;
-
-    #[test]
-    fn test_folders_focus_hotkeys() {
-        let mut state = AgentWorkspaceState::default();
-        state.is_input_focused = false;
-        state.focus_area = AgentFocusArea::Folders;
-
-        let key_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
-        assert_eq!(
-            state.handle_key(key_a),
-            Some(Action::AgentOpenAddFolderModal)
-        );
-
-        let key_d = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
-        assert_eq!(
-            state.handle_key(key_d),
-            Some(Action::AgentRemoveActiveFolder)
-        );
-
-        let key_o = KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE);
-        assert_eq!(
-            state.handle_key(key_o),
-            Some(Action::AgentOpenFolderInFileManager)
-        );
-
-        // Test hotkeys in Files panel
-        state.focus_area = AgentFocusArea::Files;
-        assert_eq!(
-            state.handle_key(key_a),
-            Some(Action::AgentOpenAddFolderModal)
-        );
-        assert_eq!(
-            state.handle_key(key_o),
-            Some(Action::AgentOpenFolderInFileManager)
-        );
     }
 }

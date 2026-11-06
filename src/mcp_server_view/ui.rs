@@ -41,29 +41,22 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
             Span::raw("Delete "),
             Span::styled(" [r] ", Theme::key_badge()),
             Span::raw("Refresh "),
+            Span::styled(" [Ctrl+Q] ", Theme::key_badge()),
+            Span::raw("Quit "),
         ]
     }
 }
 
 pub fn render_mcp_server_tab(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
-    // Sisakan 1 baris di bawah sebagai clearance dari footer help, supaya tabel
-    // dan modal tidak menempel/menutupi baris footer.
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(3),    // Server list
-            Constraint::Length(1), // Clearance for footer
-        ])
-        .split(area);
-
-    render_server_table(frame, layout[0], state);
+    // Render full-height so the card matches every other tab (no bottom gap).
+    render_server_table(frame, area, state);
 
     if state.is_form_open {
-        render_form_modal(frame, layout[0], state);
+        render_form_modal(frame, area, state);
     }
 
     if state.delete_confirm_id.is_some() {
-        render_delete_modal(frame, layout[0], state);
+        render_delete_modal(frame, area, state);
     }
 }
 

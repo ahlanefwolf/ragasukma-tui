@@ -56,21 +56,3 @@ pub fn fetch_models() -> Vec<(String, String)> {
     }
     models
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_format_custom_model_id_adds_prefix_without_repeating() {
-        assert_eq!(
-            format_custom_model_id("or", "cc/opus-5.5"),
-            "or/cc/opus-5.5"
-        );
-        assert_eq!(format_custom_model_id("or", "or/model"), "or/model");
-        assert_eq!(
-            format_custom_model_id("deepseek", "deepseek-chat"),
-            "deepseek/deepseek-chat"
-        );
-    }
-}

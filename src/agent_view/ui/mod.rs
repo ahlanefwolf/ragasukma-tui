@@ -369,7 +369,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
         hints.push(Span::raw("Stop "));
     }
-    hints.push(Span::styled(" [q] ", Theme::key_badge()));
+    hints.push(Span::styled(" [Ctrl+Q] ", Theme::key_badge()));
     hints.push(Span::raw("Quit "));
 
     hints

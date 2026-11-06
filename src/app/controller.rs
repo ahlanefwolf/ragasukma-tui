@@ -50,11 +50,11 @@ impl App {
             };
         }
 
-        // 2. Global exit: Ctrl+C always quits cleanly
+        // 2. Global exit: Ctrl+Q always quits cleanly (Ctrl+C is reserved for the OS/terminal)
         if key
             .modifiers
             .contains(crossterm::event::KeyModifiers::CONTROL)
-            && (code == KeyCode::Char('c') || code == KeyCode::Char('C'))
+            && (code == KeyCode::Char('q') || code == KeyCode::Char('Q'))
         {
             return Some(Action::Quit);
         }
@@ -99,7 +99,7 @@ impl App {
             KeyCode::Char(']') => Some(Action::NextTab),
             KeyCode::Tab => Some(Action::NextTab),
             KeyCode::BackTab => Some(Action::PrevTab),
-            KeyCode::Char('q') => Some(Action::Quit),
+            // NOTE: bare 'q' is NOT a quit key. Only Ctrl+Q quits (handled above).
             _ => None,
         }
     }

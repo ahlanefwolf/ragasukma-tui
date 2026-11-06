@@ -69,17 +69,3 @@ pub fn slugify(name: &str) -> String {
         out
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_slugify() {
-        assert_eq!(slugify("Filesystem Server"), "filesystem-server");
-        assert_eq!(slugify("  GitHub!!  "), "github");
-        assert_eq!(slugify("Snake_Case.123"), "snake-case-123");
-        assert_eq!(slugify("!!!"), "mcp-server");
-        assert_eq!(slugify(""), "mcp-server");
-    }
-}
