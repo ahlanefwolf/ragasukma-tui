@@ -117,6 +117,7 @@ impl AgentWorkspaceState {
             KeyCode::Char('3') => return Some(Action::SwitchTab(2)),
             KeyCode::Char('4') => return Some(Action::SwitchTab(3)),
             KeyCode::Char('5') => return Some(Action::SwitchTab(4)),
+            KeyCode::Char('6') => return Some(Action::SwitchTab(5)),
             _ => {}
         }
 

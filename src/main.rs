@@ -49,6 +49,19 @@ async fn main() -> Result<()> {
     }
     app.set_event_tx(events.tx.clone());
 
+    // Spawn background MCP server loader
+    let mcp_tx = events.tx.clone();
+    tokio::spawn(async move {
+        match ragasukma_core::agent::repository::projects_and_sessions::list_mcp_servers().await {
+            Ok(servers) => {
+                let _ = mcp_tx.send(AppEvent::McpServersLoaded(servers));
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load MCP servers in background: {e}");
+            }
+        }
+    });
+
     // 5. Main application loop
     let run_res = run_app(&mut term, &mut app, &mut events).await;
 
@@ -117,6 +130,9 @@ async fn run_app(
                     tracing::error!("OAuth login failed: provider='{provider}', error='{error}'");
                     term.clear()?;
                     app.error_modal = Some(format!("OAuth Login Failed [{}]: {}", provider, error));
+                }
+                AppEvent::McpServersLoaded(servers) => {
+                    app.mcp_server.set_servers(servers);
                 }
                 AppEvent::Tick => {
                     app.on_tick();

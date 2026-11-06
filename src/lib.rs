@@ -3,6 +3,7 @@ pub mod app;
 pub mod assets;
 pub mod core_bridge;
 pub mod custom_llm_view;
+pub mod mcp_server_view;
 pub mod event;
 pub mod logging;
 pub mod provider_view;

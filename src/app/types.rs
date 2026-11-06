@@ -170,6 +170,14 @@ pub enum Action {
 
     FormChar(char),
     FormBackspace,
+    FormDelete,
+    FormNewline,
+    FormCursorLeft,
+    FormCursorRight,
+    FormCursorUp,
+    FormCursorDown,
+    FormCursorHome,
+    FormCursorEnd,
     FormPaste(String),
     FormNextField,
     FormPrevField,
@@ -183,6 +191,13 @@ pub enum Action {
     CustomLlmCancelDelete,
     CustomLlmRefresh,
     CustomLlmToggleFocus,
+    McpServerAdd,
+    McpServerEdit,
+    McpServerToggle,
+    McpServerDelete,
+    McpServerConfirmDelete,
+    McpServerCancelDelete,
+    McpServerRefresh,
 
     ShowDiffPreview {
         file_path: String,

@@ -1,6 +1,7 @@
 use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, EventStream, KeyEvent, KeyEventKind, MouseEvent};
 use futures_util::StreamExt;
+use ragasukma_core::agent::models::McpServer;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -17,6 +18,7 @@ pub enum AppEvent {
     CoreEvent(CoreBridgeEvent),
     OAuthSuccess { provider: String, email: String },
     OAuthFailed { provider: String, error: String },
+    McpServersLoaded(Vec<McpServer>),
     Error(String),
 }
 

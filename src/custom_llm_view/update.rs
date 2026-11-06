@@ -6,27 +6,27 @@ use super::types::CustomLlmTabState;
 /// or None if action does not belong to Custom LLM.
 pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) -> Option<Option<String>> {
     match action {
-        Action::FormChar(c) => {
+        Action::FormChar(c) if state.is_form_open => {
             state.form_input(*c);
             Some(None)
         }
-        Action::FormPaste(text) => {
+        Action::FormPaste(text) if state.is_form_open => {
             state.form_paste(text);
             Some(None)
         }
-        Action::FormBackspace => {
+        Action::FormBackspace if state.is_form_open => {
             state.form_backspace();
             Some(None)
         }
-        Action::FormNextField => {
+        Action::FormNextField if state.is_form_open => {
             state.form_next_field();
             Some(None)
         }
-        Action::FormPrevField => {
+        Action::FormPrevField if state.is_form_open => {
             state.form_prev_field();
             Some(None)
         }
-        Action::FormSubmit => {
+        Action::FormSubmit if state.is_form_open => {
             match state.form_submit() {
                 Ok(msg) => {
                     tracing::info!("Custom LLM endpoint saved: {msg}");
@@ -38,7 +38,7 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
                 }
             }
         }
-        Action::CancelForm => {
+        Action::CancelForm if state.is_form_open => {
             state.close_form();
             Some(None)
         }
