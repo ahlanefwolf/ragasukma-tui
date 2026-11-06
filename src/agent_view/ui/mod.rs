@@ -302,7 +302,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
                     hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
                     hints.push(Span::raw("Send "));
                 }
-                hints.push(Span::styled(" [Alt+Enter] ", Theme::key_badge()));
+                hints.push(Span::styled(" [Alt+J] ", Theme::key_badge()));
                 hints.push(Span::raw("Newline "));
                 hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
                 hints.push(Span::raw("Exit Insert "));
@@ -328,7 +328,6 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         }
         AgentFocusArea::ModelTelemetry => {
             // In this focus area `r` maps to AgentRefreshModels (controller.rs:178).
-            // `f` and F5 also work but `r` is the canonical, focus-specific key.
             hints.push(Span::styled(" [r] ", Theme::key_badge()));
             hints.push(Span::raw("Refresh "));
         }

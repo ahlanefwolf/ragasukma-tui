@@ -100,7 +100,15 @@ async fn run_app(
         loop {
             match event {
                 AppEvent::Key(key) => {
+                    tracing::debug!(
+                        "key: code={:?} mods={:?} kind={:?} state={:?}",
+                        key.code,
+                        key.modifiers,
+                        key.kind,
+                        key.state
+                    );
                     if let Some(act) = app.handle_key_event(key) {
+                        tracing::debug!("  -> action {:?}", act);
                         app.update(act);
                     }
                 }

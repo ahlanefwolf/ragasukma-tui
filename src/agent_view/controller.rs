@@ -81,6 +81,33 @@ impl AgentWorkspaceState {
                 return None;
             }
 
+            // --- Newline: EXCLUSIVELY Alt+J. Nothing else may produce a newline. ---
+            // Checked BEFORE the CONTROL shortcut block below so no other combo can
+            // ever reach the newline path.
+            {
+                let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+                let alt = key.modifiers.contains(KeyModifiers::ALT);
+
+                // Alt+J => the one and only newline.
+                if alt
+                    && !ctrl
+                    && !shift
+                    && matches!(code, KeyCode::Char('j') | KeyCode::Char('J'))
+                {
+                    return Some(Action::AgentInputNewline);
+                }
+
+                // Bare Enter = send. Any other Enter/modifier combo is a DEAD KEY:
+                // swallowed so it triggers neither newline nor submit.
+                if code == KeyCode::Enter {
+                    if !shift && !ctrl && !alt {
+                        return Some(Action::AgentSubmitPrompt);
+                    }
+                    return None;
+                }
+            }
+
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 return match code {
                     KeyCode::Char('c') => Some(Action::Quit),
@@ -99,11 +126,6 @@ impl AgentWorkspaceState {
                     KeyCode::Tab | KeyCode::Enter => return Some(Action::AgentApplyTag),
                     _ => {}
                 }
-            }
-
-            // Newline on Alt+Enter only
-            if code == KeyCode::Enter && key.modifiers.contains(KeyModifiers::ALT) {
-                return Some(Action::AgentInputNewline);
             }
 
             return match code {
@@ -227,9 +249,6 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Folders => Some(Action::AgentRemoveActiveFolder),
                 AgentFocusArea::Tasks => Some(Action::AgentDeleteSelectedTask),
                 _ => None,
-            },
-            KeyCode::Char('o') if self.focus_area == AgentFocusArea::Folders => {
-                Some(Action::AgentOpenFolderInFileManager)
             }
             KeyCode::Char('P') => Some(Action::AgentOpenProjectModal),
             _ => None,

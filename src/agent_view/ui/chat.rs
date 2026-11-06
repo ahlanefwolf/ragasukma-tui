@@ -159,7 +159,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let input_title = if state.tag_query.is_some() {
         Span::styled("  Tag File Mode (@) ", Theme::badge_cyan())
     } else if is_input_focused {
-        Span::styled("  Message Input [Active] ", Theme::badge_gold())
+        Span::styled("  Message Input [Active] · Alt+J ", Theme::badge_gold())
     } else {
         Span::styled("  Message Input ", Theme::badge_gray())
     };
