@@ -6,8 +6,8 @@ pub mod server;
 
 pub use browser::open_browser_oauth;
 
-use tokio::sync::mpsc;
 use crate::event::AppEvent;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OAuthProviderKind {
@@ -23,21 +23,22 @@ pub fn spawn_oauth_listener(
     event_tx: mpsc::UnboundedSender<AppEvent>,
 ) {
     tokio::spawn(async move {
-        let (stream, callback_data) = match server::listen_for_oauth_callback(port, &expected_state).await {
-            Ok(res) => res,
-            Err(e) => {
-                let prov = match kind {
-                    OAuthProviderKind::Antigravity => "antigravity",
-                    OAuthProviderKind::Codex => "codex",
-                    OAuthProviderKind::Claude => "claude",
-                };
-                let _ = event_tx.send(AppEvent::OAuthFailed {
-                    provider: prov.to_string(),
-                    error: e,
-                });
-                return;
-            }
-        };
+        let (stream, callback_data) =
+            match server::listen_for_oauth_callback(port, &expected_state).await {
+                Ok(res) => res,
+                Err(e) => {
+                    let prov = match kind {
+                        OAuthProviderKind::Antigravity => "antigravity",
+                        OAuthProviderKind::Codex => "codex",
+                        OAuthProviderKind::Claude => "claude",
+                    };
+                    let _ = event_tx.send(AppEvent::OAuthFailed {
+                        provider: prov.to_string(),
+                        error: e,
+                    });
+                    return;
+                }
+            };
 
         let redirect_uri = match kind {
             OAuthProviderKind::Antigravity => format!("http://localhost:{}/oauth/callback", port),
@@ -51,10 +52,12 @@ pub fn spawn_oauth_listener(
                 antigravity::exchange_antigravity_token(&callback_data.code, &redirect_uri).await
             }
             OAuthProviderKind::Codex => {
-                codex::exchange_codex_token(&callback_data.code, &redirect_uri, &expected_state).await
+                codex::exchange_codex_token(&callback_data.code, &redirect_uri, &expected_state)
+                    .await
             }
             OAuthProviderKind::Claude => {
-                claude::exchange_claude_token(&callback_data.code, &redirect_uri, &expected_state).await
+                claude::exchange_claude_token(&callback_data.code, &redirect_uri, &expected_state)
+                    .await
             }
         };
 

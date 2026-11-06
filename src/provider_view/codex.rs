@@ -1,6 +1,6 @@
-use ragasukma_core::llm::providers::codex::types::{CodexModelInfo, CodexQuotaResponse};
-use ragasukma_core::llm::providers::CodexProvider;
 use super::types::{AccountInfo, ModelQuotaItem, ProviderTabState};
+use ragasukma_core::llm::providers::CodexProvider;
+use ragasukma_core::llm::providers::codex::types::{CodexModelInfo, CodexQuotaResponse};
 
 pub fn load_codex_tab() -> ProviderTabState {
     std::thread::spawn(|| {
@@ -61,7 +61,9 @@ pub fn map_codex_quotas(
             name: "Session Quota Window".to_string(),
             percentage: session_pct,
             detail: session_detail.clone(),
-            reset_in: session.reset_at.unwrap_or_else(|| "Active Window".to_string()),
+            reset_in: session
+                .reset_at
+                .unwrap_or_else(|| "Active Window".to_string()),
         });
     }
 

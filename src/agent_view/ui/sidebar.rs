@@ -1,11 +1,11 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
         Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
     },
-    Frame,
 };
 
 use crate::agent_view::state::AgentWorkspaceState;
@@ -21,16 +21,25 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
             Span::styled(" 📦 Project [Focused]: ", Theme::badge_gold()),
             Span::styled(
                 &state.active_project_name,
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
         ]
     } else {
         vec![
-            Span::styled(" 📦 Project: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " 📦 Project: ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 &state.active_project_name,
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
         ]
@@ -70,7 +79,9 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 format!(" {} ", name)
             };
             let style = if is_active {
-                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Theme::TEXT_SECONDARY)
             };
@@ -92,7 +103,9 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
 
     let folder_lines_count = folder_lines.len().max(1);
     let max_folder_height = (area.height / 3).clamp(3, 8);
-    let folder_card_height = ((folder_lines_count + 2) as u16).min(max_folder_height).max(3);
+    let folder_card_height = ((folder_lines_count + 2) as u16)
+        .min(max_folder_height)
+        .max(3);
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -137,7 +150,10 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
         .borders(Borders::BOTTOM)
         .border_style(Theme::border_subtle())
         .style(Theme::block_base());
-    frame.render_widget(Paragraph::new(Line::from(tab_spans)).block(tab_block), chunks[1]);
+    frame.render_widget(
+        Paragraph::new(Line::from(tab_spans)).block(tab_block),
+        chunks[1],
+    );
 
     // 3. Tab Content (Card 2: Tasks or Files)
     match state.sidebar_tab {
@@ -196,15 +212,22 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
 
                         let total_tokens = s.total_tokens_input + s.total_tokens_output;
                         let token_tag = if total_tokens > 0 {
-                            format!(" [{} tokens]", super::helpers::format_compact_number(total_tokens as usize))
+                            format!(
+                                " [{} tokens]",
+                                super::helpers::format_compact_number(total_tokens as usize)
+                            )
                         } else {
                             String::new()
                         };
 
                         let style = if is_cursor {
-                            Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                            Style::default()
+                                .fg(Theme::GOLD_PRIMARY)
+                                .add_modifier(Modifier::BOLD)
                         } else if is_current {
-                            Style::default().fg(Theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)
+                            Style::default()
+                                .fg(Theme::TEXT_PRIMARY)
+                                .add_modifier(Modifier::BOLD)
                         } else {
                             Style::default().fg(Theme::TEXT_SECONDARY)
                         };
@@ -227,7 +250,10 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
             };
 
             let title = if is_tasks_focused {
-                Span::styled(format!("{} [Focused] ", title_str.trim_end()), Theme::badge_gold())
+                Span::styled(
+                    format!("{} [Focused] ", title_str.trim_end()),
+                    Theme::badge_gold(),
+                )
             } else {
                 Span::styled(title_str, Theme::header_title())
             };
@@ -294,11 +320,17 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
 
                         let cursor_str = if is_cursor { "▶ " } else { "  " };
                         let text_style = if is_cursor {
-                            Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                            Style::default()
+                                .fg(Theme::GOLD_PRIMARY)
+                                .add_modifier(Modifier::BOLD)
                         } else if f.is_dir && f.depth == 0 {
-                            Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)
+                            Style::default()
+                                .fg(Theme::CYAN_ACCENT)
+                                .add_modifier(Modifier::BOLD)
                         } else if f.is_dir {
-                            Style::default().fg(Theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD)
+                            Style::default()
+                                .fg(Theme::TEXT_PRIMARY)
+                                .add_modifier(Modifier::BOLD)
                         } else {
                             Style::default().fg(Theme::TEXT_PRIMARY)
                         };
@@ -326,7 +358,10 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
             };
 
             let title = if is_files_focused {
-                Span::styled(format!("{} [Focused] ", title_str.trim_end()), Theme::badge_gold())
+                Span::styled(
+                    format!("{} [Focused] ", title_str.trim_end()),
+                    Theme::badge_gold(),
+                )
             } else {
                 Span::styled(title_str, Theme::header_title())
             };

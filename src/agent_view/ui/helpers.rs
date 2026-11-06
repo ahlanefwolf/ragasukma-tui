@@ -1,7 +1,7 @@
+use crate::agent_view::types::AgentFocusArea;
+use crate::theme::Theme;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
-use crate::theme::Theme;
-use crate::agent_view::types::AgentFocusArea;
 
 /// Return border style based on whether this card is currently focused
 pub fn area_border(current_focus: AgentFocusArea, target_focus: AgentFocusArea) -> Style {
@@ -58,4 +58,3 @@ pub fn format_compact_number(n: usize) -> String {
         n.to_string()
     }
 }
-

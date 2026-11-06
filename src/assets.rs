@@ -16,16 +16,17 @@ pub fn get_assets_dir() -> PathBuf {
 
     // 2. Relative to executable
     if let Ok(exe_path) = std::env::current_exe()
-        && let Some(exe_dir) = exe_path.parent() {
-            let exe_assets = exe_dir.join("assets");
-            if exe_assets.exists() && exe_assets.is_dir() {
-                return exe_assets;
-            }
-            let target_parent_assets = exe_dir.join("../../assets");
-            if target_parent_assets.exists() && target_parent_assets.is_dir() {
-                return target_parent_assets;
-            }
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        let exe_assets = exe_dir.join("assets");
+        if exe_assets.exists() && exe_assets.is_dir() {
+            return exe_assets;
         }
+        let target_parent_assets = exe_dir.join("../../assets");
+        if target_parent_assets.exists() && target_parent_assets.is_dir() {
+            return target_parent_assets;
+        }
+    }
 
     // 3. Fallback to ~/.config/ragasukma
     ragasukma_core::config::get_app_config_dir()
@@ -165,26 +166,29 @@ fn ensure_file_with_template(
 pub fn load_antigravity_accounts() -> Vec<AntigravityAccount> {
     let file = find_account_file("antigravity_accounts.json");
     if let Ok(content) = fs::read_to_string(&file)
-        && let Ok(accounts) = serde_json::from_str::<Vec<AntigravityAccount>>(&content) {
-            return accounts;
-        }
+        && let Ok(accounts) = serde_json::from_str::<Vec<AntigravityAccount>>(&content)
+    {
+        return accounts;
+    }
     Vec::new()
 }
 
 pub fn load_codex_accounts() -> Vec<CodexAccount> {
     let file = find_account_file("codex_accounts.json");
     if let Ok(content) = fs::read_to_string(&file)
-        && let Ok(accounts) = serde_json::from_str::<Vec<CodexAccount>>(&content) {
-            return accounts;
-        }
+        && let Ok(accounts) = serde_json::from_str::<Vec<CodexAccount>>(&content)
+    {
+        return accounts;
+    }
     Vec::new()
 }
 
 pub fn load_claude_accounts() -> Vec<ClaudeAccount> {
     let file = find_account_file("claude_accounts.json");
     if let Ok(content) = fs::read_to_string(&file)
-        && let Ok(accounts) = serde_json::from_str::<Vec<ClaudeAccount>>(&content) {
-            return accounts;
-        }
+        && let Ok(accounts) = serde_json::from_str::<Vec<ClaudeAccount>>(&content)
+    {
+        return accounts;
+    }
     Vec::new()
 }

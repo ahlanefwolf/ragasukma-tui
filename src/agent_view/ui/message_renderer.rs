@@ -138,16 +138,43 @@ pub fn render_message_to_lines<'a>(
             || msg.content.to_lowercase().starts_with("error");
 
         if is_failed {
-            let error_summary = msg.content.lines().next().unwrap_or("Execution encountered an error");
+            let error_summary = msg
+                .content
+                .lines()
+                .next()
+                .unwrap_or("Execution encountered an error");
             lines.push(Line::from(vec![
-                Span::styled("    ✗ ", Style::default().fg(Theme::STATUS_ERROR).add_modifier(Modifier::BOLD)),
-                Span::styled("Tool execution failed", Style::default().fg(Theme::STATUS_ERROR).add_modifier(Modifier::BOLD)),
-                Span::styled(format!(": {}", error_summary), Style::default().fg(Theme::TEXT_MUTED)),
+                Span::styled(
+                    "    ✗ ",
+                    Style::default()
+                        .fg(Theme::STATUS_ERROR)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Tool execution failed",
+                    Style::default()
+                        .fg(Theme::STATUS_ERROR)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(": {}", error_summary),
+                    Style::default().fg(Theme::TEXT_MUTED),
+                ),
             ]));
         } else {
             lines.push(Line::from(vec![
-                Span::styled("    ✓ ", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
-                Span::styled("Tool execution succeeded", Style::default().fg(Theme::STATUS_SUCCESS).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "    ✓ ",
+                    Style::default()
+                        .fg(Theme::STATUS_SUCCESS)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Tool execution succeeded",
+                    Style::default()
+                        .fg(Theme::STATUS_SUCCESS)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]));
         }
     } else {
@@ -165,7 +192,10 @@ pub fn render_message_to_lines<'a>(
                     in_code_block = false;
                     lines.push(Line::from(vec![
                         Span::raw("    "),
-                        Span::styled("╰──────────────────────────────────────────", Theme::text_muted()),
+                        Span::styled(
+                            "╰──────────────────────────────────────────",
+                            Theme::text_muted(),
+                        ),
                     ]));
                 } else {
                     // Open code block
@@ -267,21 +297,28 @@ pub fn render_message_to_lines<'a>(
 /// `result.len()` maps 1:1 with physical terminal lines.
 pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<Line<'static>> {
     if available_width == 0 {
-        return lines.into_iter().map(|l| {
-            let static_spans: Vec<Span<'static>> = l.spans.into_iter().map(|s| {
-                Span::styled(s.content.into_owned(), s.style)
-            }).collect();
-            Line::from(static_spans)
-        }).collect();
+        return lines
+            .into_iter()
+            .map(|l| {
+                let static_spans: Vec<Span<'static>> = l
+                    .spans
+                    .into_iter()
+                    .map(|s| Span::styled(s.content.into_owned(), s.style))
+                    .collect();
+                Line::from(static_spans)
+            })
+            .collect();
     }
 
     let mut result = Vec::with_capacity(lines.len() * 2);
 
     for line in lines {
         if line.width() <= available_width {
-            let static_spans: Vec<Span<'static>> = line.spans.into_iter().map(|s| {
-                Span::styled(s.content.into_owned(), s.style)
-            }).collect();
+            let static_spans: Vec<Span<'static>> = line
+                .spans
+                .into_iter()
+                .map(|s| Span::styled(s.content.into_owned(), s.style))
+                .collect();
             result.push(Line::from(static_spans));
             continue;
         }
@@ -316,14 +353,13 @@ pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<
                     for ch in word.chars() {
                         let ch_span = Span::raw(ch.to_string());
                         let ch_w = ch_span.width();
-                        if chunk_width + ch_w > available_width
-                            && !chunk.is_empty() {
-                                result.push(Line::from(vec![Span::styled(
-                                    std::mem::take(&mut chunk),
-                                    span_style,
-                                )]));
-                                chunk_width = 0;
-                            }
+                        if chunk_width + ch_w > available_width && !chunk.is_empty() {
+                            result.push(Line::from(vec![Span::styled(
+                                std::mem::take(&mut chunk),
+                                span_style,
+                            )]));
+                            chunk_width = 0;
+                        }
                         chunk.push(ch);
                         chunk_width += ch_w;
                     }
@@ -355,12 +391,17 @@ pub fn calculate_total_visual_lines(lines: &[Line], available_width: usize) -> u
     if available_width == 0 {
         return lines.len();
     }
-    let cloned: Vec<Line> = lines.iter().map(|l| {
-        let spans: Vec<Span> = l.spans.iter().map(|s| {
-            Span::styled(s.content.to_string(), s.style)
-        }).collect();
-        Line::from(spans)
-    }).collect();
+    let cloned: Vec<Line> = lines
+        .iter()
+        .map(|l| {
+            let spans: Vec<Span> = l
+                .spans
+                .iter()
+                .map(|s| Span::styled(s.content.to_string(), s.style))
+                .collect();
+            Line::from(spans)
+        })
+        .collect();
     wrap_lines_to_width(cloned, available_width).len()
 }
 
@@ -434,7 +475,11 @@ mod tests {
         let lines_success = render_message_to_lines(&msg_success, &config);
         // Header + 1 status line (Success) + 1 blank spacing line = 3 lines
         assert_eq!(lines_success.len(), 3);
-        let joined_success = lines_success.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let joined_success = lines_success
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(joined_success.contains("Tool execution succeeded"));
         assert!(!joined_success.contains("line 50"));
 
@@ -449,7 +494,11 @@ mod tests {
 
         let lines_failed = render_message_to_lines(&msg_failed, &config);
         assert_eq!(lines_failed.len(), 3);
-        let joined_failed = lines_failed.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let joined_failed = lines_failed
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(joined_failed.contains("Tool execution failed"));
         assert!(joined_failed.contains("file not found"));
     }

@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, Wrap},
-    Frame,
 };
 
 use crate::custom_llm_view::types::{CustomLlmFocus, CustomLlmTabState, FormField};
@@ -12,10 +12,7 @@ use crate::theme::Theme;
 pub fn render_custom_llm_tab(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(52),
-            Constraint::Percentage(48),
-        ])
+        .constraints([Constraint::Percentage(52), Constraint::Percentage(48)])
         .split(area);
 
     render_providers_card(frame, chunks[0], state);
@@ -35,12 +32,21 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
 
     let title_spans = if is_focused {
         vec![
-            Span::styled(format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()), Theme::badge_gold()),
-            Span::styled(" [● Active Card - Tab to switch] ", Theme::text_gold().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()),
+                Theme::badge_gold(),
+            ),
+            Span::styled(
+                " [● Active Card - Tab to switch] ",
+                Theme::text_gold().add_modifier(Modifier::BOLD),
+            ),
         ]
     } else {
         vec![
-            Span::styled(format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()), Theme::badge_gray()),
+            Span::styled(
+                format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()),
+                Theme::badge_gray(),
+            ),
             Span::styled(" [Tab to focus] ", Theme::text_secondary()),
         ]
     };
@@ -51,14 +57,9 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
         Theme::border_subtle()
     };
 
-    let header_cells = [
-        "Prefix",
-        "Provider Name",
-        "Base URL Endpoint",
-        "Status",
-    ]
-    .iter()
-    .map(|h| Cell::from(*h).style(Theme::header_title().add_modifier(Modifier::BOLD)));
+    let header_cells = ["Prefix", "Provider Name", "Base URL Endpoint", "Status"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Theme::header_title().add_modifier(Modifier::BOLD)));
     let header = Row::new(header_cells).height(1).bottom_margin(1);
 
     let rows: Vec<Row> = state
@@ -104,14 +105,9 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
 
             let row_style = ratatui::style::Style::default();
 
-            Row::new(vec![
-                prefix_cell,
-                name_cell,
-                url_cell,
-                status_cell,
-            ])
-            .style(row_style)
-            .height(1)
+            Row::new(vec![prefix_cell, name_cell, url_cell, status_cell])
+                .style(row_style)
+                .height(1)
         })
         .collect();
 
@@ -128,9 +124,7 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
         .title(Line::from(title_spans))
         .style(Theme::block_base());
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block);
+    let table = Table::new(rows, widths).header(header).block(block);
 
     frame.render_widget(table, area);
 }
@@ -144,13 +138,22 @@ fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) 
         .unwrap_or_default();
 
     let title_prefix = selected_acc
-        .map(|a| format!(" 📦 Models for /{prefix} ({count}) ", prefix = a.prefix, count = prefix_models.len()))
+        .map(|a| {
+            format!(
+                " 📦 Models for /{prefix} ({count}) ",
+                prefix = a.prefix,
+                count = prefix_models.len()
+            )
+        })
         .unwrap_or_else(|| " 📦 Models Catalog ".to_string());
 
     let title_spans = if is_focused {
         vec![
             Span::styled(title_prefix, Theme::badge_gold()),
-            Span::styled(" [● Active Card - Tab to switch] ", Theme::text_gold().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [● Active Card - Tab to switch] ",
+                Theme::text_gold().add_modifier(Modifier::BOLD),
+            ),
         ]
     } else {
         vec![
@@ -177,8 +180,14 @@ fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) 
     if selected_acc.is_none() {
         let para = Paragraph::new(vec![
             Line::from(""),
-            Line::from(Span::styled("  No custom provider selected.", Theme::text_secondary())),
-            Line::from(Span::styled("  Press [a] to add a custom endpoint.", Theme::text_secondary())),
+            Line::from(Span::styled(
+                "  No custom provider selected.",
+                Theme::text_secondary(),
+            )),
+            Line::from(Span::styled(
+                "  Press [a] to add a custom endpoint.",
+                Theme::text_secondary(),
+            )),
         ]);
         frame.render_widget(para, inner_area);
         return;
@@ -187,9 +196,15 @@ fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) 
     if prefix_models.is_empty() {
         let para = Paragraph::new(vec![
             Line::from(""),
-            Line::from(Span::styled("  No cached models found for this provider prefix.", Theme::text_secondary())),
+            Line::from(Span::styled(
+                "  No cached models found for this provider prefix.",
+                Theme::text_secondary(),
+            )),
             Line::from(""),
-            Line::from(Span::styled("  Press [r] to fetch remote models from /models endpoint.", Theme::text_cyan())),
+            Line::from(Span::styled(
+                "  Press [r] to fetch remote models from /models endpoint.",
+                Theme::text_cyan(),
+            )),
         ]);
         frame.render_widget(para, inner_area);
         return;
@@ -217,7 +232,10 @@ fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) 
             if is_selected && is_focused {
                 Line::from(vec![
                     Span::styled(" ▶ ", Theme::text_gold().add_modifier(Modifier::BOLD)),
-                    Span::styled(model_id.clone(), Theme::text_gold().add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        model_id.clone(),
+                        Theme::text_gold().add_modifier(Modifier::BOLD),
+                    ),
                 ])
             } else if is_selected {
                 Line::from(vec![
@@ -251,7 +269,10 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
-        .title(Span::styled(title, Theme::badge_gold().add_modifier(Modifier::BOLD)))
+        .title(Span::styled(
+            title,
+            Theme::badge_gold().add_modifier(Modifier::BOLD),
+        ))
         .style(Theme::block_base());
     let inner_area = outer_block.inner(popup_area);
     frame.render_widget(outer_block, popup_area);
@@ -379,21 +400,30 @@ fn render_delete_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::text_gold())
-        .title(Span::styled(" ⚠ Confirm Deletion ", Theme::text_gold().add_modifier(Modifier::BOLD)))
+        .title(Span::styled(
+            " ⚠ Confirm Deletion ",
+            Theme::text_gold().add_modifier(Modifier::BOLD),
+        ))
         .style(Theme::block_base());
     frame.render_widget(outer_block, popup_area);
 
     let text = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("Are you sure you want to delete custom provider '", Theme::text_primary()),
+            Span::styled(
+                "Are you sure you want to delete custom provider '",
+                Theme::text_primary(),
+            ),
             Span::styled(prefix, Theme::text_gold().add_modifier(Modifier::BOLD)),
             Span::styled("'?", Theme::text_primary()),
         ]),
         Line::from("This will remove stored API credentials for this endpoint."),
         Line::from(""),
         Line::from(vec![
-            Span::styled(" [y / Enter] Confirm Delete ", Theme::text_gold().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [y / Enter] Confirm Delete ",
+                Theme::text_gold().add_modifier(Modifier::BOLD),
+            ),
             Span::raw("    "),
             Span::styled(" [n / Esc] Cancel ", Theme::key_badge()),
         ]),

@@ -60,8 +60,8 @@ impl McpServerTabState {
 
         // 3. MCP server list navigation
         match code {
-            KeyCode::Down | KeyCode::Char('j') => Some(Action::FocusNext),
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::FocusPrev),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::McpServerSelectNext),
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::McpServerSelectPrev),
             KeyCode::Char(' ') | KeyCode::Enter => Some(Action::McpServerToggle),
             KeyCode::Char('a') | KeyCode::Char('n') => Some(Action::McpServerAdd),
             KeyCode::Char('e') => Some(Action::McpServerEdit),

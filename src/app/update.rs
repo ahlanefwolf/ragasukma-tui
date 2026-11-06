@@ -19,12 +19,10 @@ impl App {
         // 2. Delegate to active tab view module
         match self.active_tab {
             4 => {
-                if let Some(status_opt) =
-                    crate::custom_llm_view::update::handle_custom_llm_action(
-                        &mut self.custom_llm,
-                        &action,
-                    )
-                {
+                if let Some(status_opt) = crate::custom_llm_view::update::handle_custom_llm_action(
+                    &mut self.custom_llm,
+                    &action,
+                ) {
                     if let Some(status) = status_opt {
                         self.set_status(status);
                     }
@@ -32,12 +30,10 @@ impl App {
                 }
             }
             5 => {
-                if let Some(status_opt) =
-                    crate::mcp_server_view::update::handle_mcp_server_action(
-                        &mut self.mcp_server,
-                        &action,
-                    )
-                {
+                if let Some(status_opt) = crate::mcp_server_view::update::handle_mcp_server_action(
+                    &mut self.mcp_server,
+                    &action,
+                ) {
                     if let Some(status) = status_opt {
                         self.set_status(status);
                     }
@@ -165,11 +161,10 @@ impl App {
                         .as_secs()
                 );
                 let redirect_uri = format!("http://localhost:{}/oauth/callback", port);
-                let auth_url =
-                    ragasukma_core::llm::providers::antigravity::oauth::build_auth_url(
-                        &redirect_uri,
-                        &state,
-                    );
+                let auth_url = ragasukma_core::llm::providers::antigravity::oauth::build_auth_url(
+                    &redirect_uri,
+                    &state,
+                );
 
                 if let Some(event_tx) = self.event_tx.clone() {
                     crate::oauth_listener::spawn_oauth_listener(

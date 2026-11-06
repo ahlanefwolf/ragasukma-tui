@@ -1,6 +1,6 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use crate::app::Action;
 use super::types::{ProviderFocusArea, ProviderTabState};
+use crate::app::Action;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl ProviderTabState {
     pub fn handle_key(&self, key: KeyEvent) -> Option<Action> {
@@ -44,9 +44,7 @@ impl ProviderTabState {
                 KeyCode::Down | KeyCode::Char('j') | KeyCode::PageDown => {
                     Some(Action::QuotaScrollDown)
                 }
-                KeyCode::Up | KeyCode::Char('k') | KeyCode::PageUp => {
-                    Some(Action::QuotaScrollUp)
-                }
+                KeyCode::Up | KeyCode::Char('k') | KeyCode::PageUp => Some(Action::QuotaScrollUp),
                 KeyCode::Char('r') | KeyCode::Char('R') => Some(Action::RefreshQuota),
                 _ => None,
             },

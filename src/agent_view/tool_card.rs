@@ -1,19 +1,15 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
-    Frame,
 };
 
 use super::types::{ApprovalRequest, ToolCallInfo, ToolExecutionStatus};
 use crate::theme::Theme;
 
-pub fn render_tool_card(
-    tc: &ToolCallInfo,
-    is_expanded: bool,
-    index: usize,
-) -> Vec<Line<'static>> {
+pub fn render_tool_card(tc: &ToolCallInfo, is_expanded: bool, index: usize) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
     let (status_badge, status_color) = match tc.status {
@@ -65,7 +61,10 @@ pub fn render_tool_card(
                     .fg(Theme::TEXT_SECONDARY)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(tc.args_summary.clone(), Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled(
+                tc.args_summary.clone(),
+                Style::default().fg(Theme::TEXT_SECONDARY),
+            ),
         ]));
 
         // Terminal output stream
@@ -119,7 +118,8 @@ pub fn render_tool_card(
                 combined_spans.extend(diff_line.spans);
                 lines.push(Line::from(combined_spans));
             }
-        } else if tc.stdout.is_none() && tc.stderr.is_none()
+        } else if tc.stdout.is_none()
+            && tc.stderr.is_none()
             && let Some(out) = &tc.output_summary
         {
             lines.push(Line::from(vec![
@@ -179,11 +179,7 @@ pub fn render_diff_lines(diff: &str) -> Vec<Line<'static>> {
     lines
 }
 
-pub fn render_approval_modal(
-    req: &ApprovalRequest,
-    frame: &mut Frame,
-    area: Rect,
-) {
+pub fn render_approval_modal(req: &ApprovalRequest, frame: &mut Frame, area: Rect) {
     let modal_width = 74.min(area.width.saturating_sub(4));
     let modal_height = 20.min(area.height.saturating_sub(4));
 
@@ -205,8 +201,18 @@ pub fn render_approval_modal(
 
     let outer_block = Block::default()
         .title(Line::from(vec![
-            Span::styled(" ⚠️ APPROVAL REQUIRED: ", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
-            Span::styled(&req.tool_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " ⚠️ APPROVAL REQUIRED: ",
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                &req.tool_name,
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" "),
         ]))
         .borders(Borders::ALL)
@@ -215,34 +221,53 @@ pub fn render_approval_modal(
 
     frame.render_widget(outer_block, modal_area);
 
-    let mut header_lines = vec![
-        Line::from(vec![
-            Span::styled("Action Details: ", Style::default().fg(Theme::TEXT_SECONDARY).add_modifier(Modifier::BOLD)),
-            Span::styled(&req.details, Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-    ];
+    let mut header_lines = vec![Line::from(vec![
+        Span::styled(
+            "Action Details: ",
+            Style::default()
+                .fg(Theme::TEXT_SECONDARY)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(&req.details, Style::default().fg(Theme::TEXT_PRIMARY)),
+    ])];
 
     if let Some(target) = &req.target_path {
         header_lines.push(Line::from(vec![
-            Span::styled("Target Path:    ", Style::default().fg(Theme::TEXT_SECONDARY).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Target Path:    ",
+                Style::default()
+                    .fg(Theme::TEXT_SECONDARY)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(target, Style::default().fg(Color::Cyan)),
         ]));
     }
 
     if let Some(cmd) = &req.command {
         header_lines.push(Line::from(vec![
-            Span::styled("Command to Run: ", Style::default().fg(Theme::TEXT_SECONDARY).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Command to Run: ",
+                Style::default()
+                    .fg(Theme::TEXT_SECONDARY)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(cmd, Style::default().fg(Color::Yellow)),
         ]));
     }
 
-    frame.render_widget(Paragraph::new(header_lines).wrap(Wrap { trim: true }), chunks[0]);
+    frame.render_widget(
+        Paragraph::new(header_lines).wrap(Wrap { trim: true }),
+        chunks[0],
+    );
 
     // Preview area (diff or command output)
     if let Some(diff) = &req.diff_content {
         let diff_lines = render_diff_lines(diff);
         let preview_block = Block::default()
-            .title(Span::styled(" Proposed Unified Diff ", Theme::header_title()))
+            .title(Span::styled(
+                " Proposed Unified Diff ",
+                Theme::header_title(),
+            ))
             .borders(Borders::ALL)
             .border_style(Theme::border_subtle());
 
@@ -251,19 +276,36 @@ pub fn render_approval_modal(
             .wrap(Wrap { trim: false });
         frame.render_widget(p, chunks[1]);
     } else {
-        let info_p = Paragraph::new("No file modification diff. Tool requests direct system execution approval.")
-            .style(Style::default().fg(Theme::TEXT_SECONDARY))
-            .block(Block::default().borders(Borders::ALL).border_style(Theme::border_subtle()));
+        let info_p = Paragraph::new(
+            "No file modification diff. Tool requests direct system execution approval.",
+        )
+        .style(Style::default().fg(Theme::TEXT_SECONDARY))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Theme::border_subtle()),
+        );
         frame.render_widget(info_p, chunks[1]);
     }
 
     // Action button hints
     let actions_p = Paragraph::new(Line::from(vec![
-        Span::styled(" [y] Approve ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [y] Approve ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  "),
-        Span::styled(" [n] Reject ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [n] Reject ",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  "),
-        Span::styled(" [Esc] Dismiss ", Style::default().fg(Theme::TEXT_SECONDARY)),
+        Span::styled(
+            " [Esc] Dismiss ",
+            Style::default().fg(Theme::TEXT_SECONDARY),
+        ),
     ]));
     frame.render_widget(actions_p, chunks[2]);
 }

@@ -137,7 +137,8 @@ impl FileTagQuery {
         }
         let current_len = self.matched_items.len();
         let next_len = (current_len + self.batch_size).min(self.all_matches.len());
-        self.matched_items.extend_from_slice(&self.all_matches[current_len..next_len]);
+        self.matched_items
+            .extend_from_slice(&self.all_matches[current_len..next_len]);
         true
     }
 }

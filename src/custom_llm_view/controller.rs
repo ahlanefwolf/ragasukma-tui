@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::app::Action;
 use super::types::CustomLlmTabState;
+use crate::app::Action;
 
 impl CustomLlmTabState {
     #[must_use]
@@ -27,7 +27,9 @@ impl CustomLlmTabState {
                 KeyCode::Enter => Some(Action::FormSubmit),
                 KeyCode::Backspace => Some(Action::FormBackspace),
                 KeyCode::Char(c)
-                    if !key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+                    if !key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL)
                         && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT) =>
                 {
                     Some(Action::FormChar(c))

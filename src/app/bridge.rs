@@ -15,7 +15,9 @@ impl App {
                 {
                     s.is_running = true;
                 }
-                if session_id.as_ref() == self.agent.active_session_id.as_ref() || session_id.is_none() {
+                if session_id.as_ref() == self.agent.active_session_id.as_ref()
+                    || session_id.is_none()
+                {
                     self.set_status(status);
                 }
             }
@@ -28,7 +30,10 @@ impl App {
                     self.agent.append_chunk(&delta);
                 }
             }
-            CoreBridgeEvent::ThoughtDelta { session_id, thought } => {
+            CoreBridgeEvent::ThoughtDelta {
+                session_id,
+                thought,
+            } => {
                 if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
                     s.is_running = true;
                 }
@@ -37,29 +42,48 @@ impl App {
                     self.agent.append_thought(&thought);
                 }
             }
-            CoreBridgeEvent::StepInfo { session_id, action, details, .. } => {
+            CoreBridgeEvent::StepInfo {
+                session_id,
+                action,
+                details,
+                ..
+            } => {
                 let det_str = details.unwrap_or_default();
-                tracing::debug!("Agent step: session={session_id}, action='{action}', details='{det_str}'");
+                tracing::debug!(
+                    "Agent step: session={session_id}, action='{action}', details='{det_str}'"
+                );
                 if Some(&session_id) == self.agent.active_session_id.as_ref() {
                     self.set_status(format!("[Step] {} - {}", action, det_str));
                 }
             }
-            CoreBridgeEvent::ToolCall { session_id, name, args } => {
-                tracing::info!("Tool call received: session={session_id}, name='{name}', args='{args}'");
+            CoreBridgeEvent::ToolCall {
+                session_id,
+                name,
+                args,
+            } => {
+                tracing::info!(
+                    "Tool call received: session={session_id}, name='{name}', args='{args}'"
+                );
                 if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
                     s.total_requests += 1;
                 }
                 if Some(&session_id) == self.agent.active_session_id.as_ref() {
-                    let needs_new_assistant_msg = self.agent.messages.last().map(|m| m.role != crate::agent_view::types::MessageRole::Assistant).unwrap_or(true);
+                    let needs_new_assistant_msg = self
+                        .agent
+                        .messages
+                        .last()
+                        .map(|m| m.role != crate::agent_view::types::MessageRole::Assistant)
+                        .unwrap_or(true);
                     if needs_new_assistant_msg {
-                        self.agent.push_message(crate::agent_view::types::ChatMessage {
-                            role: crate::agent_view::types::MessageRole::Assistant,
-                            sender_name: "Agent".to_string(),
-                            content: String::new(),
-                            timestamp: "now".to_string(),
-                            tool_calls: Vec::new(),
-                            reasoning: None,
-                        });
+                        self.agent
+                            .push_message(crate::agent_view::types::ChatMessage {
+                                role: crate::agent_view::types::MessageRole::Assistant,
+                                sender_name: "Agent".to_string(),
+                                content: String::new(),
+                                timestamp: "now".to_string(),
+                                tool_calls: Vec::new(),
+                                reasoning: None,
+                            });
                     }
                     if let Some(last) = self.agent.messages.last_mut() {
                         last.tool_calls.push(ToolCallInfo {
@@ -77,7 +101,10 @@ impl App {
                     }
                 }
             }
-            CoreBridgeEvent::TurnCompleted { session_id, summary: msg } => {
+            CoreBridgeEvent::TurnCompleted {
+                session_id,
+                summary: msg,
+            } => {
                 tracing::info!("Turn completed for {session_id}: {msg}");
                 let is_active = Some(&session_id) == self.agent.active_session_id.as_ref();
                 if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
@@ -86,32 +113,32 @@ impl App {
                 if is_active {
                     if !msg.trim().is_empty() {
                         let mut found = false;
-                        if let Some(last) = self
-                            .agent
-                            .messages
-                            .last_mut()
-                            .filter(|m| m.role == crate::agent_view::types::MessageRole::Assistant && m.content.is_empty())
-                        {
+                        if let Some(last) = self.agent.messages.last_mut().filter(|m| {
+                            m.role == crate::agent_view::types::MessageRole::Assistant
+                                && m.content.is_empty()
+                        }) {
                             last.content = msg.clone();
                             found = true;
                         }
                         if !found {
-                            self.agent.push_message(crate::agent_view::types::ChatMessage {
-                                role: crate::agent_view::types::MessageRole::Assistant,
-                                sender_name: "Agent".to_string(),
-                                content: msg,
-                                timestamp: "now".to_string(),
-                                tool_calls: Vec::new(),
-                                reasoning: None,
-                            });
+                            self.agent
+                                .push_message(crate::agent_view::types::ChatMessage {
+                                    role: crate::agent_view::types::MessageRole::Assistant,
+                                    sender_name: "Agent".to_string(),
+                                    content: msg,
+                                    timestamp: "now".to_string(),
+                                    tool_calls: Vec::new(),
+                                    reasoning: None,
+                                });
                         }
                     }
                     self.agent.finish_turn();
                     self.set_status("Turn completed".to_string());
                     if let Some(tx) = self.bridge_cmd_tx.as_ref() {
-                        let _ = tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
-                            session_id,
-                        });
+                        let _ =
+                            tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
+                                session_id,
+                            });
                     }
                 } else {
                     let s_title = self
@@ -145,14 +172,15 @@ impl App {
                     s.is_running = false;
                 }
                 if Some(&session_id) == self.agent.active_session_id.as_ref() {
-                    self.agent.push_message(crate::agent_view::types::ChatMessage {
-                        role: crate::agent_view::types::MessageRole::Assistant,
-                        sender_name: "System Error".to_string(),
-                        content: format!("⚠️ Error: {}", error),
-                        timestamp: "now".to_string(),
-                        tool_calls: Vec::new(),
-                        reasoning: None,
-                    });
+                    self.agent
+                        .push_message(crate::agent_view::types::ChatMessage {
+                            role: crate::agent_view::types::MessageRole::Assistant,
+                            sender_name: "System Error".to_string(),
+                            content: format!("⚠️ Error: {}", error),
+                            timestamp: "now".to_string(),
+                            tool_calls: Vec::new(),
+                            reasoning: None,
+                        });
                     self.agent.fail_turn(error.clone());
                 }
                 self.set_status(format!("Turn failed: {}", error));
@@ -167,7 +195,10 @@ impl App {
                 total_tokens,
                 ..
             } => {
-                self.set_status(format!("Quota updated: {} total: {}", provider, total_tokens));
+                self.set_status(format!(
+                    "Quota updated: {} total: {}",
+                    provider, total_tokens
+                ));
             }
             CoreBridgeEvent::AccountQuotaUpdated {
                 provider,
@@ -218,7 +249,9 @@ impl App {
                     self.agent.active_project_name = "No Project".to_string();
                 }
 
-                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(initial_root.as_deref());
+                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(
+                    initial_root.as_deref(),
+                );
                 let folders: Vec<std::path::PathBuf> = parsed
                     .into_iter()
                     .map(std::path::PathBuf::from)
@@ -230,7 +263,9 @@ impl App {
                 self.agent.scan_workspace_files();
             }
             CoreBridgeEvent::ProjectCreated { project } => {
-                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(project.root_path.as_deref());
+                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(
+                    project.root_path.as_deref(),
+                );
                 let folders: Vec<std::path::PathBuf> = parsed
                     .into_iter()
                     .map(std::path::PathBuf::from)
@@ -262,7 +297,9 @@ impl App {
                 self.agent.active_project_id = Some(project_id);
                 self.agent.active_project_name = project_name;
 
-                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(root_path.as_deref());
+                let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(
+                    root_path.as_deref(),
+                );
                 let folders: Vec<std::path::PathBuf> = parsed
                     .into_iter()
                     .map(std::path::PathBuf::from)
@@ -312,10 +349,19 @@ impl App {
                 tracing::error!("Core bridge error received: {err}");
                 self.error_modal = Some(err);
             }
-            CoreBridgeEvent::HistoryLoaded { session_id, messages } => {
+            CoreBridgeEvent::HistoryLoaded {
+                session_id,
+                messages,
+            } => {
                 self.agent.active_session_id = Some(session_id.clone());
-                let sum_in: i64 = messages.iter().map(|m| m.token_usage_input.unwrap_or(0)).sum();
-                let sum_out: i64 = messages.iter().map(|m| m.token_usage_output.unwrap_or(0)).sum();
+                let sum_in: i64 = messages
+                    .iter()
+                    .map(|m| m.token_usage_input.unwrap_or(0))
+                    .sum();
+                let sum_out: i64 = messages
+                    .iter()
+                    .map(|m| m.token_usage_output.unwrap_or(0))
+                    .sum();
                 let asst_count = messages.iter().filter(|m| m.role == "assistant").count();
                 let tool_count = messages.iter().filter(|m| m.role == "tool").count();
                 let req_count = asst_count + tool_count;
@@ -325,13 +371,17 @@ impl App {
                         self.agent.sessions[pos].total_tokens_input = sum_in;
                         self.agent.sessions[pos].total_tokens_output = sum_out;
                     }
-                    self.agent.sessions[pos].total_requests = self.agent.sessions[pos].total_requests.max(req_count);
+                    self.agent.sessions[pos].total_requests =
+                        self.agent.sessions[pos].total_requests.max(req_count);
                     if let Some(ref m) = self.agent.sessions[pos].model {
                         self.agent.active_model = m.clone();
                     }
                 }
                 self.agent.set_messages_from_persisted(messages);
-                self.set_status(format!("Loaded conversation history for session: {}", session_id));
+                self.set_status(format!(
+                    "Loaded conversation history for session: {}",
+                    session_id
+                ));
             }
             CoreBridgeEvent::SessionCreated { id, title } => {
                 let session_item = crate::agent_view::types::TaskSessionItem {
@@ -353,7 +403,9 @@ impl App {
             }
             CoreBridgeEvent::SessionDeleted { id } => {
                 self.agent.sessions.retain(|s| s.id != id);
-                if self.agent.selected_session_idx >= self.agent.sessions.len() && !self.agent.sessions.is_empty() {
+                if self.agent.selected_session_idx >= self.agent.sessions.len()
+                    && !self.agent.sessions.is_empty()
+                {
                     self.agent.selected_session_idx = self.agent.sessions.len() - 1;
                 }
                 self.set_status("Deleted task session".to_string());
@@ -371,9 +423,15 @@ impl App {
 
     fn request_selected_account_quota_internal(&mut self, force: bool) {
         let (provider, account_id) = match self.active_tab {
-            1 => ("antigravity", self.antigravity.selected_account().map(|a| a.id.clone())),
+            1 => (
+                "antigravity",
+                self.antigravity.selected_account().map(|a| a.id.clone()),
+            ),
             2 => ("codex", self.codex.selected_account().map(|a| a.id.clone())),
-            3 => ("claude", self.claude.selected_account().map(|a| a.id.clone())),
+            3 => (
+                "claude",
+                self.claude.selected_account().map(|a| a.id.clone()),
+            ),
             _ => return,
         };
 

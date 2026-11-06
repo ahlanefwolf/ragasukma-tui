@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
-    Frame,
 };
 
 use crate::agent_view::state::AgentWorkspaceState;
@@ -65,7 +65,15 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
         Line::from(vec![
             Span::styled("Requests: ", Style::default().fg(Theme::TEXT_SECONDARY)),
             Span::styled(
-                format!("{} req{}", super::helpers::format_comma_number(breakdown.task_requests), if breakdown.task_requests == 1 { "" } else { "s" }),
+                format!(
+                    "{} req{}",
+                    super::helpers::format_comma_number(breakdown.task_requests),
+                    if breakdown.task_requests == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
+                ),
                 Style::default().fg(Theme::TEXT_PRIMARY),
             ),
         ]),
@@ -93,9 +101,9 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
 
     let block_tools = Block::default()
         .title(if is_tools_focused {
-            Span::styled(" 🛠️ MCP Tool Status [Focused] ", Theme::badge_gold())
+            Span::styled(" 🔌 MCP Servers [Focused] ", Theme::badge_gold())
         } else {
-            Span::styled(" 🛠️ MCP Tool Status ", Theme::header_title())
+            Span::styled(" 🔌 MCP Servers ", Theme::header_title())
         })
         .borders(Borders::ALL)
         .border_style(if is_tools_focused {
@@ -105,48 +113,46 @@ pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
         })
         .style(Theme::block_base());
 
-    let tools_lines: Vec<Line> = vec![
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("workspace_list_dir", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("workspace_read_file", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("workspace_write_file", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("workspace_edit_file", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("workspace_grep", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("workspace_run_cmd", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("quota_fetch_all", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("db_query_execute", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("git_status_check", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-        Line::from(vec![
-            Span::styled("● ", Theme::status_success()),
-            Span::styled("git_diff_inspect", Style::default().fg(Theme::TEXT_PRIMARY)),
-        ]),
-    ];
+    // All MCP servers from the global `mcp_servers` table.
+    // [ON]/[OFF] reflects the per-project link in `project_mcp_servers`;
+    // Space toggles the link (add/remove), synced via AgentToggleMcpServer.
+    let mut tools_lines: Vec<Line> = Vec::new();
+    if state.mcp_servers.is_empty() {
+        tools_lines.push(Line::from(Span::styled(
+            "  (no MCP servers configured)",
+            Style::default().fg(Theme::TEXT_SECONDARY),
+        )));
+        tools_lines.push(Line::from(Span::styled(
+            "  Press 'r' to load; add servers in MCP view",
+            Style::default().fg(Theme::TEXT_SECONDARY),
+        )));
+    } else {
+        let selected = state.selected_mcp_idx.min(state.mcp_servers.len() - 1);
+        for (idx, server) in state.mcp_servers.iter().enumerate() {
+            let enabled = state.mcp_active_ids.iter().any(|id| id == &server.id);
+            let is_selected = is_tools_focused && idx == selected;
+            let cursor = if is_selected { "▶ " } else { "  " };
+            let marker = if enabled {
+                Span::styled("[ON]  ", Theme::status_success())
+            } else {
+                Span::styled("[OFF] ", Style::default().fg(Theme::TEXT_SECONDARY))
+            };
+            let name_style = if is_selected {
+                Style::default()
+                    .fg(Theme::TEXT_PRIMARY)
+                    .add_modifier(ratatui::style::Modifier::BOLD)
+            } else if enabled {
+                Style::default().fg(Theme::TEXT_PRIMARY)
+            } else {
+                Style::default().fg(Theme::TEXT_SECONDARY)
+            };
+            tools_lines.push(Line::from(vec![
+                Span::styled(cursor, Theme::badge_gold()),
+                marker,
+                Span::styled(server.name.clone(), name_style),
+            ]));
+        }
+    }
 
     let total_tools = tools_lines.len();
     let tools_inner = block_tools.inner(chunks[1]);

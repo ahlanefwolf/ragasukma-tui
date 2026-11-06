@@ -1,13 +1,13 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
-    Frame,
 };
 
-use crate::theme::Theme;
 use super::types::{ProviderFocusArea, ProviderTabState};
+use crate::theme::Theme;
 
 pub fn render_provider_tab(frame: &mut Frame, area: Rect, state: &ProviderTabState) {
     let chunks = Layout::default()
@@ -18,25 +18,25 @@ pub fn render_provider_tab(frame: &mut Frame, area: Rect, state: &ProviderTabSta
         ])
         .split(area);
 
-    let header_lines = vec![
-        Line::from(vec![
-            Span::styled(format!("🌌  {} Hub", state.provider_name), Theme::header_title()),
-            Span::styled(
-                if state.is_refreshing {
-                    "  [Refreshing Quotas...]"
-                } else {
-                    ""
-                },
-                Theme::text_gold(),
-            ),
-        ]),
-    ];
-    let header = Paragraph::new(header_lines)
-        .block(
-            Block::default()
-                .borders(Borders::BOTTOM)
-                .border_style(Theme::border_subtle()),
-        );
+    let header_lines = vec![Line::from(vec![
+        Span::styled(
+            format!("🌌  {} Hub", state.provider_name),
+            Theme::header_title(),
+        ),
+        Span::styled(
+            if state.is_refreshing {
+                "  [Refreshing Quotas...]"
+            } else {
+                ""
+            },
+            Theme::text_gold(),
+        ),
+    ])];
+    let header = Paragraph::new(header_lines).block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Theme::border_subtle()),
+    );
     frame.render_widget(header, chunks[0]);
 
     render_provider_dashboard(frame, chunks[1], state);
@@ -56,7 +56,10 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
         .map(|(i, acc)| {
             let is_selected = i == state.selected_account_idx;
             let status_badge = if acc.is_active {
-                Span::styled(" ● ACTIVE ", Theme::status_success().add_modifier(Modifier::BOLD))
+                Span::styled(
+                    " ● ACTIVE ",
+                    Theme::status_success().add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::styled(" ○ INACTIVE ", Theme::text_secondary())
             };
@@ -256,8 +259,14 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
 
         if account.quotas.is_empty() {
             let empty_text = vec![
-                Line::from(Span::styled("No model quota data available.", Theme::text_secondary())),
-                Line::from(Span::styled("Press [r] to fetch/refresh quota from server...", Theme::text_gold())),
+                Line::from(Span::styled(
+                    "No model quota data available.",
+                    Theme::text_secondary(),
+                )),
+                Line::from(Span::styled(
+                    "Press [r] to fetch/refresh quota from server...",
+                    Theme::text_gold(),
+                )),
             ];
             let p = Paragraph::new(empty_text);
             frame.render_widget(p, quota_chunks[0]);
@@ -277,10 +286,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                         Span::raw("  "),
                         Span::styled(&quota.detail, Theme::text_secondary()),
                         Span::raw("  "),
-                        Span::styled(
-                            format!("(Reset: {})", quota.reset_in),
-                            Theme::text_gold(),
-                        ),
+                        Span::styled(format!("(Reset: {})", quota.reset_in), Theme::text_gold()),
                     ]);
                     let title_p = Paragraph::new(title_line);
                     frame.render_widget(title_p, sub_chunks[0]);
@@ -294,10 +300,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                     };
 
                     let gauge = Gauge::default()
-                        .gauge_style(
-                            ratatui::style::Style::default()
-                                .fg(gauge_color),
-                        )
+                        .gauge_style(ratatui::style::Style::default().fg(gauge_color))
                         .percent(quota.percentage)
                         .label(format!("{}% Available", quota.percentage));
 
@@ -312,7 +315,10 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
             .title(" Account & Quota Info ");
         let msg = Paragraph::new(vec![
             Line::from(""),
-            Line::from(Span::styled("  No account selected.", Theme::text_secondary())),
+            Line::from(Span::styled(
+                "  No account selected.",
+                Theme::text_secondary(),
+            )),
             Line::from(""),
             Line::from(vec![
                 Span::raw("  Press "),

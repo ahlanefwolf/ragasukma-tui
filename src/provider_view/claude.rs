@@ -1,5 +1,5 @@
-use ragasukma_core::llm::providers::claude::types::{ClaudeModelInfo, ClaudeQuotaResponse};
 use ragasukma_core::llm::providers::ClaudeProvider;
+use ragasukma_core::llm::providers::claude::types::{ClaudeModelInfo, ClaudeQuotaResponse};
 
 use super::types::{AccountInfo, ModelQuotaItem, ProviderTabState};
 
@@ -66,7 +66,9 @@ pub fn map_claude_quotas(
             name: "Session Quota Window".to_string(),
             percentage: session_pct,
             detail: session_detail.clone(),
-            reset_in: session.reset_at.unwrap_or_else(|| "Active Window".to_string()),
+            reset_in: session
+                .reset_at
+                .unwrap_or_else(|| "Active Window".to_string()),
         });
     }
 

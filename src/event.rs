@@ -77,7 +77,11 @@ impl EventHandler {
             }
         });
 
-        Self { tx, rx, _task: task }
+        Self {
+            tx,
+            rx,
+            _task: task,
+        }
     }
 
     pub async fn next(&mut self) -> Result<AppEvent> {

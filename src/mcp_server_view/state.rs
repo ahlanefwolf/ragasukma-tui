@@ -3,6 +3,85 @@ use ragasukma_core::agent::models::McpServer;
 use super::service;
 use super::types::{McpFormField, McpServerTabState};
 
+/// Maximum characters rendered for the `config_preview_summary` hint.
+///
+/// Keeps the chat input footer from overflowing narrow terminals.
+pub const CONFIG_PREVIEW_MAX_CHARS: usize = 56;
+
+/// Truncate `s` to at most `max` characters, appending `…` when shortened.
+///
+/// Uses char counts (not bytes) so multi-byte server names never panic or
+/// produce invalid UTF-8 boundaries.
+pub fn truncate_chars(s: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    let mut out = String::new();
+    for (count, ch) in s.chars().enumerate() {
+        if count + 1 >= max {
+            out.push('…');
+            return out;
+        }
+        out.push(ch);
+    }
+    out
+}
+
+/// Build a short single-line summary of a server's config.
+///
+/// The summary shows `<name> [<transport>]` plus human detail: the command for
+/// `stdio` servers, the URL for `sse`/`http` servers, and the number of extra
+/// top-level JSON keys. It is already truncated to
+/// [`CONFIG_PREVIEW_MAX_CHARS`] so callers can render it directly.
+///
+/// Returns `None` when no server is selected at `selected_idx`.
+#[must_use]
+pub fn config_preview_summary(servers: &[McpServer], selected_idx: usize) -> Option<String> {
+    let server = servers.get(selected_idx)?;
+    let config = server.config_value();
+    let is_object = config.is_object();
+
+    let detail = match (server.command(), server.url()) {
+        (Some(cmd), _) => cmd,
+        (None, Some(url)) => url,
+        (None, None) => {
+            if is_object {
+                let keys = config.as_object().map_or(0, serde_json::Map::len);
+                format!("{keys} keys")
+            } else {
+                format!("{}B", server.config.chars().count())
+            }
+        }
+    };
+
+    let extra_keys = config.as_object().map_or(0, |m| {
+        m.keys()
+            .filter(|k| !matches!(k.as_str(), "command" | "url" | "transport" | "args" | "env"))
+            .count()
+    });
+
+    let suffix = if extra_keys > 0 {
+        format!(" +{extra_keys}")
+    } else {
+        String::new()
+    };
+
+    let raw = format!("{} [{}] {detail}{suffix}", server.name, server.transport());
+    Some(truncate_chars(&raw, CONFIG_PREVIEW_MAX_CHARS))
+}
+
+/// Full JSON keys preview, used when the user explicitly opens the config.
+///
+/// Returns the sorted list of top-level object keys of the selected server's
+/// config, or `None` when nothing is selected or the config is not an object.
+#[must_use]
+pub fn config_preview_keys(servers: &[McpServer], selected_idx: usize) -> Option<Vec<String>> {
+    let server = servers.get(selected_idx)?;
+    let mut keys: Vec<String> = server.config_value().as_object()?.keys().cloned().collect();
+    keys.sort();
+    Some(keys)
+}
+
 impl Default for McpServerTabState {
     fn default() -> Self {
         Self::new()
@@ -349,8 +428,7 @@ impl McpServerTabState {
             }
             McpFormField::JsonConfig => {
                 let (line, _) = get_line_and_col(&self.form_json, self.json_cursor);
-                let end_of_line =
-                    byte_offset_from_line_and_col(&self.form_json, line, usize::MAX);
+                let end_of_line = byte_offset_from_line_and_col(&self.form_json, line, usize::MAX);
                 if self.json_cursor == end_of_line {
                     self.json_cursor = self.form_json.len();
                 } else {
@@ -436,6 +514,15 @@ impl McpServerTabState {
 
     pub fn cancel_delete(&mut self) {
         self.delete_confirm_id = None;
+    }
+
+    /// Short single-line summary of the currently selected server's JSON config.
+    ///
+    /// Used as a compact indicator in the chat input title bar, since the
+    /// previous "JSON Configuration Preview" sidebar card was removed.
+    #[must_use]
+    pub fn config_preview_summary(&self) -> Option<String> {
+        config_preview_summary(&self.servers, self.selected_idx)
     }
 
     pub fn confirm_delete(&mut self) -> Result<String, String> {
@@ -576,7 +663,13 @@ mod tests {
         state.form_name = "Test MCP".to_string();
         state.form_json = "{ invalid_json".to_string();
         assert!(state.save_form().is_err());
-        assert!(state.form_error.as_deref().unwrap_or("").contains("Invalid JSON"));
+        assert!(
+            state
+                .form_error
+                .as_deref()
+                .unwrap_or("")
+                .contains("Invalid JSON")
+        );
     }
 
     #[test]

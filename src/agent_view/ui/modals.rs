@@ -1,4 +1,5 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -6,7 +7,6 @@ use ratatui::{
         Block, Borders, Clear, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Wrap,
     },
-    Frame,
 };
 
 use super::helpers::centered_rect;
@@ -56,9 +56,13 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
             let selector = if is_sel { "▶ " } else { "  " };
             let active_mark = if is_active { "★ " } else { "  " };
             let name_style = if is_sel {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else if is_active {
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -68,7 +72,10 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
                 Span::styled(active_mark, Style::default().fg(Color::Green)),
                 Span::styled(&proj.name, name_style),
                 Span::raw(" "),
-                Span::styled(format!("({desc})"), Style::default().fg(Theme::TEXT_SECONDARY)),
+                Span::styled(
+                    format!("({desc})"),
+                    Style::default().fg(Theme::TEXT_SECONDARY),
+                ),
             ]);
             ListItem::new(line)
         })
@@ -104,7 +111,12 @@ pub fn render_create_project_modal(frame: &mut Frame, area: Rect, modal: &Create
     let content = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("Project Name: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Project Name: ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(&modal.name_input, Style::default().fg(Color::Yellow)),
             Span::styled("█", Style::default().fg(Color::White)),
         ]),
@@ -121,12 +133,20 @@ pub fn render_add_folder_modal(frame: &mut Frame, area: Rect, modal: &AddFolderM
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
-        .title(Span::styled(" 📁 Attach Workspace Folder ", Theme::badge_gold()));
+        .title(Span::styled(
+            " 📁 Attach Workspace Folder ",
+            Theme::badge_gold(),
+        ));
 
     let mut lines = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled("Folder Path: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Folder Path: ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(&modal.input_path, Style::default().fg(Color::Yellow)),
             Span::styled("█", Style::default().fg(Color::White)),
         ]),
@@ -181,10 +201,15 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
 
     let items: Vec<ListItem> = if total == 0 {
         vec![ListItem::new(Line::from(vec![
-            Span::styled("  🔍 No items matching ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled(
+                "  🔍 No items matching ",
+                Style::default().fg(Theme::TEXT_SECONDARY),
+            ),
             Span::styled(
                 format!("\"@{}\"", tq.query),
-                Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]))]
     } else {
@@ -224,7 +249,9 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
                     Span::styled(
                         prefix,
                         if is_sel {
-                            Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)
+                            Style::default()
+                                .fg(Theme::GOLD_PRIMARY)
+                                .add_modifier(Modifier::BOLD)
                         } else {
                             Style::default()
                         },
@@ -308,7 +335,9 @@ pub fn render_diff_preview_modal(frame: &mut Frame, diff: &DiffApprovalState, ar
         lines.push(Line::from(Span::styled(&diff_line.content, style)));
     }
 
-    let p = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let p = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     frame.render_widget(p, popup_area);
 }
 
@@ -396,9 +425,10 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
         } else {
             " [No matching models found] "
         };
-        items.push(ListItem::new(Line::from(vec![
-            Span::styled(msg, Style::default().fg(Theme::TEXT_SECONDARY)),
-        ])));
+        items.push(ListItem::new(Line::from(vec![Span::styled(
+            msg,
+            Style::default().fg(Theme::TEXT_SECONDARY),
+        )])));
     } else {
         for (idx, m) in filtered_models[offset..end].iter().enumerate() {
             let actual_idx = offset + idx;
@@ -407,8 +437,18 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
 
             let line = if is_selected {
                 Line::from(vec![
-                    Span::styled(" ❯ ", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("[◈ {}]", m), Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        " ❯ ",
+                        Style::default()
+                            .fg(Theme::GOLD_PRIMARY)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("[◈ {}]", m),
+                        Style::default()
+                            .fg(Theme::GOLD_PRIMARY)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     if is_active {
                         Span::styled(" (current)", Style::default().fg(Theme::CYAN_ACCENT))
                     } else {
@@ -418,13 +458,19 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
             } else if is_active {
                 Line::from(vec![
                     Span::raw("   "),
-                    Span::styled(format!("  {}  ", m), Style::default().fg(Theme::TEXT_PRIMARY)),
+                    Span::styled(
+                        format!("  {}  ", m),
+                        Style::default().fg(Theme::TEXT_PRIMARY),
+                    ),
                     Span::styled(" (current)", Style::default().fg(Theme::CYAN_ACCENT)),
                 ])
             } else {
                 Line::from(vec![
                     Span::raw("   "),
-                    Span::styled(format!("  {}", m), Style::default().fg(Theme::TEXT_SECONDARY)),
+                    Span::styled(
+                        format!("  {}", m),
+                        Style::default().fg(Theme::TEXT_SECONDARY),
+                    ),
                 ])
             };
 

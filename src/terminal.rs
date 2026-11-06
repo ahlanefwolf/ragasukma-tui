@@ -2,13 +2,11 @@ use color_eyre::Result;
 use crossterm::{
     event::{DisableBracketedPaste, EnableBracketedPaste},
     execute,
-    terminal::{
-        disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-    },
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-use std::io::{stdout, Stdout};
+use ratatui::backend::CrosstermBackend;
+use std::io::{Stdout, stdout};
 use std::panic;
 
 pub type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;

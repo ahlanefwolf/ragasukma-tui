@@ -1,5 +1,5 @@
 use ragasukma_core::llm::providers::custom::{
-    load_accounts, save_accounts, validate_account, CustomLlmAccount,
+    CustomLlmAccount, load_accounts, save_accounts, validate_account,
 };
 
 use super::types::{CustomLlmTabState, FormField};
@@ -249,7 +249,10 @@ impl CustomLlmTabState {
         if (!is_editing || original_prefix != candidate.prefix)
             && self.accounts.iter().any(|a| a.prefix == candidate.prefix)
         {
-            let err = format!("Prefix '{}' is already in use by another provider", candidate.prefix);
+            let err = format!(
+                "Prefix '{}' is already in use by another provider",
+                candidate.prefix
+            );
             self.form_error = Some(err.clone());
             return Err(err);
         }

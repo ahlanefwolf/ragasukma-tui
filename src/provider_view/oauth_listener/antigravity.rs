@@ -3,8 +3,7 @@ pub async fn exchange_antigravity_token(code: &str, redirect_uri: &str) -> Resul
     let redirect_uri = redirect_uri.to_string();
 
     tokio::task::spawn_blocking(move || {
-        let mut provider =
-            ragasukma_core::llm::providers::antigravity::AntigravityProvider::new();
+        let mut provider = ragasukma_core::llm::providers::antigravity::AntigravityProvider::new();
         let account_id = provider
             .add_oauth_account(&code, &redirect_uri)
             .map_err(|e| e.to_string())?;

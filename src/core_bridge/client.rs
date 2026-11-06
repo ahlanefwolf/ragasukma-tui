@@ -138,11 +138,7 @@ impl CoreBridge {
             .map_err(|e| anyhow::anyhow!("Failed to create new project: {}", e))
     }
 
-    pub fn update_project_folders(
-        &self,
-        project_id: &str,
-        folders: Vec<String>,
-    ) -> Result<()> {
+    pub fn update_project_folders(&self, project_id: &str, folders: Vec<String>) -> Result<()> {
         self.cmd_tx
             .send(CoreBridgeCommand::UpdateProjectFolders {
                 project_id: project_id.to_string(),

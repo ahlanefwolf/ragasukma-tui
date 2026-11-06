@@ -1,11 +1,11 @@
 use crate::app::App;
 use crate::theme::Theme;
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap},
-    Frame,
 };
 
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -45,10 +45,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
     let header_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(22),
-            Constraint::Min(35),
-        ])
+        .constraints([Constraint::Length(22), Constraint::Min(35)])
         .split(area);
 
     // Title Block
@@ -126,7 +123,10 @@ fn render_confirm_dialog(frame: &mut Frame, dialog: &crate::app::ConfirmDialogSt
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_gold())
-        .title(Span::styled(format!(" {} ", dialog.title), Theme::header_title()));
+        .title(Span::styled(
+            format!(" {} ", dialog.title),
+            Theme::header_title(),
+        ));
     frame.render_widget(outer_block, popup_area);
 
     let text = vec![
@@ -134,7 +134,10 @@ fn render_confirm_dialog(frame: &mut Frame, dialog: &crate::app::ConfirmDialogSt
         Line::from(Span::styled(&dialog.message, Theme::text_primary())),
         Line::from(""),
         Line::from(vec![
-            Span::styled(" [y / Enter] Confirm ", Theme::badge_gold().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [y / Enter] Confirm ",
+                Theme::badge_gold().add_modifier(Modifier::BOLD),
+            ),
             Span::raw("    "),
             Span::styled(" [n / Esc] Cancel ", Theme::text_secondary()),
         ]),
@@ -161,12 +164,18 @@ fn render_error_modal(frame: &mut Frame, err_msg: &str, area: Rect) {
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::status_danger())
-        .title(Span::styled(" ⚠ SYSTEM ERROR ", Theme::status_danger().add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " ⚠ SYSTEM ERROR ",
+            Theme::status_danger().add_modifier(Modifier::BOLD),
+        ));
     frame.render_widget(outer_block, popup_area);
 
     let text = vec![
         Line::from(""),
-        Line::from(Span::styled("An unexpected error occurred:", Theme::text_secondary())),
+        Line::from(Span::styled(
+            "An unexpected error occurred:",
+            Theme::text_secondary(),
+        )),
         Line::from(""),
         Line::from(Span::styled(err_msg, Theme::status_danger())),
         Line::from(""),

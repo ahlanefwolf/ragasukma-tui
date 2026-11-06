@@ -17,7 +17,9 @@ pub fn handle_provider_action(
                 1 => {
                     if let Some(status) = antigravity.toggle_selected_account() {
                         let status_label = if status { "Active" } else { "Inactive" };
-                        Some(format!("Antigravity account status updated: {status_label}"))
+                        Some(format!(
+                            "Antigravity account status updated: {status_label}"
+                        ))
                     } else {
                         None
                     }
@@ -60,9 +62,15 @@ pub fn handle_provider_action(
         Action::RefreshQuota => {
             if let Some(tx) = bridge_cmd_tx {
                 let target = match active_tab {
-                    1 => antigravity.selected_account().map(|a| ("antigravity", a.id.clone(), a.email.clone())),
-                    2 => codex.selected_account().map(|a| ("codex", a.id.clone(), a.email.clone())),
-                    3 => claude.selected_account().map(|a| ("claude", a.id.clone(), a.email.clone())),
+                    1 => antigravity
+                        .selected_account()
+                        .map(|a| ("antigravity", a.id.clone(), a.email.clone())),
+                    2 => codex
+                        .selected_account()
+                        .map(|a| ("codex", a.id.clone(), a.email.clone())),
+                    3 => claude
+                        .selected_account()
+                        .map(|a| ("claude", a.id.clone(), a.email.clone())),
                     _ => None,
                 };
 

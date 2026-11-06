@@ -51,7 +51,9 @@ impl App {
         }
 
         // 2. Global exit: Ctrl+C always quits cleanly
-        if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+        if key
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::CONTROL)
             && (code == KeyCode::Char('c') || code == KeyCode::Char('C'))
         {
             return Some(Action::Quit);

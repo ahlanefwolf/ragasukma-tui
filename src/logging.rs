@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Multi-writer struct to duplicate log output to both local working directory and global config dir
 struct MultiWriter {
@@ -60,21 +60,18 @@ pub fn init_logging() -> WorkerGuard {
 
     let (non_blocking, guard) = tracing_appender::non_blocking(multi_writer);
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new("info,ragasukma_tui=trace,ragasukma_core=trace")
-    });
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,ragasukma_tui=trace,ragasukma_core=trace"));
 
-    let subscriber = tracing_subscriber::registry()
-        .with(env_filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking)
-                .with_ansi(false)
-                .with_target(true)
-                .with_thread_ids(true)
-                .with_file(true)
-                .with_line_number(true),
-        );
+    let subscriber = tracing_subscriber::registry().with(env_filter).with(
+        tracing_subscriber::fmt::layer()
+            .with_writer(non_blocking)
+            .with_ansi(false)
+            .with_target(true)
+            .with_thread_ids(true)
+            .with_file(true)
+            .with_line_number(true),
+    );
 
     subscriber.init();
 

@@ -1,7 +1,7 @@
+use ratatui::text::Line;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use ratatui::text::Line;
 
 #[derive(Debug, Clone, Default)]
 pub struct ChatLayoutCache {
@@ -77,6 +77,11 @@ pub struct AgentWorkspaceState {
     pub create_project_modal: CreateProjectModalState,
     pub model_modal: ModelSelectorModalState,
 
+    // MCP Servers (project-scoped)
+    pub mcp_servers: Vec<ragasukma_core::agent::models::McpServer>,
+    pub mcp_active_ids: Vec<String>,
+    pub selected_mcp_idx: usize,
+
     // Phase 6: Responsive Layout & Inspection
     pub is_sidebar_visible: bool,
     pub is_inspector_visible: bool,
@@ -141,6 +146,9 @@ impl Default for AgentWorkspaceState {
             project_modal: ProjectSwitcherModalState::default(),
             create_project_modal: CreateProjectModalState::default(),
             model_modal: ModelSelectorModalState::default(),
+            mcp_servers: Vec::new(),
+            mcp_active_ids: Vec::new(),
+            selected_mcp_idx: 0,
             chat_layout_cache: RefCell::new(ChatLayoutCache::default()),
         }
     }
@@ -287,7 +295,8 @@ impl AgentWorkspaceState {
 
                 // If this physical line filled the width completely and cursor is at end,
                 // wrap automatically to a new visual line below
-                if char_count > 0 && char_count.is_multiple_of(wrap) && self.cursor_pos == phys_end {
+                if char_count > 0 && char_count.is_multiple_of(wrap) && self.cursor_pos == phys_end
+                {
                     vlines.push(InputVisualLine {
                         start_byte: phys_end,
                         end_byte: phys_end,
@@ -543,7 +552,9 @@ impl AgentWorkspaceState {
             if prev_len > 0 && prev_len <= self.cursor_pos {
                 let start = self.cursor_pos - prev_len;
                 let end = self.cursor_pos;
-                if self.input_buffer.is_char_boundary(start) && self.input_buffer.is_char_boundary(end) {
+                if self.input_buffer.is_char_boundary(start)
+                    && self.input_buffer.is_char_boundary(end)
+                {
                     self.input_buffer.replace_range(start..end, "");
                     self.cursor_pos = start;
                 }
@@ -564,7 +575,9 @@ impl AgentWorkspaceState {
             if next_len > 0 {
                 let start = self.cursor_pos;
                 let end = self.cursor_pos + next_len;
-                if self.input_buffer.is_char_boundary(start) && self.input_buffer.is_char_boundary(end) {
+                if self.input_buffer.is_char_boundary(start)
+                    && self.input_buffer.is_char_boundary(end)
+                {
                     self.input_buffer.replace_range(start..end, "");
                 }
             }
@@ -614,18 +627,20 @@ impl AgentWorkspaceState {
         self.is_running = false;
         self.active_turn_id = None;
         if let Some(active_sid) = &self.active_session_id
-            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
-                s.is_running = false;
-            }
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid)
+        {
+            s.is_running = false;
+        }
     }
 
     pub fn fail_turn(&mut self, _err: String) {
         self.is_running = false;
         self.active_turn_id = None;
         if let Some(active_sid) = &self.active_session_id
-            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
-                s.is_running = false;
-            }
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid)
+        {
+            s.is_running = false;
+        }
     }
 
     pub fn submit_prompt(&mut self) -> Option<String> {
@@ -784,7 +799,11 @@ impl AgentWorkspaceState {
         if self.available_models.is_empty() {
             return;
         }
-        if let Some(pos) = self.available_models.iter().position(|m| m == &self.active_model) {
+        if let Some(pos) = self
+            .available_models
+            .iter()
+            .position(|m| m == &self.active_model)
+        {
             let next = (pos + 1) % self.available_models.len();
             self.active_model = self.available_models[next].clone();
         } else {
@@ -840,8 +859,7 @@ impl AgentWorkspaceState {
     pub fn select_next_modal_model(&mut self) {
         let filtered = self.filtered_modal_models();
         if !filtered.is_empty() {
-            self.model_modal.selected_idx =
-                (self.model_modal.selected_idx + 1) % filtered.len();
+            self.model_modal.selected_idx = (self.model_modal.selected_idx + 1) % filtered.len();
         }
     }
 
@@ -870,18 +888,20 @@ impl AgentWorkspaceState {
         self.scroll_offset = 0;
         self.auto_scroll = true;
         if let Some(active_sid) = &self.active_session_id
-            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
-                s.is_running = true;
-            }
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid)
+        {
+            s.is_running = true;
+        }
     }
 
     pub fn cancel_turn(&mut self) {
         self.is_running = false;
         self.active_turn_id = None;
         if let Some(active_sid) = &self.active_session_id
-            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid) {
-                s.is_running = false;
-            }
+            && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid)
+        {
+            s.is_running = false;
+        }
     }
 
     pub fn tick_spinner(&mut self) {
@@ -934,11 +954,19 @@ impl AgentWorkspaceState {
                 match (a_starts, b_starts) {
                     (true, false) => std::cmp::Ordering::Less,
                     (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.path.len().cmp(&b.path.len()).then_with(|| a.name.cmp(&b.name)),
+                    _ => a
+                        .path
+                        .len()
+                        .cmp(&b.path.len())
+                        .then_with(|| a.name.cmp(&b.name)),
                 }
             });
 
-            let prev_selected = self.tag_query.as_ref().map(|tq| tq.selected_idx).unwrap_or(0);
+            let prev_selected = self
+                .tag_query
+                .as_ref()
+                .map(|tq| tq.selected_idx)
+                .unwrap_or(0);
             let mut tq = FileTagQuery::new(query, all_matches, at_pos);
             if !tq.matched_items.is_empty() {
                 tq.selected_idx = prev_selected.min(tq.matched_items.len() - 1);
@@ -1006,7 +1034,10 @@ impl AgentWorkspaceState {
     pub fn next_session(&mut self) {
         if !self.sessions.is_empty() {
             self.selected_session_idx = (self.selected_session_idx + 1) % self.sessions.len();
-            self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
+            self.active_session_id = self
+                .sessions
+                .get(self.selected_session_idx)
+                .map(|s| s.id.clone());
             self.session_start_instant = std::time::Instant::now();
         }
     }
@@ -1018,14 +1049,23 @@ impl AgentWorkspaceState {
             } else {
                 self.selected_session_idx -= 1;
             }
-            self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
+            self.active_session_id = self
+                .sessions
+                .get(self.selected_session_idx)
+                .map(|s| s.id.clone());
             self.session_start_instant = std::time::Instant::now();
         }
     }
 
     pub fn create_new_task(&mut self, title: Option<String>) {
         let task_num = self.sessions.len() + 1;
-        let id = format!("task-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+        let id = format!(
+            "task-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
         let new_task = TaskSessionItem {
             id: id.clone(),
             title: title.unwrap_or_else(|| format!("Task #{}: New Agent Task", task_num)),
@@ -1033,7 +1073,10 @@ impl AgentWorkspaceState {
             model: Some(self.active_model.clone()),
             total_tokens_input: 0,
             total_tokens_output: 0,
-            updated_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
+            updated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64,
             is_running: false,
             total_requests: 0,
         };
@@ -1049,14 +1092,21 @@ impl AgentWorkspaceState {
             if self.selected_session_idx >= self.sessions.len() && !self.sessions.is_empty() {
                 self.selected_session_idx = self.sessions.len() - 1;
             }
-            self.active_session_id = self.sessions.get(self.selected_session_idx).map(|s| s.id.clone());
+            self.active_session_id = self
+                .sessions
+                .get(self.selected_session_idx)
+                .map(|s| s.id.clone());
             self.session_start_instant = std::time::Instant::now();
         }
     }
 
     pub fn calculate_token_breakdown(&self) -> TokenBreakdown {
         let chat_tokens = self.messages.iter().map(|m| m.content.len() / 4).sum();
-        let session_tokens = self.sessions.iter().map(|s| (s.total_tokens_input + s.total_tokens_output) as usize).sum();
+        let session_tokens = self
+            .sessions
+            .iter()
+            .map(|s| (s.total_tokens_input + s.total_tokens_output) as usize)
+            .sum();
 
         let mut user_prompts = 0;
         let mut assistant_turns = 0;
@@ -1097,7 +1147,11 @@ impl AgentWorkspaceState {
 
         let completed_requests = assistant_turns + total_tool_calls;
         let (stored_in, stored_out, stored_requests) = if let Some(s) = cur_session {
-            (s.total_tokens_input as usize, s.total_tokens_output as usize, s.total_requests)
+            (
+                s.total_tokens_input as usize,
+                s.total_tokens_output as usize,
+                s.total_requests,
+            )
         } else {
             (0, 0, 0)
         };
@@ -1157,7 +1211,11 @@ impl AgentWorkspaceState {
     }
 
     pub fn toggle_file_tree_expand(&mut self) {
-        if let Some(file) = self.workspace_files.get(self.selected_file_idx).filter(|f| f.is_dir) {
+        if let Some(file) = self
+            .workspace_files
+            .get(self.selected_file_idx)
+            .filter(|f| f.is_dir)
+        {
             let path = file.path.clone();
             if self.expanded_dirs.contains(&path) {
                 self.expanded_dirs.remove(&path);
@@ -1242,7 +1300,8 @@ impl AgentWorkspaceState {
         }
         if idx < self.workspace_folders.len() {
             let removed = self.workspace_folders.remove(idx);
-            self.expanded_dirs.remove(&removed.to_string_lossy().to_string());
+            self.expanded_dirs
+                .remove(&removed.to_string_lossy().to_string());
             if self.active_folder_idx >= self.workspace_folders.len() {
                 self.active_folder_idx = self.workspace_folders.len().saturating_sub(1);
             }
@@ -1336,7 +1395,8 @@ impl AgentWorkspaceState {
         }
 
         self.workspace_files = nodes;
-        if self.selected_file_idx >= self.workspace_files.len() && !self.workspace_files.is_empty() {
+        if self.selected_file_idx >= self.workspace_files.len() && !self.workspace_files.is_empty()
+        {
             self.selected_file_idx = self.workspace_files.len() - 1;
         }
         self.refresh_workspace_tag_items();
@@ -1365,14 +1425,7 @@ impl AgentWorkspaceState {
                 });
             }
 
-            collect_recursive_tag_items(
-                folder,
-                folder,
-                1,
-                is_multi_root,
-                &root_name,
-                &mut items,
-            );
+            collect_recursive_tag_items(folder, folder, 1, is_multi_root, &root_name, &mut items);
         }
 
         self.all_workspace_tag_items = items;
@@ -1548,7 +1601,10 @@ mod tests {
         }
         assert_eq!(state.messages.len(), MAX_CHAT_MESSAGES);
         assert_eq!(state.messages[0].content, "Message 50");
-        assert_eq!(state.messages[MAX_CHAT_MESSAGES - 1].content, format!("Message {}", MAX_CHAT_MESSAGES + 49));
+        assert_eq!(
+            state.messages[MAX_CHAT_MESSAGES - 1].content,
+            format!("Message {}", MAX_CHAT_MESSAGES + 49)
+        );
     }
 
     #[test]
@@ -1590,7 +1646,10 @@ mod tests {
         state.paste("const fn = @decorator\nfunction test() {}");
         assert!(state.tag_query.is_none());
         state.backspace();
-        assert_eq!(state.input_buffer, "const fn = @decorator\nfunction test() {");
+        assert_eq!(
+            state.input_buffer,
+            "const fn = @decorator\nfunction test() {"
+        );
     }
 
     #[test]

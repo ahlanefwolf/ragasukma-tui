@@ -30,7 +30,10 @@ pub async fn exchange_claude_token(
     .map_err(|e| format!("Task join error: {e}"))?
     .map_err(|e| format!("Claude OAuth error: {e:#}"))?;
 
-    let email = account.email.clone().unwrap_or_else(|| "claude_user".to_string());
+    let email = account
+        .email
+        .clone()
+        .unwrap_or_else(|| "claude_user".to_string());
 
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         let mut provider = ragasukma_core::llm::providers::claude::ClaudeProvider::new();

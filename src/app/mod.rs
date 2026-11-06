@@ -117,7 +117,8 @@ mod tests {
 
         // Test create new task session
         let initial_count = app.agent.sessions.len();
-        app.agent.create_new_task(Some("Refactor Agent View".to_string()));
+        app.agent
+            .create_new_task(Some("Refactor Agent View".to_string()));
         assert_eq!(app.agent.sessions.len(), initial_count + 1);
         assert_eq!(
             app.agent.sessions.last().map(|s| s.title.as_str()),
@@ -125,9 +126,15 @@ mod tests {
         );
 
         // Test switch sidebar tab
-        assert_eq!(app.agent.sidebar_tab, crate::agent_view::types::AgentSidebarTab::Tasks);
+        assert_eq!(
+            app.agent.sidebar_tab,
+            crate::agent_view::types::AgentSidebarTab::Tasks
+        );
         app.agent.switch_sidebar_tab();
-        assert_eq!(app.agent.sidebar_tab, crate::agent_view::types::AgentSidebarTab::Files);
+        assert_eq!(
+            app.agent.sidebar_tab,
+            crate::agent_view::types::AgentSidebarTab::Files
+        );
 
         // Test delete task session
         app.agent.delete_selected_task();
@@ -155,7 +162,9 @@ mod tests {
 
         // 2. Bracket keys [ and ] safely switch tabs without conflict
         let bracket_right = KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE);
-        let action_next = app.handle_key_event(bracket_right).expect("action expected");
+        let action_next = app
+            .handle_key_event(bracket_right)
+            .expect("action expected");
         assert_eq!(action_next, Action::NextTab);
         app.update(action_next);
         assert_eq!(app.active_tab, 1);
@@ -235,7 +244,10 @@ mod tests {
 
         // Cannot remove the only workspace folder
         let rem_last_res = app.agent.remove_workspace_folder(0);
-        assert!(rem_last_res.is_err(), "Expected removing the only workspace folder to fail");
+        assert!(
+            rem_last_res.is_err(),
+            "Expected removing the only workspace folder to fail"
+        );
     }
 
     #[test]

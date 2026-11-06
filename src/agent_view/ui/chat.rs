@@ -1,11 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-    },
-    Frame,
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 use super::message_renderer::{render_message_standard, wrap_lines_to_width};
@@ -62,7 +60,9 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
                 Span::styled("Welcome to ", Style::default().fg(Theme::TEXT_SECONDARY)),
                 Span::styled(
                     "Ragasukma AI Agent",
-                    Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Theme::GOLD_PRIMARY)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     "! Type your message below or press @ to attach files.",
@@ -176,7 +176,9 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     );
 
     let prompt_width = 2usize; // "❯ "
-    let available_width = (chunks[1].width as usize).saturating_sub(2 + prompt_width).max(5);
+    let available_width = (chunks[1].width as usize)
+        .saturating_sub(2 + prompt_width)
+        .max(5);
     state.input_wrap_width.set(available_width);
 
     let vlines = state.compute_visual_lines(available_width);
@@ -186,7 +188,9 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         let placeholder = if is_input_focused {
             Span::styled(
                 "Type a prompt, or @ to attach file context... (Enter: send, Alt+Enter: newline)",
-                Style::default().fg(Theme::TEXT_SECONDARY).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Theme::TEXT_SECONDARY)
+                    .add_modifier(Modifier::ITALIC),
             )
         } else {
             Span::styled(
@@ -286,8 +290,8 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         let visual_col = cursor_col as u16;
         let cursor_x = (chunks[1].x + 1 + prompt_width as u16 + visual_col)
             .min(chunks[1].x + chunks[1].width.saturating_sub(2));
-        let cursor_y = (chunks[1].y + 1 + visual_row)
-            .min(chunks[1].y + chunks[1].height.saturating_sub(2));
+        let cursor_y =
+            (chunks[1].y + 1 + visual_row).min(chunks[1].y + chunks[1].height.saturating_sub(2));
         frame.set_cursor_position((cursor_x, cursor_y));
     }
 }

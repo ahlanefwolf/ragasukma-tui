@@ -139,6 +139,12 @@ pub enum Action {
     AgentModelModalBackspace,
     AgentRefreshModels,
 
+    // Project-scoped MCP server toggling (inspector panel)
+    AgentNextMcpServer,
+    AgentPrevMcpServer,
+    AgentToggleMcpServer,
+    AgentRefreshMcpServers,
+
     // Multi-Folder Workspace Support (1:1 with web agent)
     AgentOpenAddFolderModal,
     AgentCloseAddFolderModal,
@@ -198,6 +204,8 @@ pub enum Action {
     McpServerConfirmDelete,
     McpServerCancelDelete,
     McpServerRefresh,
+    McpServerSelectNext,
+    McpServerSelectPrev,
 
     ShowDiffPreview {
         file_path: String,

@@ -1,10 +1,13 @@
-use crate::app::types::Action;
 use super::types::CustomLlmTabState;
+use crate::app::types::Action;
 
 /// Handles actions related to the Custom LLM tab.
 /// Returns Some(Option<status_message>) if action was recognized & handled,
 /// or None if action does not belong to Custom LLM.
-pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) -> Option<Option<String>> {
+pub fn handle_custom_llm_action(
+    state: &mut CustomLlmTabState,
+    action: &Action,
+) -> Option<Option<String>> {
     match action {
         Action::FormChar(c) if state.is_form_open => {
             state.form_input(*c);
@@ -26,18 +29,16 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
             state.form_prev_field();
             Some(None)
         }
-        Action::FormSubmit if state.is_form_open => {
-            match state.form_submit() {
-                Ok(msg) => {
-                    tracing::info!("Custom LLM endpoint saved: {msg}");
-                    Some(Some(msg))
-                }
-                Err(err) => {
-                    tracing::warn!("Custom LLM form submit error: {err}");
-                    Some(Some(format!("Failed: {err}")))
-                }
+        Action::FormSubmit if state.is_form_open => match state.form_submit() {
+            Ok(msg) => {
+                tracing::info!("Custom LLM endpoint saved: {msg}");
+                Some(Some(msg))
             }
-        }
+            Err(err) => {
+                tracing::warn!("Custom LLM form submit error: {err}");
+                Some(Some(format!("Failed: {err}")))
+            }
+        },
         Action::CancelForm if state.is_form_open => {
             state.close_form();
             Some(None)
@@ -81,7 +82,9 @@ pub fn handle_custom_llm_action(state: &mut CustomLlmTabState, action: &Action) 
         Action::CustomLlmToggleFocus => {
             state.toggle_focus();
             let msg = match state.focus {
-                super::types::CustomLlmFocus::Providers => "Focus: Provider List (Press Tab to switch)",
+                super::types::CustomLlmFocus::Providers => {
+                    "Focus: Provider List (Press Tab to switch)"
+                }
                 super::types::CustomLlmFocus::Models => "Focus: Models List (Press Tab to switch)",
             };
             Some(Some(msg.to_string()))

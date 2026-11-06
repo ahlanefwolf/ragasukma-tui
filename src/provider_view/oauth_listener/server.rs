@@ -59,7 +59,11 @@ pub async fn listen_for_oauth_callback(
             .get("error_description")
             .cloned()
             .unwrap_or_default();
-        let fallback = if err_desc.trim().is_empty() { err } else { &err_desc };
+        let fallback = if err_desc.trim().is_empty() {
+            err
+        } else {
+            &err_desc
+        };
         let html_response = format!(
             "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
             <html><body style='font-family: sans-serif; text-align: center; padding: 50px;'>\

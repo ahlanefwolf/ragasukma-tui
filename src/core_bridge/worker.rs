@@ -8,7 +8,9 @@ use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
-use super::types::{CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto, SessionDto};
+use super::types::{
+    CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto, SessionDto,
+};
 
 pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<CoreBridgeEvent> {
     match event {
@@ -49,7 +51,9 @@ pub fn spawn_session_subscriber(
 ) {
     tokio::spawn(async move {
         let mut active_sid = {
-            let guard = sub_sid.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let guard = sub_sid
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             guard.clone()
         };
         let mut broadcast_rx = get_session_sender(&active_sid).subscribe();
@@ -208,10 +212,7 @@ pub fn spawn_core_bridge_worker(
         let pool_clone = db_pool.clone();
 
         // Spawn subscriber loop
-        spawn_session_subscriber(
-            worker_tx.clone(),
-            Arc::clone(&current_sid_clone),
-        );
+        spawn_session_subscriber(worker_tx.clone(), Arc::clone(&current_sid_clone));
 
         let mut active_turns: std::collections::HashMap<String, tokio::task::JoinHandle<()>> =
             std::collections::HashMap::new();
@@ -263,7 +264,10 @@ pub fn spawn_core_bridge_worker(
                 } => {
                     // Normalize & init git/gitignore for folders like ai-voice
                     if let Some(ref path_str) = root_path {
-                        let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(Some(path_str));
+                        let parsed =
+                            ragasukma_core::agent::executor::helpers::parse_project_folders(Some(
+                                path_str,
+                            ));
                         for folder in &parsed {
                             let p = std::path::Path::new(folder);
                             if p.is_dir() {
@@ -273,12 +277,12 @@ pub fn spawn_core_bridge_worker(
                     }
 
                     match create_project(
-                    &name,
-                    description.as_deref().unwrap_or(""),
-                    root_path.as_deref(),
-                    None,
-                )
-                .await
+                        &name,
+                        description.as_deref().unwrap_or(""),
+                        root_path.as_deref(),
+                        None,
+                    )
+                    .await
                     {
                         Ok(new_proj) => {
                             let dto = ProjectDto {
@@ -362,17 +366,24 @@ pub fn spawn_core_bridge_worker(
                 }
                 CoreBridgeCommand::SwitchProject { project_id } => {
                     worker_project_id = project_id.clone();
-                    let _ = sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
-                        .bind(&worker_project_id)
-                        .execute(&pool_clone)
-                        .await;
+                    let _ =
+                        sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
+                            .bind(&worker_project_id)
+                            .execute(&pool_clone)
+                            .await;
                     let prj_opt = get_project(&worker_project_id).await.ok().flatten();
-                    let project_name = prj_opt.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Project".to_string());
+                    let project_name = prj_opt
+                        .as_ref()
+                        .map(|p| p.name.clone())
+                        .unwrap_or_else(|| "Project".to_string());
                     let project_root_path = prj_opt.as_ref().and_then(|p| p.root_path.clone());
                     let mut sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
                     sessions.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
                     let active_session = sessions.first().cloned();
-                    active_sid = active_session.as_ref().map(|s| s.id.clone()).unwrap_or_default();
+                    active_sid = active_session
+                        .as_ref()
+                        .map(|s| s.id.clone())
+                        .unwrap_or_default();
                     if let Ok(mut guard) = current_sid_clone.lock() {
                         *guard = active_sid.clone();
                     }
@@ -407,7 +418,8 @@ pub fn spawn_core_bridge_worker(
                         rem_projects.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
                         if let Some(first) = rem_projects.first() {
                             worker_project_id = first.id.clone();
-                            let mut sessions = list_sessions(&worker_project_id).await.unwrap_or_default();
+                            let mut sessions =
+                                list_sessions(&worker_project_id).await.unwrap_or_default();
                             sessions.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
                             let first_sess = sessions.first().cloned();
                             if let Some(fs) = first_sess {
@@ -429,14 +441,9 @@ pub fn spawn_core_bridge_worker(
                     }
                 }
                 CoreBridgeCommand::CreateSession { title, model } => {
-                    if let Ok(new_sess) = create_session(
-                        &worker_project_id,
-                        &title,
-                        model.as_deref(),
-                        None,
-                        None,
-                    )
-                    .await
+                    if let Ok(new_sess) =
+                        create_session(&worker_project_id, &title, model.as_deref(), None, None)
+                            .await
                     {
                         active_sid = new_sess.id.clone();
                         if let Ok(mut guard) = current_sid_clone.lock() {
@@ -453,14 +460,16 @@ pub fn spawn_core_bridge_worker(
                     if let Ok(mut guard) = current_sid_clone.lock() {
                         *guard = session_id.clone();
                     }
-                    let _ = sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
-                        .bind(&active_sid)
-                        .execute(&pool_clone)
-                        .await;
-                    let _ = sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
-                        .bind(&worker_project_id)
-                        .execute(&pool_clone)
-                        .await;
+                    let _ =
+                        sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
+                            .bind(&active_sid)
+                            .execute(&pool_clone)
+                            .await;
+                    let _ =
+                        sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
+                            .bind(&worker_project_id)
+                            .execute(&pool_clone)
+                            .await;
                     if let Ok(msgs) = list_messages(&session_id).await {
                         let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
                         let _ = worker_tx.send(CoreBridgeEvent::HistoryLoaded {
@@ -471,16 +480,15 @@ pub fn spawn_core_bridge_worker(
                 }
                 CoreBridgeCommand::UpdateSessionModel { session_id, model } => {
                     let _ = update_session_model(&session_id, &model).await;
-                    let _ = sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
-                        .bind(&session_id)
-                        .execute(&pool_clone)
-                        .await;
+                    let _ =
+                        sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
+                            .bind(&session_id)
+                            .execute(&pool_clone)
+                            .await;
                 }
                 CoreBridgeCommand::DeleteSession { session_id } => {
                     let _ = delete_session(&session_id).await;
-                    let _ = worker_tx.send(CoreBridgeEvent::SessionDeleted {
-                        id: session_id,
-                    });
+                    let _ = worker_tx.send(CoreBridgeEvent::SessionDeleted { id: session_id });
                 }
                 CoreBridgeCommand::LoadHistory { session_id } => {
                     if let Ok(msgs) = list_messages(&session_id).await {
@@ -553,7 +561,10 @@ pub fn spawn_core_bridge_worker(
                         });
                     });
                 }
-                CoreBridgeCommand::RefreshAccountQuota { provider, account_id } => {
+                CoreBridgeCommand::RefreshAccountQuota {
+                    provider,
+                    account_id,
+                } => {
                     let quota_tx = worker_tx.clone();
                     let prov = provider.clone();
                     let acc_id = account_id.clone();
@@ -573,11 +584,16 @@ pub fn spawn_core_bridge_worker(
                                 }
                             }
                             p if p.contains("codex") => {
-                                let mut provider = ragasukma_core::llm::providers::codex::CodexProvider::new();
+                                let mut provider =
+                                    ragasukma_core::llm::providers::codex::CodexProvider::new();
                                 match provider.get_account_quota(&acc_id) {
                                     Ok(res) => {
-                                        let models = provider.get_dynamic_available_models().unwrap_or_default();
-                                        quotas = crate::provider_view::codex::map_codex_quotas(res, models);
+                                        let models = provider
+                                            .get_dynamic_available_models()
+                                            .unwrap_or_default();
+                                        quotas = crate::provider_view::codex::map_codex_quotas(
+                                            res, models,
+                                        );
                                     }
                                     Err(e) => {
                                         err_msg = Some(e.to_string());
@@ -585,11 +601,16 @@ pub fn spawn_core_bridge_worker(
                                 }
                             }
                             p if p.contains("claude") => {
-                                let mut provider = ragasukma_core::llm::providers::claude::ClaudeProvider::new();
+                                let mut provider =
+                                    ragasukma_core::llm::providers::claude::ClaudeProvider::new();
                                 match provider.get_account_quota(&acc_id) {
                                     Ok(res) => {
-                                        let models = provider.get_dynamic_available_models().unwrap_or_default();
-                                        quotas = crate::provider_view::claude::map_claude_quotas(res, models);
+                                        let models = provider
+                                            .get_dynamic_available_models()
+                                            .unwrap_or_default();
+                                        quotas = crate::provider_view::claude::map_claude_quotas(
+                                            res, models,
+                                        );
                                     }
                                     Err(e) => {
                                         err_msg = Some(e.to_string());
@@ -600,14 +621,24 @@ pub fn spawn_core_bridge_worker(
                         }
 
                         if !quotas.is_empty() {
-                            tracing::info!("Updated {} quotas for account: {} ({})", quotas.len(), acc_id, prov);
+                            tracing::info!(
+                                "Updated {} quotas for account: {} ({})",
+                                quotas.len(),
+                                acc_id,
+                                prov
+                            );
                             let _ = quota_tx.send(CoreBridgeEvent::AccountQuotaUpdated {
                                 provider: prov,
                                 account_id: acc_id,
                                 quotas,
                             });
                         } else if let Some(err) = err_msg {
-                            tracing::warn!("Failed to fetch quota for account {} ({}): {}", acc_id, prov, err);
+                            tracing::warn!(
+                                "Failed to fetch quota for account {} ({}): {}",
+                                acc_id,
+                                prov,
+                                err
+                            );
                             let _ = quota_tx.send(CoreBridgeEvent::StatusChange {
                                 session_id: None,
                                 status: format!("Failed to load quota for {}: {}", prov, err),

@@ -1,7 +1,7 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::agent_view::state::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::app::Action;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl AgentWorkspaceState {
     /// Controller key handler for the Agent workspace view.
@@ -149,11 +149,17 @@ impl AgentWorkspaceState {
             }
             KeyCode::F(5) => Some(Action::AgentRefreshModels),
             KeyCode::Char('x') => Some(Action::AgentToggleToolExpand),
-            KeyCode::Char('s') if matches!(self.focus_area, AgentFocusArea::Tasks | AgentFocusArea::Files) => {
+            KeyCode::Char('s')
+                if matches!(
+                    self.focus_area,
+                    AgentFocusArea::Tasks | AgentFocusArea::Files
+                ) =>
+            {
                 Some(Action::AgentSwitchSidebarTab)
             }
             KeyCode::Char('r') => match self.focus_area {
                 AgentFocusArea::Files => Some(Action::AgentScanFiles),
+                AgentFocusArea::McpTools => Some(Action::AgentRefreshMcpServers),
                 _ => Some(Action::AgentToggleReasoning),
             },
             KeyCode::Char('t') if self.focus_area == AgentFocusArea::McpTools => {
@@ -162,13 +168,16 @@ impl AgentWorkspaceState {
             KeyCode::Char('n') if self.focus_area == AgentFocusArea::Tasks => {
                 Some(Action::AgentNewTask)
             }
+            KeyCode::Char(' ') if self.focus_area == AgentFocusArea::McpTools => {
+                Some(Action::AgentToggleMcpServer)
+            }
 
             KeyCode::Down | KeyCode::Char('j') => match self.focus_area {
                 AgentFocusArea::Tasks => Some(Action::AgentNextTask),
                 AgentFocusArea::Files => Some(Action::AgentSelectFileNext),
                 AgentFocusArea::Folders => Some(Action::AgentNextFolder),
                 AgentFocusArea::Chat | AgentFocusArea::Input => Some(Action::AgentScrollDown),
-                AgentFocusArea::McpTools => Some(Action::AgentScrollDown),
+                AgentFocusArea::McpTools => Some(Action::AgentNextMcpServer),
                 AgentFocusArea::ModelTelemetry => None,
             },
             KeyCode::Up | KeyCode::Char('k') => match self.focus_area {
@@ -176,7 +185,7 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Files => Some(Action::AgentSelectFilePrev),
                 AgentFocusArea::Folders => Some(Action::AgentPrevFolder),
                 AgentFocusArea::Chat | AgentFocusArea::Input => Some(Action::AgentScrollUp),
-                AgentFocusArea::McpTools => Some(Action::AgentScrollUp),
+                AgentFocusArea::McpTools => Some(Action::AgentPrevMcpServer),
                 AgentFocusArea::ModelTelemetry => None,
             },
             KeyCode::Enter => match self.focus_area {
@@ -184,6 +193,7 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Files => Some(Action::AgentToggleFileTreeExpand),
                 AgentFocusArea::Input => Some(Action::AgentSubmitPrompt),
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
+                AgentFocusArea::McpTools => Some(Action::AgentToggleMcpServer),
                 _ => None,
             },
             KeyCode::Char('a')
@@ -224,17 +234,32 @@ mod tests {
         state.focus_area = AgentFocusArea::Folders;
 
         let key_a = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
-        assert_eq!(state.handle_key(key_a), Some(Action::AgentOpenAddFolderModal));
+        assert_eq!(
+            state.handle_key(key_a),
+            Some(Action::AgentOpenAddFolderModal)
+        );
 
         let key_d = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
-        assert_eq!(state.handle_key(key_d), Some(Action::AgentRemoveActiveFolder));
+        assert_eq!(
+            state.handle_key(key_d),
+            Some(Action::AgentRemoveActiveFolder)
+        );
 
         let key_o = KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE);
-        assert_eq!(state.handle_key(key_o), Some(Action::AgentOpenFolderInFileManager));
+        assert_eq!(
+            state.handle_key(key_o),
+            Some(Action::AgentOpenFolderInFileManager)
+        );
 
         // Test hotkeys in Files panel
         state.focus_area = AgentFocusArea::Files;
-        assert_eq!(state.handle_key(key_a), Some(Action::AgentOpenAddFolderModal));
-        assert_eq!(state.handle_key(key_o), Some(Action::AgentOpenFolderInFileManager));
+        assert_eq!(
+            state.handle_key(key_a),
+            Some(Action::AgentOpenAddFolderModal)
+        );
+        assert_eq!(
+            state.handle_key(key_o),
+            Some(Action::AgentOpenFolderInFileManager)
+        );
     }
 }

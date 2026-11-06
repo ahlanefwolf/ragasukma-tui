@@ -125,6 +125,20 @@ pub fn handle_mcp_server_action(
             state.cancel_delete();
             Some(Some("Deletion canceled".to_string()))
         }
+        Action::McpServerSelectNext => {
+            if state.is_form_open || state.delete_confirm_id.is_some() {
+                return None;
+            }
+            state.select_next();
+            Some(None)
+        }
+        Action::McpServerSelectPrev => {
+            if state.is_form_open || state.delete_confirm_id.is_some() {
+                return None;
+            }
+            state.select_prev();
+            Some(None)
+        }
         Action::McpServerRefresh => {
             if let Err(err) = state.reload() {
                 tracing::warn!("MCP reload error: {err}");

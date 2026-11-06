@@ -160,7 +160,11 @@ pub fn handle_agent_action(
         }
         Action::AgentToggleReasoning => {
             agent.toggle_reasoning();
-            let label = if agent.reasoning_expanded { "expanded" } else { "collapsed" };
+            let label = if agent.reasoning_expanded {
+                "expanded"
+            } else {
+                "collapsed"
+            };
             Some(format!("Reasoning {}", label))
         }
         Action::AgentScrollToTop => {
@@ -195,7 +199,10 @@ pub fn handle_agent_action(
         }
         Action::AgentSwitchSidebarTab => {
             agent.switch_sidebar_tab();
-            if matches!(agent.focus_area, AgentFocusArea::Tasks | AgentFocusArea::Files) {
+            if matches!(
+                agent.focus_area,
+                AgentFocusArea::Tasks | AgentFocusArea::Files
+            ) {
                 agent.focus_area = match agent.sidebar_tab {
                     AgentSidebarTab::Tasks => AgentFocusArea::Tasks,
                     AgentSidebarTab::Files => AgentFocusArea::Files,
@@ -205,7 +212,10 @@ pub fn handle_agent_action(
                 AgentSidebarTab::Tasks => "Tasks",
                 AgentSidebarTab::Files => "Files",
             };
-            Some(format!("Sidebar: {} (Focus: {:?})", tab_name, agent.focus_area))
+            Some(format!(
+                "Sidebar: {} (Focus: {:?})",
+                tab_name, agent.focus_area
+            ))
         }
         Action::AgentNewTask => {
             let default_title = format!("Task #{}", agent.sessions.len() + 1);
@@ -250,48 +260,48 @@ pub fn handle_agent_action(
             }
         }
         Action::AgentNextTask => {
-        agent.next_session();
-        if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
-            let sid = s.id.clone();
-            if let Some(ref m) = s.model {
-                agent.active_model = m.clone();
+            agent.next_session();
+            if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
+                let sid = s.id.clone();
+                if let Some(ref m) = s.model {
+                    agent.active_model = m.clone();
+                }
+                agent.active_session_id = Some(sid.clone());
+                agent.is_running = s.is_running;
+                if let Some(tx) = bridge_cmd_tx {
+                    let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
+                }
+                Some(format!("Selected task: {}", s.title))
+            } else {
+                None
             }
-            agent.active_session_id = Some(sid.clone());
-            agent.is_running = s.is_running;
+        }
+        Action::AgentPrevTask => {
+            agent.prev_session();
+            if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
+                let sid = s.id.clone();
+                if let Some(ref m) = s.model {
+                    agent.active_model = m.clone();
+                }
+                agent.active_session_id = Some(sid.clone());
+                agent.is_running = s.is_running;
+                if let Some(tx) = bridge_cmd_tx {
+                    let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
+                }
+                Some(format!("Selected task: {}", s.title))
+            } else {
+                None
+            }
+        }
+        Action::AgentCancelTurn => {
             if let Some(tx) = bridge_cmd_tx {
-                let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
+                let _ = tx.send(CoreBridgeCommand::CancelTurn {
+                    session_id: agent.active_session_id.clone(),
+                });
             }
-            Some(format!("Selected task: {}", s.title))
-        } else {
-            None
+            agent.cancel_turn();
+            Some("Cancelling turn...".to_string())
         }
-    }
-    Action::AgentPrevTask => {
-        agent.prev_session();
-        if let Some(s) = agent.sessions.get(agent.selected_session_idx) {
-            let sid = s.id.clone();
-            if let Some(ref m) = s.model {
-                agent.active_model = m.clone();
-            }
-            agent.active_session_id = Some(sid.clone());
-            agent.is_running = s.is_running;
-            if let Some(tx) = bridge_cmd_tx {
-                let _ = tx.send(CoreBridgeCommand::SwitchSession { session_id: sid });
-            }
-            Some(format!("Selected task: {}", s.title))
-        } else {
-            None
-        }
-    }
-    Action::AgentCancelTurn => {
-        if let Some(tx) = bridge_cmd_tx {
-            let _ = tx.send(CoreBridgeCommand::CancelTurn {
-                session_id: agent.active_session_id.clone(),
-            });
-        }
-        agent.cancel_turn();
-        Some("Cancelling turn...".to_string())
-    }
         Action::AgentRetryTurn => {
             if let Some(tx) = bridge_cmd_tx {
                 let _ = tx.send(CoreBridgeCommand::RetryTurn);
@@ -370,7 +380,69 @@ pub fn handle_agent_action(
         }
         Action::AgentRefreshModels => {
             let count = agent.refresh_available_models();
-            Some(format!("Refreshed models from core providers ({} available)", count))
+            Some(format!(
+                "Refreshed models from core providers ({} available)",
+                count
+            ))
+        }
+        Action::AgentNextMcpServer => {
+            if !agent.mcp_servers.is_empty() {
+                agent.selected_mcp_idx =
+                    (agent.selected_mcp_idx + 1).min(agent.mcp_servers.len() - 1);
+            }
+            None
+        }
+        Action::AgentPrevMcpServer => {
+            agent.selected_mcp_idx = agent.selected_mcp_idx.saturating_sub(1);
+            None
+        }
+        Action::AgentToggleMcpServer => 'toggle: {
+            let Some(project_id) = agent.active_project_id.clone() else {
+                break 'toggle Some("No active project to toggle MCP servers".to_string());
+            };
+            if agent.mcp_servers.is_empty() {
+                break 'toggle Some("No MCP servers available".to_string());
+            }
+            let idx = agent.selected_mcp_idx.min(agent.mcp_servers.len() - 1);
+            let server_id = agent.mcp_servers[idx].id.clone();
+            let server_name = agent.mcp_servers[idx].name.clone();
+            let mut active = agent.mcp_active_ids.clone();
+            let now_active = if let Some(pos) = active.iter().position(|id| id == &server_id) {
+                active.remove(pos);
+                false
+            } else {
+                active.push(server_id);
+                true
+            };
+            match crate::mcp_server_view::service::set_project_active_servers(&project_id, &active)
+            {
+                Ok(()) => {
+                    agent.mcp_active_ids = active;
+                    Some(format!(
+                        "MCP server '{}' {}",
+                        server_name,
+                        if now_active { "enabled" } else { "disabled" }
+                    ))
+                }
+                Err(e) => Some(format!("Failed to update MCP server: {e}")),
+            }
+        }
+        Action::AgentRefreshMcpServers => {
+            let Some(project_id) = agent.active_project_id.clone() else {
+                return Some(Some("No active project to load MCP servers".to_string()));
+            };
+            match crate::mcp_server_view::service::load_for_project(Some(&project_id)) {
+                Ok((servers, active_ids)) => {
+                    let count = servers.len();
+                    agent.mcp_servers = servers;
+                    agent.mcp_active_ids = active_ids;
+                    if agent.selected_mcp_idx >= agent.mcp_servers.len() {
+                        agent.selected_mcp_idx = agent.mcp_servers.len().saturating_sub(1);
+                    }
+                    Some(format!("Loaded {} MCP server(s) for project", count))
+                }
+                Err(e) => Some(format!("Failed to load MCP servers: {e}")),
+            }
         }
         Action::AgentOpenAddFolderModal => {
             agent.open_add_folder_modal();
@@ -388,50 +460,50 @@ pub fn handle_agent_action(
             agent.add_folder_modal.input_path.pop();
             None
         }
-        Action::AgentSubmitAddFolder => {
-            match agent.submit_add_folder() {
-                Ok(()) => {
-                    let count = agent.workspace_folders.len();
-                    if let Some(tx) = bridge_cmd_tx {
-                        let folders: Vec<String> = agent
+        Action::AgentSubmitAddFolder => match agent.submit_add_folder() {
+            Ok(()) => {
+                let count = agent.workspace_folders.len();
+                if let Some(tx) = bridge_cmd_tx {
+                    let folders: Vec<String> = agent
+                        .workspace_folders
+                        .iter()
+                        .map(|f| f.to_string_lossy().to_string())
+                        .collect();
+
+                    if let Some(active_pid) = &agent.active_project_id {
+                        let _ = tx.send(CoreBridgeCommand::UpdateProjectFolders {
+                            project_id: active_pid.clone(),
+                            folders,
+                        });
+                    } else {
+                        let first_folder_name = agent
                             .workspace_folders
-                            .iter()
-                            .map(|f| f.to_string_lossy().to_string())
-                            .collect();
+                            .first()
+                            .and_then(|p| p.file_name())
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "Workspace".to_string());
 
-                        if let Some(active_pid) = &agent.active_project_id {
-                            let _ = tx.send(CoreBridgeCommand::UpdateProjectFolders {
-                                project_id: active_pid.clone(),
-                                folders,
-                            });
-                        } else {
-                            let first_folder_name = agent
-                                .workspace_folders
-                                .first()
-                                .and_then(|p| p.file_name())
-                                .map(|n| n.to_string_lossy().to_string())
-                                .unwrap_or_else(|| "Workspace".to_string());
-
-                            let root_path_json = serde_json::to_string(&folders).ok();
-                            let _ = tx.send(CoreBridgeCommand::CreateProject {
-                                name: first_folder_name,
-                                description: Some("Workspace project".to_string()),
-                                root_path: root_path_json,
-                            });
-                        }
+                        let root_path_json = serde_json::to_string(&folders).ok();
+                        let _ = tx.send(CoreBridgeCommand::CreateProject {
+                            name: first_folder_name,
+                            description: Some("Workspace project".to_string()),
+                            root_path: root_path_json,
+                        });
                     }
-                    Some(format!("Folder attached successfully (Total: {} folders)", count))
                 }
-                Err(err) => {
-                    Some(format!("Failed to attach folder: {}", err))
-                }
+                Some(format!(
+                    "Folder attached successfully (Total: {} folders)",
+                    count
+                ))
             }
-        }
+            Err(err) => Some(format!("Failed to attach folder: {}", err)),
+        },
         Action::AgentRemoveActiveFolder => {
             let idx = agent.active_folder_idx;
             match agent.remove_workspace_folder(idx) {
                 Ok(()) => {
-                    if let (Some(active_pid), Some(tx)) = (&agent.active_project_id, bridge_cmd_tx) {
+                    if let (Some(active_pid), Some(tx)) = (&agent.active_project_id, bridge_cmd_tx)
+                    {
                         let folders: Vec<String> = agent
                             .workspace_folders
                             .iter()
@@ -444,9 +516,7 @@ pub fn handle_agent_action(
                     }
                     Some("Folder detached from workspace".to_string())
                 }
-                Err(err) => {
-                    Some(format!("Failed to detach folder: {}", err))
-                }
+                Err(err) => Some(format!("Failed to detach folder: {}", err)),
             }
         }
         Action::AgentNextFolder => {
@@ -517,12 +587,8 @@ pub fn handle_agent_action(
                         Err(err) => Some(format!("Failed to attach folder: {}", err)),
                     }
                 }
-                Ok(None) => {
-                    Some("Folder selection cancelled".to_string())
-                }
-                Err(err) => {
-                    Some(format!("File manager dialog error: {}", err))
-                }
+                Ok(None) => Some("Folder selection cancelled".to_string()),
+                Err(err) => Some(format!("File manager dialog error: {}", err)),
             }
         }
         Action::AgentOpenFolderInFileManager => {
@@ -538,23 +604,30 @@ pub fn handle_agent_action(
                                 .or_else(|| Some(p.to_path_buf()))
                         }
                     } else {
-                        agent.workspace_folders.get(agent.active_folder_idx).cloned()
+                        agent
+                            .workspace_folders
+                            .get(agent.active_folder_idx)
+                            .cloned()
                     }
                 } else {
-                    agent.workspace_folders.get(agent.active_folder_idx).cloned()
+                    agent
+                        .workspace_folders
+                        .get(agent.active_folder_idx)
+                        .cloned()
                 }
             } else {
-                agent.workspace_folders.get(agent.active_folder_idx).cloned()
+                agent
+                    .workspace_folders
+                    .get(agent.active_folder_idx)
+                    .cloned()
             };
 
             if let Some(folder) = target_path {
-                match ragasukma_core::agent::tools::open_path_in_file_manager(&folder.to_string_lossy()) {
-                    Ok(()) => {
-                        Some(format!("Opened file manager for {}", folder.display()))
-                    }
-                    Err(err) => {
-                        Some(format!("Failed to open file manager: {}", err))
-                    }
+                match ragasukma_core::agent::tools::open_path_in_file_manager(
+                    &folder.to_string_lossy(),
+                ) {
+                    Ok(()) => Some(format!("Opened file manager for {}", folder.display())),
+                    Err(err) => Some(format!("Failed to open file manager: {}", err)),
                 }
             } else {
                 None
@@ -562,7 +635,9 @@ pub fn handle_agent_action(
         }
         Action::AgentOpenProjectModal => {
             agent.project_modal.is_open = true;
-            Some("Project switcher opened. Select a project or press 'n' to create new.".to_string())
+            Some(
+                "Project switcher opened. Select a project or press 'n' to create new.".to_string(),
+            )
         }
         Action::AgentCloseProjectModal => {
             agent.project_modal.is_open = false;
@@ -629,7 +704,9 @@ pub fn handle_agent_action(
                 }
 
                 agent.projects.remove(agent.project_modal.selected_idx);
-                if agent.project_modal.selected_idx >= agent.projects.len() && !agent.projects.is_empty() {
+                if agent.project_modal.selected_idx >= agent.projects.len()
+                    && !agent.projects.is_empty()
+                {
                     agent.project_modal.selected_idx = agent.projects.len() - 1;
                 }
 

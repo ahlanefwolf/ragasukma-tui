@@ -6,9 +6,9 @@ pub mod modals;
 pub mod sidebar;
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    Frame,
 };
 
 pub use modals::render_diff_preview_modal;
@@ -27,7 +27,9 @@ pub fn get_help_lines(state: &AgentWorkspaceState) -> (String, &'static str, Vec
     let lines = vec![
         Line::from(vec![
             Span::styled("  Tab / Shift+Tab  ", Theme::key_badge()),
-            Span::raw(" Cycle focus between panels (Folders -> Tasks/Files -> Chat -> Input -> Telemetry -> MCP Tools)"),
+            Span::raw(
+                " Cycle focus between panels (Folders -> Tasks/Files -> Chat -> Input -> Telemetry -> MCP Tools)",
+            ),
         ]),
         Line::from(vec![
             Span::styled("  a                ", Theme::key_badge()),
@@ -83,11 +85,7 @@ pub fn get_help_lines(state: &AgentWorkspaceState) -> (String, &'static str, Vec
         ]),
     ];
 
-    (
-        "Agent Workspace (Tab [1])".to_string(),
-        focus_str,
-        lines,
-    )
+    ("Agent Workspace (Tab [1])".to_string(), focus_str, lines)
 }
 
 use crate::agent_view::state::AgentWorkspaceState;

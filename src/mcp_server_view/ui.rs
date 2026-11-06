@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Row, Table, TableState},
-    Frame,
 };
 
 use super::types::{McpFormField, McpServerTabState};
@@ -46,13 +46,7 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
 }
 
 pub fn render_mcp_server_tab(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(6), Constraint::Length(10)])
-        .split(area);
-
-    render_server_table(frame, chunks[0], state);
-    render_config_preview(frame, chunks[1], state);
+    render_server_table(frame, area, state);
 
     if state.is_form_open {
         render_form_modal(frame, area, state);
@@ -122,28 +116,6 @@ fn render_server_table(frame: &mut Frame, area: Rect, state: &McpServerTabState)
         .highlight_symbol("▶ ");
 
     frame.render_stateful_widget(table, area, &mut table_state);
-}
-
-fn render_config_preview(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
-    let block = Block::default()
-        .title(" JSON Configuration Preview ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Theme::BORDER_SUBTLE));
-
-    let content = if let Some(server) = state.selected_server() {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&server.config) {
-            serde_json::to_string_pretty(&v).unwrap_or_else(|_| server.config.clone())
-        } else {
-            server.config.clone()
-        }
-    } else {
-        "-".to_string()
-    };
-
-    let p = Paragraph::new(content)
-        .block(block)
-        .style(Style::default().fg(Theme::TEXT_PRIMARY));
-    frame.render_widget(p, area);
 }
 
 fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
@@ -262,14 +234,17 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
     };
     let status_line = Line::from(vec![
         Span::styled(format!("{box_char} Status: {status_text} "), status_style),
-        Span::styled("(Press Space to toggle)", Style::default().fg(Theme::TEXT_MUTED)),
+        Span::styled(
+            "(Press Space to toggle)",
+            Style::default().fg(Theme::TEXT_MUTED),
+        ),
     ]);
     frame.render_widget(Paragraph::new(status_line), inner[2]);
 
     // 4. Error line
     if let Some(err) = &state.form_error {
-        let err_widget = Paragraph::new(format!("⚠ {err}"))
-            .style(Style::default().fg(Theme::STATUS_ERROR));
+        let err_widget =
+            Paragraph::new(format!("⚠ {err}")).style(Style::default().fg(Theme::STATUS_ERROR));
         frame.render_widget(err_widget, inner[3]);
     }
 

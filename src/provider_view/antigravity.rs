@@ -1,6 +1,6 @@
-use ragasukma_core::llm::providers::antigravity::types::AntigravityQuotaResponse;
-use ragasukma_core::llm::providers::AntigravityProvider;
 use super::types::{AccountInfo, ModelQuotaItem, ProviderTabState};
+use ragasukma_core::llm::providers::AntigravityProvider;
+use ragasukma_core::llm::providers::antigravity::types::AntigravityQuotaResponse;
 
 pub fn load_antigravity_tab() -> ProviderTabState {
     std::thread::spawn(|| {
@@ -21,7 +21,11 @@ pub fn load_antigravity_tab() -> ProviderTabState {
                     email: a.email.unwrap_or(a.id),
                     plan,
                     is_active: a.is_active,
-                    status: if a.is_active { "Active".to_string() } else { "Inactive".to_string() },
+                    status: if a.is_active {
+                        "Active".to_string()
+                    } else {
+                        "Inactive".to_string()
+                    },
                     quotas: Vec::new(),
                 }
             })
