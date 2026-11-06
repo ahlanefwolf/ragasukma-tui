@@ -230,9 +230,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             Span::styled(" [ INPUT:INSERT] ", Theme::badge_gold())
         }
         AgentFocusArea::Input => Span::styled(" [ INPUT:NORMAL] ", Theme::badge_cyan()),
-        AgentFocusArea::ModelTelemetry => {
-            Span::styled(" [ MODEL TELEMETRY] ", Theme::badge_gold())
-        }
+        AgentFocusArea::ModelTelemetry => Span::styled(" [ MODEL TELEMETRY] ", Theme::badge_gold()),
         AgentFocusArea::McpTools => Span::styled(" [ MCP TOOLS] ", Theme::badge_gold()),
     };
     hints.push(card_badge);

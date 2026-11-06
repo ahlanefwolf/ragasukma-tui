@@ -261,16 +261,8 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         rendered
     };
 
-    let model_tag_span = Span::styled(
-        format!(" [◈ {}] ", state.active_model),
-        Style::default()
-            .fg(Theme::GOLD_PRIMARY)
-            .add_modifier(Modifier::BOLD),
-    );
-
     let input_block = Block::default()
         .title(input_title)
-        .title_top(Line::from(model_tag_span).right_aligned())
         .borders(Borders::ALL)
         .border_style(input_border)
         .style(Theme::block_base());

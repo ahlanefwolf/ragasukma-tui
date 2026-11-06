@@ -516,9 +516,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
     }
 
     // 5. Model Telemetry card pinned at the bottom of the sidebar.
-    if show_telemetry {
-        if let Some(telemetry_area) = chunks.get(3) {
-            super::inspector::render_model_telemetry(frame, *telemetry_area, state);
-        }
+    if show_telemetry && let Some(telemetry_area) = chunks.get(3) {
+        super::inspector::render_model_telemetry(frame, *telemetry_area, state);
     }
 }
