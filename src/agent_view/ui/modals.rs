@@ -204,11 +204,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
                 };
 
                 let prefix = if is_sel { " ▸ " } else { "   " };
-                let item_style = if is_sel {
-                    Style::default().bg(Theme::BG_SURFACE_ELEVATED)
-                } else {
-                    Style::default()
-                };
+                let item_style = Style::default();
 
                 let name_style = if is_sel {
                     Style::default()

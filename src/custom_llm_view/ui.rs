@@ -78,15 +78,22 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
             ));
 
             let name_cell = Cell::from(Span::styled(
-                acc.name.clone(),
+                &acc.name,
                 if is_selected {
                     Theme::text_gold().add_modifier(Modifier::BOLD)
                 } else {
-                    Theme::text_primary()
+                    Theme::text_secondary()
                 },
             ));
 
-            let url_cell = Cell::from(Span::styled(acc.base_url.clone(), Theme::text_secondary()));
+            let url_cell = Cell::from(Span::styled(
+                &acc.base_url,
+                if is_selected {
+                    Theme::text_primary()
+                } else {
+                    Theme::text_secondary()
+                },
+            ));
 
             let status_span = if acc.enabled {
                 Span::styled("● ON", Theme::text_gold().add_modifier(Modifier::BOLD))
@@ -95,11 +102,7 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
             };
             let status_cell = Cell::from(status_span);
 
-            let row_style = if is_selected {
-                ratatui::style::Style::default().bg(Theme::BG_SURFACE_ELEVATED)
-            } else {
-                ratatui::style::Style::default()
-            };
+            let row_style = ratatui::style::Style::default();
 
             Row::new(vec![
                 prefix_cell,
@@ -216,13 +219,11 @@ fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) 
                     Span::styled(" ▶ ", Theme::text_gold().add_modifier(Modifier::BOLD)),
                     Span::styled(model_id.clone(), Theme::text_gold().add_modifier(Modifier::BOLD)),
                 ])
-                .style(ratatui::style::Style::default().bg(Theme::BG_SURFACE_ELEVATED))
             } else if is_selected {
                 Line::from(vec![
-                    Span::styled(" ▷ ", Theme::text_cyan()),
-                    Span::styled(model_id.clone(), Theme::text_primary()),
+                    Span::styled(" ▷ ", Theme::text_cyan().add_modifier(Modifier::BOLD)),
+                    Span::styled(model_id.clone(), Theme::text_gold()),
                 ])
-                .style(ratatui::style::Style::default().bg(Theme::BG_SURFACE_ELEVATED))
             } else {
                 Line::from(vec![
                     Span::styled("   ", Theme::text_secondary()),

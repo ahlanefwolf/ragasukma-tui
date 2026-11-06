@@ -116,7 +116,6 @@ fn render_server_table(frame: &mut Frame, area: Rect, state: &McpServerTabState)
         .block(block)
         .row_highlight_style(
             Style::default()
-                .bg(Theme::BG_SURFACE_ELEVATED)
                 .fg(Theme::GOLD_PRIMARY)
                 .add_modifier(Modifier::BOLD),
         )
