@@ -50,7 +50,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
 
     // Title Block
     let title_line = Line::from(vec![
-        Span::styled("⚡ RAGASUKMA ", Theme::header_title()),
+        Span::styled(" RAGASUKMA ", Theme::header_title()),
         Span::styled("TUI", Theme::badge_cyan()),
     ]);
     let title_widget = Paragraph::new(title_line)

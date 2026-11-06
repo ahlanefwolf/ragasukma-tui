@@ -166,7 +166,7 @@ impl AgentWorkspaceState {
             KeyCode::Char('s')
                 if matches!(
                     self.focus_area,
-                    AgentFocusArea::Tasks | AgentFocusArea::Files
+                    AgentFocusArea::Tasks | AgentFocusArea::Files | AgentFocusArea::McpTools
                 ) =>
             {
                 Some(Action::AgentSwitchSidebarTab)

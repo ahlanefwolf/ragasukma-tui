@@ -84,7 +84,6 @@ pub struct AgentWorkspaceState {
     // Phase 6: Responsive Layout & Inspection
     pub is_sidebar_visible: bool,
     pub is_inspector_visible: bool,
-    pub inspector_scroll_offset: usize,
 
     // Chat Layout Cache to avoid re-wrapping on scroll
     pub chat_layout_cache: RefCell<ChatLayoutCache>,
@@ -106,7 +105,6 @@ impl Default for AgentWorkspaceState {
             input_wrap_width: Cell::new(80),
             scroll_offset: 0,
             chat_max_scroll: Cell::new(0),
-            inspector_scroll_offset: 0,
             is_sidebar_visible: true,
             is_inspector_visible: true,
             is_input_focused: false,

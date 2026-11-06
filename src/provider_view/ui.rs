@@ -20,7 +20,7 @@ pub fn render_provider_tab(frame: &mut Frame, area: Rect, state: &ProviderTabSta
 
     let header_lines = vec![Line::from(vec![
         Span::styled(
-            format!("🌌  {} Hub", state.provider_name),
+            format!("  {} Hub", state.provider_name),
             Theme::header_title(),
         ),
         Span::styled(
@@ -64,7 +64,7 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                 Span::styled(" ○ INACTIVE ", Theme::text_secondary())
             };
 
-            let prefix = if is_selected { "▶ " } else { "  " };
+            let prefix = if is_selected { "❯ " } else { "  " };
 
             let line1 = Line::from(vec![
                 Span::styled(

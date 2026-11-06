@@ -46,14 +46,24 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
 }
 
 pub fn render_mcp_server_tab(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
-    render_server_table(frame, area, state);
+    // Sisakan 1 baris di bawah sebagai clearance dari footer help, supaya tabel
+    // dan modal tidak menempel/menutupi baris footer.
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(3),    // Server list
+            Constraint::Length(1), // Clearance for footer
+        ])
+        .split(area);
+
+    render_server_table(frame, layout[0], state);
 
     if state.is_form_open {
-        render_form_modal(frame, area, state);
+        render_form_modal(frame, layout[0], state);
     }
 
     if state.delete_confirm_id.is_some() {
-        render_delete_modal(frame, area, state);
+        render_delete_modal(frame, layout[0], state);
     }
 }
 
@@ -113,7 +123,7 @@ fn render_server_table(frame: &mut Frame, area: Rect, state: &McpServerTabState)
                 .fg(Theme::GOLD_PRIMARY)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("▶ ");
+        .highlight_symbol("❯ ");
 
     frame.render_stateful_widget(table, area, &mut table_state);
 }

@@ -33,7 +33,7 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
     let title_spans = if is_focused {
         vec![
             Span::styled(
-                format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()),
+                format!("  Custom LLM Providers ({}) ", state.accounts.len()),
                 Theme::badge_gold(),
             ),
             Span::styled(
@@ -44,7 +44,7 @@ fn render_providers_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabStat
     } else {
         vec![
             Span::styled(
-                format!(" 🌐 Custom LLM Providers ({}) ", state.accounts.len()),
+                format!("  Custom LLM Providers ({}) ", state.accounts.len()),
                 Theme::badge_gray(),
             ),
             Span::styled(" [Tab to focus] ", Theme::text_secondary()),
@@ -140,12 +140,12 @@ fn render_models_card(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) 
     let title_prefix = selected_acc
         .map(|a| {
             format!(
-                " 📦 Models for /{prefix} ({count}) ",
+                "  Models for /{prefix} ({count}) ",
                 prefix = a.prefix,
                 count = prefix_models.len()
             )
         })
-        .unwrap_or_else(|| " 📦 Models Catalog ".to_string());
+        .unwrap_or_else(|| "  Models Catalog ".to_string());
 
     let title_spans = if is_focused {
         vec![
@@ -261,9 +261,9 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
 
     let is_edit = state.editing_prefix.is_some();
     let title = if is_edit {
-        " ✏ Edit Custom Provider "
+        "  Edit Custom Provider "
     } else {
-        " ➕ Add Custom LLM Provider "
+        "  Add Custom LLM Provider "
     };
 
     let outer_block = Block::default()
@@ -299,7 +299,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         frame,
         inner[1],
         "Model Prefix",
-        "🏷️",
+        "",
         state.form_prefix.as_str(),
         prefix_focused,
         "e.g. groq, vllm, ollama",
@@ -310,7 +310,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         frame,
         inner[3],
         "Display Name",
-        "📝",
+        "",
         state.form_name.as_str(),
         name_focused,
         "e.g. Groq Cloud LPU",
@@ -321,7 +321,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         frame,
         inner[5],
         "Base URL",
-        "🌐",
+        "",
         state.form_base_url.as_str(),
         url_focused,
         "e.g. https://api.groq.com/openai/v1",
@@ -337,7 +337,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         frame,
         inner[7],
         "API Key",
-        "🔑",
+        "",
         &masked_key,
         key_focused,
         "e.g. gsk_... (leave empty for local)",
@@ -501,11 +501,7 @@ fn render_text_field(
             0
         };
         let visible_slice: String = value.chars().skip(scroll_offset).collect();
-        if is_focused {
-            Span::styled(visible_slice, Theme::text_gold())
-        } else {
-            Span::styled(visible_slice, Theme::text_primary())
-        }
+        Span::styled(visible_slice, Theme::text_primary())
     };
 
     let para = Paragraph::new(Line::from(vec![prompt_prefix, content_span])).block(block);

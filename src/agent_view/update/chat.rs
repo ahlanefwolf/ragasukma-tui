@@ -144,16 +144,18 @@ pub(crate) fn handle_action(
             agent.switch_sidebar_tab();
             if matches!(
                 agent.focus_area,
-                AgentFocusArea::Tasks | AgentFocusArea::Files
+                AgentFocusArea::Tasks | AgentFocusArea::Files | AgentFocusArea::McpTools
             ) {
                 agent.focus_area = match agent.sidebar_tab {
                     AgentSidebarTab::Tasks => AgentFocusArea::Tasks,
                     AgentSidebarTab::Files => AgentFocusArea::Files,
+                    AgentSidebarTab::Mcp => AgentFocusArea::McpTools,
                 };
             }
             let tab_name = match agent.sidebar_tab {
                 AgentSidebarTab::Tasks => "Tasks",
                 AgentSidebarTab::Files => "Files",
+                AgentSidebarTab::Mcp => "MCP Servers",
             };
             Some(format!(
                 "Sidebar: {} (Focus: {:?})",

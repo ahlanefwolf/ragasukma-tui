@@ -176,7 +176,7 @@ impl App {
                         .push_message(crate::agent_view::types::ChatMessage {
                             role: crate::agent_view::types::MessageRole::Assistant,
                             sender_name: "System Error".to_string(),
-                            content: format!("⚠️ Error: {}", error),
+                            content: format!("⚠ Error: {}", error),
                             timestamp: "now".to_string(),
                             tool_calls: Vec::new(),
                             reasoning: None,

@@ -22,9 +22,9 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
     let total = state.projects.len();
     let sel = state.project_modal.selected_idx;
     let title = if total > 0 {
-        format!(" 🗂️ Database Projects [{}/{}] ", sel + 1, total)
+        format!("  Database Projects [{}/{}] ", sel + 1, total)
     } else {
-        " 🗂️ Database Projects ".to_string()
+        "  Database Projects ".to_string()
     };
 
     let block = Block::default()
@@ -53,7 +53,7 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
         .map(|(idx, proj)| {
             let is_sel = idx == sel;
             let is_active = state.active_project_id.as_deref() == Some(&proj.id);
-            let selector = if is_sel { "▶ " } else { "  " };
+            let selector = if is_sel { "❯ " } else { "  " };
             let active_mark = if is_active { "★ " } else { "  " };
             let name_style = if is_sel {
                 Style::default()
@@ -106,7 +106,7 @@ pub fn render_create_project_modal(frame: &mut Frame, area: Rect, modal: &Create
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
-        .title(Span::styled(" ➕ Create New Project ", Theme::badge_gold()));
+        .title(Span::styled("  Create New Project ", Theme::badge_gold()));
 
     let content = vec![
         Line::from(""),
@@ -117,7 +117,7 @@ pub fn render_create_project_modal(frame: &mut Frame, area: Rect, modal: &Create
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(&modal.name_input, Style::default().fg(Color::Yellow)),
+            Span::styled(&modal.name_input, Style::default().fg(Theme::TEXT_PRIMARY)),
             Span::styled("█", Style::default().fg(Color::White)),
         ]),
     ];
@@ -134,7 +134,7 @@ pub fn render_add_folder_modal(frame: &mut Frame, area: Rect, modal: &AddFolderM
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
         .title(Span::styled(
-            " 📁 Attach Workspace Folder ",
+            "  Attach Workspace Folder ",
             Theme::badge_gold(),
         ));
 
@@ -147,7 +147,7 @@ pub fn render_add_folder_modal(frame: &mut Frame, area: Rect, modal: &AddFolderM
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(&modal.input_path, Style::default().fg(Color::Yellow)),
+            Span::styled(&modal.input_path, Style::default().fg(Theme::TEXT_PRIMARY)),
             Span::styled("█", Style::default().fg(Color::White)),
         ]),
         Line::from(""),
@@ -202,7 +202,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
     let items: Vec<ListItem> = if total == 0 {
         vec![ListItem::new(Line::from(vec![
             Span::styled(
-                "  🔍 No items matching ",
+                "   No items matching ",
                 Style::default().fg(Theme::TEXT_SECONDARY),
             ),
             Span::styled(
@@ -220,7 +220,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
             .take(end.saturating_sub(offset))
             .map(|(idx, item)| {
                 let is_sel = idx == sel;
-                let icon = if item.is_dir { "📁 " } else { "📄 " };
+                let icon = if item.is_dir { "▸ " } else { "  " };
 
                 let clean_p = item.path.trim_end_matches('/');
                 let (dir_prefix, file_name) = match clean_p.rfind('/') {
@@ -228,7 +228,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
                     None => ("", clean_p),
                 };
 
-                let prefix = if is_sel { " ▸ " } else { "   " };
+                let prefix = if is_sel { " ❯ " } else { "   " };
                 let item_style = Style::default();
 
                 let name_style = if is_sel {
@@ -283,7 +283,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
     };
 
     let title_line = Line::from(vec![
-        Span::styled(" 🏷️ Tag Item ", Theme::badge_cyan()),
+        Span::styled("  Tag Item ", Theme::badge_cyan()),
         if !tq.query.is_empty() {
             Span::styled(format!("(@{}) ", tq.query), Theme::badge_gold())
         } else {
@@ -320,7 +320,7 @@ pub fn render_diff_preview_modal(frame: &mut Frame, diff: &DiffApprovalState, ar
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
         .title(Span::styled(
-            format!(" 📝 Diff: {} (Tool: {}) ", diff.file_path, diff.tool_name),
+            format!("  Diff: {} (Tool: {}) ", diff.file_path, diff.tool_name),
             Theme::badge_gold(),
         ));
 
@@ -352,7 +352,7 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
-        .title(Span::styled(" 🏷️ Select Model ", Theme::header_title()))
+        .title(Span::styled("  Select Model ", Theme::header_title()))
         .title_bottom(Line::from(vec![
             Span::styled(" [Type] ", Style::default().fg(Theme::GOLD_PRIMARY)),
             Span::styled("Filter  ", Style::default().fg(Theme::TEXT_SECONDARY)),
@@ -386,14 +386,12 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
     } else {
         Span::styled(
             format!("{}_", search_query),
-            Style::default()
-                .fg(Theme::GOLD_PRIMARY)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Theme::TEXT_PRIMARY),
         )
     };
 
     let search_box = Paragraph::new(Line::from(vec![
-        Span::styled(" 🔍 ", Style::default().fg(Theme::CYAN_ACCENT)),
+        Span::styled("  ", Style::default().fg(Theme::CYAN_ACCENT)),
         query_display,
     ]))
     .block(

@@ -34,7 +34,7 @@ pub fn render_tool_card(tc: &ToolCallInfo, is_expanded: bool, index: usize) -> V
     lines.push(Line::from(vec![
         Span::raw("    "),
         Span::styled(
-            format!("[{}] {} 🔧 Tool: {} ", index + 1, toggle_icon, tc.name),
+            format!("[{}] {} Tool: {} ", index + 1, toggle_icon, tc.name),
             Style::default()
                 .fg(Theme::TEXT_PRIMARY)
                 .add_modifier(Modifier::BOLD),
@@ -202,7 +202,7 @@ pub fn render_approval_modal(req: &ApprovalRequest, frame: &mut Frame, area: Rec
     let outer_block = Block::default()
         .title(Line::from(vec![
             Span::styled(
-                " ⚠️ APPROVAL REQUIRED: ",
+                " ⚠ APPROVAL REQUIRED: ",
                 Style::default()
                     .fg(Theme::GOLD_PRIMARY)
                     .add_modifier(Modifier::BOLD),

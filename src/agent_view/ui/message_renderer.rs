@@ -107,7 +107,7 @@ pub fn render_message_to_lines<'a>(
         lines.push(Line::from(vec![
             Span::raw("  "),
             Span::styled(
-                "💭 Thinking / Reasoning:",
+                "  Thinking / Reasoning:",
                 Style::default()
                     .fg(Theme::TEXT_MUTED)
                     .add_modifier(Modifier::ITALIC),
@@ -265,7 +265,7 @@ pub fn render_message_to_lines<'a>(
             ToolExecutionStatus::Running => "⏳ Running...",
             ToolExecutionStatus::Success => "✓ Completed",
             ToolExecutionStatus::Failed => "✗ Failed",
-            ToolExecutionStatus::PendingApproval => "⚠️ Pending Approval",
+            ToolExecutionStatus::PendingApproval => "⚠ Pending Approval",
         };
         let status_color = match tc.status {
             ToolExecutionStatus::Running => Theme::CYAN_ACCENT,
@@ -275,7 +275,7 @@ pub fn render_message_to_lines<'a>(
         };
 
         lines.push(Line::from(vec![
-            Span::raw("  🛠️ ["),
+            Span::raw("   ["),
             Span::styled(
                 &tc.name,
                 Style::default()

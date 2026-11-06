@@ -115,7 +115,8 @@ impl AgentWorkspaceState {
     pub fn switch_sidebar_tab(&mut self) {
         self.sidebar_tab = match self.sidebar_tab {
             AgentSidebarTab::Tasks => AgentSidebarTab::Files,
-            AgentSidebarTab::Files => AgentSidebarTab::Tasks,
+            AgentSidebarTab::Files => AgentSidebarTab::Mcp,
+            AgentSidebarTab::Mcp => AgentSidebarTab::Tasks,
         };
     }
 

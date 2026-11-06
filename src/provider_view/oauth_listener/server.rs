@@ -113,7 +113,6 @@ pub async fn respond_success(mut stream: tokio::net::TcpStream, email: &str) {
         <head><title>Ragasukma OAuth - Success</title></head>\
         <body style='background: #0f172a; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; text-align: center; padding-top: 80px;'>\
             <div style='background: #1e293b; display: inline-block; padding: 40px 60px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid #334155;'>\
-                <div style='font-size: 54px; margin-bottom: 20px;'>🎉</div>\
                 <h1 style='color: #10b981; margin: 0 0 10px 0;'>Authentication Successful!</h1>\
                 <p style='color: #94a3b8; font-size: 16px; margin: 0 0 24px 0;'>Account <b>{}</b> is now connected to Ragasukma TUI.</p>\
                 <p style='color: #64748b; font-size: 14px;'>You may safely close this tab and return to your terminal.</p>\

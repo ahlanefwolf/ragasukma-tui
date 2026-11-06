@@ -154,7 +154,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // 0. Modal: Select Model
     if state.model_modal.is_open {
-        hints.push(Span::styled(" [🏷️ SELECT MODEL] ", Theme::badge_gold()));
+        hints.push(Span::styled(" [SELECT MODEL] ", Theme::badge_gold()));
         hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
         hints.push(Span::raw("Select "));
         hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
@@ -166,7 +166,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // 1. Modal: Add Folder to Workspace
     if state.add_folder_modal.is_open {
-        hints.push(Span::styled(" [📂 ADD FOLDER] ", Theme::badge_cyan()));
+        hints.push(Span::styled(" [ADD FOLDER] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
         hints.push(Span::raw("Confirm "));
         hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
@@ -178,7 +178,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // 2. Modal: Create Project
     if state.create_project_modal.is_open {
-        hints.push(Span::styled(" [➕ NEW PROJECT] ", Theme::badge_cyan()));
+        hints.push(Span::styled(" [NEW PROJECT] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
         hints.push(Span::raw("Create "));
         hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
@@ -188,7 +188,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // 3. Modal: Project Switcher / List Project
     if state.project_modal.is_open {
-        hints.push(Span::styled(" [📦 PROJECTS] ", Theme::badge_cyan()));
+        hints.push(Span::styled(" [PROJECTS] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
         hints.push(Span::raw("Select "));
         hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
@@ -204,7 +204,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // 4. Modal: Pending Tool Approval / Diff Review
     if state.pending_approval.is_some() {
-        hints.push(Span::styled(" [⚠️ APPROVAL] ", Theme::badge_gold()));
+        hints.push(Span::styled(" [⚠ APPROVAL] ", Theme::badge_gold()));
         hints.push(Span::styled(" [y] ", Theme::key_badge()));
         hints.push(Span::raw("Approve "));
         hints.push(Span::styled(" [n] ", Theme::key_badge()));
@@ -216,7 +216,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // 5. Popup: Tag Picker / Tag Query active
     if let Some(ref tq) = state.tag_query {
-        hints.push(Span::styled(" [🏷️ TAG POPUP] ", Theme::badge_cyan()));
+        hints.push(Span::styled(" [TAG POPUP] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
         hints.push(Span::raw("Select "));
         hints.push(Span::styled(" [Enter/Tab] ", Theme::key_badge()));
@@ -231,18 +231,18 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // Reactive Focus Card Badge
     let card_badge = match state.focus_area {
-        AgentFocusArea::Folders => Span::styled(" [📁 FOLDERS] ", Theme::badge_gold()),
-        AgentFocusArea::Tasks => Span::styled(" [📋 TASKS] ", Theme::badge_gold()),
-        AgentFocusArea::Files => Span::styled(" [🗂️ FILES] ", Theme::badge_gold()),
-        AgentFocusArea::Chat => Span::styled(" [💬 CHAT] ", Theme::badge_gold()),
+        AgentFocusArea::Folders => Span::styled(" [FOLDERS] ", Theme::badge_gold()),
+        AgentFocusArea::Tasks => Span::styled(" [TASKS] ", Theme::badge_gold()),
+        AgentFocusArea::Files => Span::styled(" [FILES] ", Theme::badge_gold()),
+        AgentFocusArea::Chat => Span::styled(" [CHAT] ", Theme::badge_gold()),
         AgentFocusArea::Input if state.is_input_focused => {
-            Span::styled(" [✏️ INPUT:INSERT] ", Theme::badge_gold())
+            Span::styled(" [ INPUT:INSERT] ", Theme::badge_gold())
         }
-        AgentFocusArea::Input => Span::styled(" [✏️ INPUT:NORMAL] ", Theme::badge_cyan()),
+        AgentFocusArea::Input => Span::styled(" [ INPUT:NORMAL] ", Theme::badge_cyan()),
         AgentFocusArea::ModelTelemetry => {
-            Span::styled(" [🧠 MODEL TELEMETRY] ", Theme::badge_gold())
+            Span::styled(" [ MODEL TELEMETRY] ", Theme::badge_gold())
         }
-        AgentFocusArea::McpTools => Span::styled(" [🛠️ MCP TOOLS] ", Theme::badge_gold()),
+        AgentFocusArea::McpTools => Span::styled(" [ MCP TOOLS] ", Theme::badge_gold()),
     };
     hints.push(card_badge);
 
@@ -348,8 +348,8 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::raw("Select "));
             hints.push(Span::styled(" [Space] ", Theme::key_badge()));
             hints.push(Span::raw("Toggle "));
-            hints.push(Span::styled(" [t] ", Theme::key_badge()));
-            hints.push(Span::raw("Filter "));
+            hints.push(Span::styled(" [s] ", Theme::key_badge()));
+            hints.push(Span::raw("Switch "));
             if width > 90 {
                 hints.push(Span::styled(" [r] ", Theme::key_badge()));
                 hints.push(Span::raw("Refresh "));

@@ -439,6 +439,7 @@ impl AgentWorkspaceState {
             match self.sidebar_tab {
                 AgentSidebarTab::Tasks => order.push(AgentFocusArea::Tasks),
                 AgentSidebarTab::Files => order.push(AgentFocusArea::Files),
+                AgentSidebarTab::Mcp => order.push(AgentFocusArea::McpTools),
             }
             order.push(AgentFocusArea::Folders);
         }
@@ -446,7 +447,9 @@ impl AgentWorkspaceState {
         order.push(AgentFocusArea::Input);
         if self.is_inspector_visible {
             order.push(AgentFocusArea::ModelTelemetry);
-            order.push(AgentFocusArea::McpTools);
+            if !self.is_sidebar_visible || self.sidebar_tab != AgentSidebarTab::Mcp {
+                order.push(AgentFocusArea::McpTools);
+            }
         }
 
         if let Some(pos) = order.iter().position(|&f| f == self.focus_area) {
@@ -465,6 +468,7 @@ impl AgentWorkspaceState {
             match self.sidebar_tab {
                 AgentSidebarTab::Tasks => order.push(AgentFocusArea::Tasks),
                 AgentSidebarTab::Files => order.push(AgentFocusArea::Files),
+                AgentSidebarTab::Mcp => order.push(AgentFocusArea::McpTools),
             }
             order.push(AgentFocusArea::Folders);
         }
@@ -472,7 +476,9 @@ impl AgentWorkspaceState {
         order.push(AgentFocusArea::Input);
         if self.is_inspector_visible {
             order.push(AgentFocusArea::ModelTelemetry);
-            order.push(AgentFocusArea::McpTools);
+            if !self.is_sidebar_visible || self.sidebar_tab != AgentSidebarTab::Mcp {
+                order.push(AgentFocusArea::McpTools);
+            }
         }
 
         if let Some(pos) = order.iter().position(|&f| f == self.focus_area) {
@@ -486,25 +492,17 @@ impl AgentWorkspaceState {
     }
 
     pub fn scroll_up(&mut self) {
-        if self.focus_area == AgentFocusArea::McpTools {
-            self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_sub(1);
-        } else {
-            let max = self.chat_max_scroll.get();
-            self.scroll_offset = (self.scroll_offset.saturating_add(1)).min(max);
-            self.auto_scroll = false;
-        }
+        let max = self.chat_max_scroll.get();
+        self.scroll_offset = (self.scroll_offset.saturating_add(1)).min(max);
+        self.auto_scroll = false;
     }
 
     pub fn scroll_down(&mut self) {
-        if self.focus_area == AgentFocusArea::McpTools {
-            self.inspector_scroll_offset = self.inspector_scroll_offset.saturating_add(1);
-        } else {
-            let max = self.chat_max_scroll.get();
-            let current = self.scroll_offset.min(max);
-            self.scroll_offset = current.saturating_sub(1);
-            if self.scroll_offset == 0 {
-                self.auto_scroll = true;
-            }
+        let max = self.chat_max_scroll.get();
+        let current = self.scroll_offset.min(max);
+        self.scroll_offset = current.saturating_sub(1);
+        if self.scroll_offset == 0 {
+            self.auto_scroll = true;
         }
     }
 

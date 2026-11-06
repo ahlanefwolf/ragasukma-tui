@@ -70,6 +70,17 @@ pub enum AgentFocusArea {
 pub enum AgentSidebarTab {
     Tasks,
     Files,
+    Mcp,
+}
+
+impl AgentSidebarTab {
+    pub fn next(self) -> Self {
+        match self {
+            AgentSidebarTab::Tasks => AgentSidebarTab::Files,
+            AgentSidebarTab::Files => AgentSidebarTab::Mcp,
+            AgentSidebarTab::Mcp => AgentSidebarTab::Tasks,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

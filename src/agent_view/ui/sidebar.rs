@@ -18,7 +18,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
     // 1. Header Workspace Folders Bar (Card 1: Folders)
     let folder_title = if is_folders_focused {
         vec![
-            Span::styled(" 📦 Project [Focused]: ", Theme::badge_gold()),
+            Span::styled("  Project [Focused]: ", Theme::badge_gold()),
             Span::styled(
                 &state.active_project_name,
                 Style::default()
@@ -30,7 +30,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
     } else {
         vec![
             Span::styled(
-                " 📦 Project: ",
+                "  Project: ",
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
@@ -111,7 +111,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(folder_card_height),
-            Constraint::Length(3),
+            Constraint::Length(1),
             Constraint::Min(8),
         ])
         .split(area);
@@ -120,11 +120,13 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
 
     // 2. Sidebar Tab Switcher
     let is_tasks_active = state.sidebar_tab == AgentSidebarTab::Tasks;
-    let tab_spans = vec![
-        Span::raw("  "),
+    let is_files_active = state.sidebar_tab == AgentSidebarTab::Files;
+    let is_mcp_active = state.sidebar_tab == AgentSidebarTab::Mcp;
+    let mcp_online = state.mcp_active_ids.len();
+    let mut tab_spans = vec![
         if is_tasks_active {
             Span::styled(
-                format!(" 💬 Tasks ({}) ", state.sessions.len()),
+                format!("  Tasks ({}) ", state.sessions.len()),
                 Theme::badge_gold(),
             )
         } else {
@@ -133,10 +135,10 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 Style::default().fg(Theme::TEXT_SECONDARY),
             )
         },
-        Span::raw("  |  "),
-        if !is_tasks_active {
+        Span::raw("|"),
+        if is_files_active {
             Span::styled(
-                format!(" 📁 Files ({}) ", state.workspace_files.len()),
+                format!("  Files ({}) ", state.workspace_files.len()),
                 Theme::badge_gold(),
             )
         } else {
@@ -145,15 +147,29 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 Style::default().fg(Theme::TEXT_SECONDARY),
             )
         },
+        Span::raw("|"),
+        if is_mcp_active {
+            Span::styled(
+                format!(" MCP ({}/{}) ", mcp_online, state.mcp_servers.len()),
+                Theme::badge_gold(),
+            )
+        } else {
+            Span::styled(
+                format!(" MCP ({}/{}) ", mcp_online, state.mcp_servers.len()),
+                Style::default().fg(Theme::TEXT_SECONDARY),
+            )
+        },
     ];
-    let tab_block = Block::default()
-        .borders(Borders::BOTTOM)
-        .border_style(Theme::border_subtle())
-        .style(Theme::block_base());
-    frame.render_widget(
-        Paragraph::new(Line::from(tab_spans)).block(tab_block),
-        chunks[1],
-    );
+
+    // Center the tab group horizontally within the sidebar width.
+    let tab_width: usize = tab_spans.iter().map(|s| s.content.chars().count()).sum();
+    let avail_width = chunks[1].width as usize;
+    let pad_left = avail_width.saturating_sub(tab_width) / 2;
+    if pad_left > 0 {
+        tab_spans.insert(0, Span::raw(" ".repeat(pad_left)));
+    }
+
+    frame.render_widget(Paragraph::new(Line::from(tab_spans)), chunks[1]);
 
     // 3. Tab Content (Card 2: Tasks or Files)
     match state.sidebar_tab {
@@ -190,7 +206,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                     .map(|(idx, s)| {
                         let is_cursor = idx == sel && is_tasks_focused;
                         let is_current = state.active_session_id.as_deref() == Some(&s.id);
-                        let cursor_str = if is_cursor { "▶ " } else { "  " };
+                        let cursor_str = if is_cursor { "❯ " } else { "  " };
                         let (marker, marker_color) = if s.is_running {
                             (format!("{} ", state.spinner_char()), Theme::CYAN_ACCENT)
                         } else if is_current {
@@ -244,9 +260,9 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
             };
 
             let title_str = if total > 0 {
-                format!(" 💬 Active Tasks [{}/{}] ", sel + 1, total)
+                format!("  Active Tasks [{}/{}] ", sel + 1, total)
             } else {
-                " 💬 Active Tasks [0] ".to_string()
+                "  Active Tasks [0] ".to_string()
             };
 
             let title = if is_tasks_focused {
@@ -313,12 +329,12 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                         let is_cursor = idx == sel && is_files_focused;
                         let indent = "  ".repeat(f.depth);
                         let icon = if f.is_dir {
-                            if f.is_expanded { "📂 " } else { "📁 " }
+                            if f.is_expanded { "▾ " } else { "▸ " }
                         } else {
-                            "📄 "
+                            "  "
                         };
 
-                        let cursor_str = if is_cursor { "▶ " } else { "  " };
+                        let cursor_str = if is_cursor { "❯ " } else { "  " };
                         let text_style = if is_cursor {
                             Style::default()
                                 .fg(Theme::GOLD_PRIMARY)
@@ -352,9 +368,9 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
             };
 
             let title_str = if total > 0 {
-                format!(" 📁 Workspace Files [{}/{}] ", sel + 1, total)
+                format!("  Workspace Files [{}/{}] ", sel + 1, total)
             } else {
-                " 📁 Workspace Files [0] ".to_string()
+                "  Workspace Files [0] ".to_string()
             };
 
             let title = if is_files_focused {
@@ -372,6 +388,104 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 .border_style(border_style)
                 .style(Theme::block_base());
             frame.render_widget(List::new(file_items).block(block), chunks[2]);
+
+            if total > inner_height {
+                let mut scrollbar_state = ScrollbarState::default()
+                    .content_length(total)
+                    .position(sel);
+                frame.render_stateful_widget(
+                    Scrollbar::default()
+                        .orientation(ScrollbarOrientation::VerticalRight)
+                        .begin_symbol(Some("▲"))
+                        .end_symbol(Some("▼")),
+                    chunks[2],
+                    &mut scrollbar_state,
+                );
+            }
+        }
+        AgentSidebarTab::Mcp => {
+            let is_mcp_focused = state.focus_area == AgentFocusArea::McpTools;
+            let border_style = if is_mcp_focused {
+                Theme::border_focused()
+            } else {
+                Theme::border_subtle()
+            };
+
+            let total = state.mcp_servers.len();
+            let sel = if total > 0 {
+                state.selected_mcp_idx.min(total - 1)
+            } else {
+                0
+            };
+            let inner_height = (chunks[2].height.saturating_sub(2) as usize).max(1);
+            let offset = if sel >= inner_height {
+                sel.saturating_sub(inner_height - 1)
+            } else {
+                0
+            };
+            let end = (offset + inner_height).min(total);
+
+            let mcp_items: Vec<ListItem> = if state.mcp_servers.is_empty() {
+                vec![
+                    ListItem::new(Line::from(vec![Span::styled(
+                        " (no MCP servers configured) ",
+                        Style::default().fg(Theme::TEXT_SECONDARY),
+                    )])),
+                    ListItem::new(Line::from(vec![Span::styled(
+                        "  add servers in MCP view ",
+                        Style::default().fg(Theme::TEXT_SECONDARY),
+                    )])),
+                ]
+            } else {
+                state
+                    .mcp_servers
+                    .iter()
+                    .enumerate()
+                    .skip(offset)
+                    .take(end.saturating_sub(offset))
+                    .map(|(idx, server)| {
+                        let enabled = state.mcp_active_ids.iter().any(|id| id == &server.id);
+                        let is_cursor = idx == sel && is_mcp_focused;
+                        let cursor_str = if is_cursor { "❯ " } else { "  " };
+                        let marker = if enabled {
+                            Span::styled("● ON  ", Theme::status_success())
+                        } else {
+                            Span::styled("○ OFF ", Style::default().fg(Theme::TEXT_SECONDARY))
+                        };
+                        let name_style = if is_cursor {
+                            Style::default()
+                                .fg(Theme::GOLD_PRIMARY)
+                                .add_modifier(Modifier::BOLD)
+                        } else if enabled {
+                            Style::default().fg(Theme::TEXT_PRIMARY)
+                        } else {
+                            Style::default().fg(Theme::TEXT_SECONDARY)
+                        };
+                        ListItem::new(Line::from(vec![
+                            Span::styled(cursor_str, Style::default().fg(Theme::GOLD_PRIMARY)),
+                            marker,
+                            Span::styled(server.name.clone(), name_style),
+                        ]))
+                    })
+                    .collect()
+            };
+
+            let title_str = format!(" MCP Servers [{}/{}] ", mcp_online, total);
+            let title = if is_mcp_focused {
+                Span::styled(
+                    format!("{} [Focused] ", title_str.trim_end()),
+                    Theme::badge_gold(),
+                )
+            } else {
+                Span::styled(title_str, Theme::header_title())
+            };
+
+            let block = Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .style(Theme::block_base());
+            frame.render_widget(List::new(mcp_items).block(block), chunks[2]);
 
             if total > inner_height {
                 let mut scrollbar_state = ScrollbarState::default()

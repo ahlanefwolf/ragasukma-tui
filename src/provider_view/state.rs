@@ -8,7 +8,7 @@ impl ProviderTabState {
     pub fn init_antigravity() -> Self {
         Self {
             provider_name: "Antigravity".to_string(),
-            icon: "🌌".to_string(),
+            icon: String::new(),
             accounts: Vec::new(),
             selected_account_idx: 0,
             focus_area: ProviderFocusArea::Accounts,
@@ -21,7 +21,7 @@ impl ProviderTabState {
     pub fn init_codex() -> Self {
         Self {
             provider_name: "Codex".to_string(),
-            icon: "🤖".to_string(),
+            icon: String::new(),
             accounts: Vec::new(),
             selected_account_idx: 0,
             focus_area: ProviderFocusArea::Accounts,
@@ -34,7 +34,7 @@ impl ProviderTabState {
     pub fn init_claude() -> Self {
         Self {
             provider_name: "Claude".to_string(),
-            icon: "🎭".to_string(),
+            icon: String::new(),
             accounts: Vec::new(),
             selected_account_idx: 0,
             focus_area: ProviderFocusArea::Accounts,

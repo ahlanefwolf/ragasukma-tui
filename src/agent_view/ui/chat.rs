@@ -21,9 +21,9 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let is_input_focused = state.focus_area == AgentFocusArea::Input || state.is_input_focused;
 
     let chat_title = if is_chat_focused {
-        Span::styled(" 💬 Agent Conversation [Focused] ", Theme::badge_gold())
+        Span::styled("  Agent Conversation [Focused] ", Theme::badge_gold())
     } else {
-        Span::styled(" 💬 Agent Conversation ", Theme::header_title())
+        Span::styled("  Agent Conversation ", Theme::header_title())
     };
 
     let chat_block = Block::default()
@@ -78,7 +78,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         // Loading indicator at the bottom of agent conversation when agent is active
         if state.is_running {
             chat_lines.push(Line::from(vec![
-                Span::styled("  ⚡ ", Style::default().fg(Theme::GOLD_PRIMARY)),
+                Span::styled("   ", Style::default().fg(Theme::GOLD_PRIMARY)),
                 Span::styled(
                     "Agent is thinking & generating response...",
                     Style::default()
@@ -157,11 +157,11 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     };
 
     let input_title = if state.tag_query.is_some() {
-        Span::styled(" 🏷️ Tag File Mode (@) ", Theme::badge_cyan())
+        Span::styled("  Tag File Mode (@) ", Theme::badge_cyan())
     } else if is_input_focused {
-        Span::styled(" ✏️ Message Input [Active] ", Theme::badge_gold())
+        Span::styled("  Message Input [Active] ", Theme::badge_gold())
     } else {
-        Span::styled(" ✏️ Message Input ", Theme::badge_gray())
+        Span::styled("  Message Input ", Theme::badge_gray())
     };
 
     let prompt_prefix = Span::styled(
@@ -187,7 +187,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let visible_lines: Vec<Line> = if state.input_buffer.is_empty() {
         let placeholder = if is_input_focused {
             Span::styled(
-                "Type a prompt, or @ to attach file context... (Enter: send, Alt+Enter: newline)",
+                "Type a prompt, or @ to attach file context...",
                 Style::default()
                     .fg(Theme::TEXT_SECONDARY)
                     .add_modifier(Modifier::ITALIC),
@@ -268,15 +268,9 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
             .add_modifier(Modifier::BOLD),
     );
 
-    let input_hint = Span::styled(
-        " [Enter] Send • [Alt+Enter] Newline ",
-        Style::default().fg(Theme::TEXT_MUTED),
-    );
-
     let input_block = Block::default()
         .title(input_title)
         .title_top(Line::from(model_tag_span).right_aligned())
-        .title_bottom(Line::from(input_hint).right_aligned())
         .borders(Borders::ALL)
         .border_style(input_border)
         .style(Theme::block_base());
