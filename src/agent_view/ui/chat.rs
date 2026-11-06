@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::message_renderer::{render_message_standard, wrap_lines_to_width};
-use crate::agent_view::state::AgentWorkspaceState;
+use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
 

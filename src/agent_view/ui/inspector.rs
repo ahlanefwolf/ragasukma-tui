@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-use crate::agent_view::state::AgentWorkspaceState;
+use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
 

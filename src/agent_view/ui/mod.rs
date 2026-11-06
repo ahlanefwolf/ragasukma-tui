@@ -88,7 +88,7 @@ pub fn get_help_lines(state: &AgentWorkspaceState) -> (String, &'static str, Vec
     ("Agent Workspace (Tab [1])".to_string(), focus_str, lines)
 }
 
-use crate::agent_view::state::AgentWorkspaceState;
+use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
 

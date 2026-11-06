@@ -1,4 +1,4 @@
-use crate::agent_view::state::AgentWorkspaceState;
+use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::app::Action;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -225,7 +225,7 @@ impl AgentWorkspaceState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent_view::state::AgentWorkspaceState;
+    use crate::agent_view::states::AgentWorkspaceState;
 
     #[test]
     fn test_folders_focus_hotkeys() {

@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use super::helpers::centered_rect;
-use crate::agent_view::state::AgentWorkspaceState;
+use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::{AddFolderModalState, CreateProjectModalState, FileTagQuery};
 use crate::app::types::{DiffApprovalState, DiffLineType};
 use crate::theme::Theme;

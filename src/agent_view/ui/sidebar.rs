@@ -8,7 +8,7 @@ use ratatui::{
     },
 };
 
-use crate::agent_view::state::AgentWorkspaceState;
+use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::{AgentFocusArea, AgentSidebarTab};
 use crate::theme::Theme;
 
