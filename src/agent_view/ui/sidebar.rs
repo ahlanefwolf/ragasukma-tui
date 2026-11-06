@@ -107,13 +107,25 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
         .min(max_folder_height)
         .max(3);
 
+    // Bottom-anchored Model Telemetry card. On short terminals we shrink the
+    // tab content first; the telemetry card keeps a sensible minimum.
+    let telemetry_height = super::inspector::MODEL_TELEMETRY_HEIGHT
+        .min(area.height.saturating_sub(folder_card_height + 1 + 5))
+        .max(3);
+    let show_telemetry = area.height >= telemetry_height + folder_card_height + 1 + 5;
+
+    let mut v_constraints = vec![
+        Constraint::Length(folder_card_height),
+        Constraint::Length(1),
+        Constraint::Min(5),
+    ];
+    if show_telemetry {
+        v_constraints.push(Constraint::Length(telemetry_height));
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(folder_card_height),
-            Constraint::Length(1),
-            Constraint::Min(8),
-        ])
+        .constraints(v_constraints)
         .split(area);
 
     frame.render_widget(Paragraph::new(folder_lines).block(folder_block), chunks[0]);
@@ -500,6 +512,13 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                     &mut scrollbar_state,
                 );
             }
+        }
+    }
+
+    // 5. Model Telemetry card pinned at the bottom of the sidebar.
+    if show_telemetry {
+        if let Some(telemetry_area) = chunks.get(3) {
+            super::inspector::render_model_telemetry(frame, *telemetry_area, state);
         }
     }
 }

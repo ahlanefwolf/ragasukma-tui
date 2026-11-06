@@ -3,16 +3,23 @@ use ratatui::{
     layout::Rect,
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Paragraph},
 };
 
 use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
 
-pub fn render_inspector(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
-    frame.render_widget(Clear, area);
+/// Fixed inner content height needed by the Model Telemetry card.
+/// 4 data lines + 2 borders (top/bottom).
+pub const MODEL_TELEMETRY_HEIGHT: u16 = 6;
 
+/// Render the Model Telemetry card into the given `area`.
+///
+/// The card is anchored at the bottom of the left sidebar. It is a plain
+/// widget render (no `Clear`/scroll) so it can share the sidebar column with
+/// the folder bar and the tab content above it.
+pub fn render_model_telemetry(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
     let is_model_focused = state.focus_area == AgentFocusArea::ModelTelemetry;
 
     let model_block = Block::default()

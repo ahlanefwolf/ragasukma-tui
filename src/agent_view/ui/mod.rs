@@ -95,12 +95,9 @@ use crate::theme::Theme;
 pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
     let mut constraints = Vec::new();
     if state.is_sidebar_visible {
-        constraints.push(Constraint::Percentage(22));
+        constraints.push(Constraint::Percentage(24));
     }
     constraints.push(Constraint::Min(40));
-    if state.is_inspector_visible {
-        constraints.push(Constraint::Percentage(26));
-    }
 
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -109,27 +106,21 @@ pub fn render_agent_tab(frame: &mut Frame, area: Rect, state: &AgentWorkspaceSta
 
     let mut current_idx = 0;
 
-    // Left Sidebar
+    // Left Sidebar (also hosts the Model Telemetry card at its bottom)
     if state.is_sidebar_visible {
         sidebar::render_left_sidebar(frame, chunks[current_idx], state);
         current_idx += 1;
     }
 
-    // Center Chat Panel
+    // Center Chat Panel (only the sidebar remains on the left, so this is the last chunk)
     let center_chat_area = chunks[current_idx];
     chat::render_center_chat(frame, center_chat_area, state);
-    current_idx += 1;
 
     let chat_sub_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(6), Constraint::Length(3)])
         .split(center_chat_area);
     let input_area = chat_sub_chunks[1];
-
-    // Right Inspector Panel
-    if state.is_inspector_visible {
-        inspector::render_inspector(frame, chunks[current_idx], state);
-    }
 
     // Floating Modals
     if state.project_modal.is_open {
