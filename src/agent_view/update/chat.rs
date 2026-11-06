@@ -89,10 +89,6 @@ pub(crate) fn handle_action(
             agent.scroll_down();
             None
         }
-        Action::AgentToggleToolExpand => {
-            agent.toggle_tool_expand();
-            None
-        }
         Action::AgentTagQueryNext => {
             agent.select_tag_query_next();
             None
@@ -143,10 +139,6 @@ pub(crate) fn handle_action(
         Action::AgentCycleToolFilter => {
             agent.cycle_tool_filter();
             Some(format!("Tool Filter: {:?}", agent.tool_filter))
-        }
-        Action::AgentToggleToolCard(idx) => {
-            agent.toggle_tool_card(idx);
-            None
         }
         Action::AgentSwitchSidebarTab => {
             agent.switch_sidebar_tab();

@@ -37,7 +37,6 @@ pub struct AgentWorkspaceState {
     pub active_model: String,
     pub available_models: Vec<String>,
     pub expanded_tools: HashSet<usize>,
-    pub expanded_tool_idx: Option<usize>,
     pub reasoning_expanded: bool,
     pub auto_scroll: bool,
     pub spinner_tick: usize,
@@ -117,7 +116,6 @@ impl Default for AgentWorkspaceState {
             active_model,
             available_models,
             expanded_tools: HashSet::new(),
-            expanded_tool_idx: None,
             reasoning_expanded: false,
             auto_scroll: true,
             spinner_tick: 0,
@@ -187,7 +185,6 @@ impl AgentWorkspaceState {
             let overflow = self.messages.len() - MAX_CHAT_MESSAGES;
             self.messages.drain(0..overflow);
             self.expanded_tools.clear();
-            self.expanded_tool_idx = None;
         }
     }
 
@@ -224,7 +221,6 @@ impl AgentWorkspaceState {
         self.messages.clear();
         self.scroll_offset = 0;
         self.expanded_tools.clear();
-        self.expanded_tool_idx = None;
         self.auto_scroll = true;
     }
 

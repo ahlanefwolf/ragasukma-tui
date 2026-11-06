@@ -85,14 +85,6 @@ mod tests {
             reasoning: None,
         });
 
-        // Test 'x' toggles tool detail expand
-        let x_key = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE);
-        let action = app.handle_key_event(x_key).expect("action expected");
-        assert_eq!(action, Action::AgentToggleToolExpand);
-        let initial_expand = app.agent.expanded_tool_idx;
-        app.update(action);
-        assert_ne!(app.agent.expanded_tool_idx, initial_expand);
-
         // Test input focused hotkeys: Ctrl+C, Esc
         app.agent.focus_input();
         app.agent.input_buffer = "hello world".to_string();

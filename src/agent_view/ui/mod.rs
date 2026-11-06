@@ -246,7 +246,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
     };
     hints.push(card_badge);
 
-    // Context-sensitive card hints matching actual controller keybindings
+    // Context-sensitive card hints — mirrors controller.rs `match code` blocks exactly.
     match state.focus_area {
         AgentFocusArea::Folders => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
@@ -258,8 +258,6 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             if width > 90 {
                 hints.push(Span::styled(" [o] ", Theme::key_badge()));
                 hints.push(Span::raw("Open "));
-                hints.push(Span::styled(" [P] ", Theme::key_badge()));
-                hints.push(Span::raw("Projects "));
             }
         }
         AgentFocusArea::Tasks => {
@@ -269,25 +267,21 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::raw("New "));
             hints.push(Span::styled(" [d] ", Theme::key_badge()));
             hints.push(Span::raw("Delete "));
+            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+            hints.push(Span::raw("Switch "));
             hints.push(Span::styled(" [s] ", Theme::key_badge()));
             hints.push(Span::raw("Files Tab "));
-            if width > 95 {
-                hints.push(Span::styled(" [P] ", Theme::key_badge()));
-                hints.push(Span::raw("Projects "));
-            }
         }
         AgentFocusArea::Files => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
             hints.push(Span::raw("Select "));
             hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
             hints.push(Span::raw("Expand/Collapse "));
-            hints.push(Span::styled(" [Space] ", Theme::key_badge()));
-            hints.push(Span::raw("Insert Path "));
             hints.push(Span::styled(" [s] ", Theme::key_badge()));
             hints.push(Span::raw("Tasks Tab "));
             if width > 90 {
                 hints.push(Span::styled(" [a] ", Theme::key_badge()));
-                hints.push(Span::raw("Add Folder "));
+                hints.push(Span::raw("Add "));
                 hints.push(Span::styled(" [r] ", Theme::key_badge()));
                 hints.push(Span::raw("Rescan "));
                 hints.push(Span::styled(" [o] ", Theme::key_badge()));
@@ -295,61 +289,100 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             }
         }
         AgentFocusArea::Chat => {
-            hints.push(Span::styled(" [i/Enter] ", Theme::key_badge()));
-            hints.push(Span::raw("Write "));
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
             hints.push(Span::raw("Scroll "));
-            hints.push(Span::styled(" [m] ", Theme::key_badge()));
-            hints.push(Span::raw("Model "));
-            if width > 95 {
-                hints.push(Span::styled(" [b] ", Theme::key_badge()));
-                hints.push(Span::raw("Sidebar "));
-            }
+            hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+            hints.push(Span::raw("Write "));
         }
         AgentFocusArea::Input if state.is_input_focused => {
-            if state.is_running {
-                hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
-                hints.push(Span::raw("Stop Agent "));
+            // Input focused = a modal-like trap. Global keys (q, i, b, m, P, x, F5,
+            // 1-6) are ALL dead here and get typed as text. Only Esc and Tab/Shift+Tab
+            // stay meaningful — keep the footer strictly to what actually works.
+            if state.tag_query.is_some() {
+                hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
+                hints.push(Span::raw("Select Tag "));
+                hints.push(Span::styled(" [Tab/Enter] ", Theme::key_badge()));
+                hints.push(Span::raw("Apply "));
+                hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+                hints.push(Span::raw("Cancel "));
             } else {
-                hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
-                hints.push(Span::raw("Send Prompt "));
+                if state.is_running {
+                    hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
+                    hints.push(Span::raw("Stop "));
+                } else {
+                    hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
+                    hints.push(Span::raw("Send "));
+                }
+                hints.push(Span::styled(" [Alt+Enter] ", Theme::key_badge()));
+                hints.push(Span::raw("Newline "));
+                hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
+                hints.push(Span::raw("Exit Insert "));
             }
-            hints.push(Span::styled(" [@] ", Theme::key_badge()));
-            hints.push(Span::raw("Tag File/Folder "));
-            hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
-            hints.push(Span::raw("Normal Mode "));
+            hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
+            hints.push(Span::raw("Next "));
+            if width > 100 {
+                hints.push(Span::styled(" [Shift+Tab] ", Theme::key_badge()));
+                hints.push(Span::raw("Prev "));
+            }
+            // No global block appended below — they do not apply while typing.
+            return hints;
         }
         AgentFocusArea::Input => {
             if state.is_running {
                 hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
-                hints.push(Span::raw("Stop Agent "));
+                hints.push(Span::raw("Stop "));
             }
             hints.push(Span::styled(" [i/Enter] ", Theme::key_badge()));
             hints.push(Span::raw("Insert Mode "));
-            hints.push(Span::styled(" [m] ", Theme::key_badge()));
-            hints.push(Span::raw("Model "));
-            hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
-            hints.push(Span::raw("Scroll Chat "));
+            hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
+            hints.push(Span::raw("Scroll "));
         }
         AgentFocusArea::ModelTelemetry => {
-            hints.push(Span::styled(" [m] ", Theme::key_badge()));
-            hints.push(Span::raw("Cycle Model "));
-            hints.push(Span::styled(" [f/F5] ", Theme::key_badge()));
-            hints.push(Span::raw("Fetch/Refresh "));
+            // In this focus area `r` maps to AgentRefreshModels (controller.rs:178).
+            // `f` and F5 also work but `r` is the canonical, focus-specific key.
+            hints.push(Span::styled(" [r] ", Theme::key_badge()));
+            hints.push(Span::raw("Refresh "));
         }
         AgentFocusArea::McpTools => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
-            hints.push(Span::raw("Scroll Tools "));
+            hints.push(Span::raw("Select "));
+            hints.push(Span::styled(" [Space] ", Theme::key_badge()));
+            hints.push(Span::raw("Toggle "));
             hints.push(Span::styled(" [t] ", Theme::key_badge()));
             hints.push(Span::raw("Filter "));
-            hints.push(Span::styled(" [x] ", Theme::key_badge()));
-            hints.push(Span::raw("Expand "));
+            if width > 90 {
+                hints.push(Span::styled(" [r] ", Theme::key_badge()));
+                hints.push(Span::raw("Refresh "));
+            }
         }
     }
 
-    // Common navigation
+    // Global keys — real in controller.rs, active from any panel while no modal is open.
+    // (Tab/Shift+Tab, i, b, m, F5, x are always bound and listed once here.)
     hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
-    hints.push(Span::raw("Next Card "));
+    hints.push(Span::raw("Next "));
+    if width > 100 {
+        hints.push(Span::styled(" [Shift+Tab] ", Theme::key_badge()));
+        hints.push(Span::raw("Prev "));
+    }
+    hints.push(Span::styled(" [i] ", Theme::key_badge()));
+    hints.push(Span::raw("Input "));
+    hints.push(Span::styled(" [b] ", Theme::key_badge()));
+    hints.push(Span::raw("Sidebar "));
+    hints.push(Span::styled(" [m] ", Theme::key_badge()));
+    hints.push(Span::raw("Model "));
+    if width > 80 {
+        hints.push(Span::styled(" [P] ", Theme::key_badge()));
+        hints.push(Span::raw("Projects "));
+    }
+
+    // Lifecycle keys
+    if state.is_running {
+        hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
+        hints.push(Span::raw("Stop "));
+    }
+    hints.push(Span::styled(" [q] ", Theme::key_badge()));
+    hints.push(Span::raw("Quit "));
 
     hints
 }

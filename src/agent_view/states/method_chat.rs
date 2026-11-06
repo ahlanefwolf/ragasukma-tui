@@ -6,14 +6,6 @@ impl AgentWorkspaceState {
         self.auto_scroll = true;
     }
 
-    pub fn toggle_tool_expand(&mut self) {
-        if self.expanded_tool_idx.is_some() {
-            self.expanded_tool_idx = None;
-        } else {
-            self.expanded_tool_idx = Some(0);
-        }
-    }
-
     pub fn toggle_tool_card(&mut self, idx: usize) {
         if self.expanded_tools.contains(&idx) {
             self.expanded_tools.remove(&idx);

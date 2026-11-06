@@ -8,6 +8,17 @@ impl AgentWorkspaceState {
     pub fn handle_key(&self, key: KeyEvent) -> Option<Action> {
         let code = key.code;
 
+        // Modal: Pending Tool Approval / Diff Review
+        if self.pending_approval.is_some() {
+            return match code {
+                KeyCode::Char('y') | KeyCode::Enter => Some(Action::DiffApprove),
+                KeyCode::Char('n') | KeyCode::Esc => Some(Action::DiffReject),
+                KeyCode::Up | KeyCode::Char('k') => Some(Action::DiffScrollUp),
+                KeyCode::Down | KeyCode::Char('j') => Some(Action::DiffScrollDown),
+                _ => None,
+            };
+        }
+
         // Modal: Add Folder to Workspace
         if self.add_folder_modal.is_open {
             return match code {
@@ -48,8 +59,12 @@ impl AgentWorkspaceState {
         if self.model_modal.is_open {
             return match code {
                 KeyCode::Esc => Some(Action::AgentCloseModelModal),
-                KeyCode::Down | KeyCode::Tab => Some(Action::AgentSelectNextModalModel),
-                KeyCode::Up | KeyCode::BackTab => Some(Action::AgentSelectPrevModalModel),
+                KeyCode::Down | KeyCode::Tab | KeyCode::Char('j') => {
+                    Some(Action::AgentSelectNextModalModel)
+                }
+                KeyCode::Up | KeyCode::BackTab | KeyCode::Char('k') => {
+                    Some(Action::AgentSelectPrevModalModel)
+                }
                 KeyCode::Enter => Some(Action::AgentApplyModalModel),
                 KeyCode::Backspace => Some(Action::AgentModelModalBackspace),
                 KeyCode::Char(c) => Some(Action::AgentModelModalChar(c)),
@@ -148,7 +163,6 @@ impl AgentWorkspaceState {
                 Some(Action::AgentRefreshModels)
             }
             KeyCode::F(5) => Some(Action::AgentRefreshModels),
-            KeyCode::Char('x') => Some(Action::AgentToggleToolExpand),
             KeyCode::Char('s')
                 if matches!(
                     self.focus_area,
@@ -160,6 +174,7 @@ impl AgentWorkspaceState {
             KeyCode::Char('r') => match self.focus_area {
                 AgentFocusArea::Files => Some(Action::AgentScanFiles),
                 AgentFocusArea::McpTools => Some(Action::AgentRefreshMcpServers),
+                AgentFocusArea::ModelTelemetry => Some(Action::AgentRefreshModels),
                 _ => Some(Action::AgentToggleReasoning),
             },
             KeyCode::Char('t') if self.focus_area == AgentFocusArea::McpTools => {

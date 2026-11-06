@@ -95,7 +95,6 @@ pub enum Action {
     AgentScanFiles,
     AgentScrollUp,
     AgentScrollDown,
-    AgentToggleToolExpand,
 
     // Phase 1 Foundations
     AgentTagQueryNext,
@@ -112,7 +111,6 @@ pub enum Action {
     AgentApprovePending,
     AgentRejectPending,
     AgentCycleToolFilter,
-    AgentToggleToolCard(usize),
 
     // Phase 4 Tasks & Sessions (1:1 with ai-voice AgentSidebar)
     AgentSwitchSidebarTab,
