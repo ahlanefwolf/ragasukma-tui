@@ -26,8 +26,13 @@ of triggering actions. Use `Esc` (or `Tab` back to panels) to leave the input.
 | `P` (Shift+p)   | Open Project switcher modal             |
 | `F5`            | Refresh models (telemetry)              |
 | `x`             | Toggle expand/collapse tool output card |
+| `q`             | Quit app                                |
 | `Ctrl+C`        | Quit app                                |
 | `Alt+s`         | Cancel running turn (if running)        |
+
+> **Note on `q`:** `q` quits the app only when no input/modal is focused.
+> While any text input (Input textarea, a modal form, tag query) is active,
+> press `Esc` first to leave it — otherwise `q` is typed as a character.
 
 ---
 
@@ -70,8 +75,6 @@ of triggering actions. Use `Esc` (or `Tab` back to panels) to leave the input.
 |-----------|-----------------------|
 | `j` / `↓` | Scroll chat down      |
 | `k` / `↑` | Scroll chat up        |
-| `Enter`   | Jump to Input         |
-| `r`       | Toggle reasoning view |
 
 ## Input focus (textarea)
 
@@ -82,8 +85,6 @@ of triggering actions. Use `Esc` (or `Tab` back to panels) to leave the input.
 | `Esc`          | Close tag query (if active)         |
 | `Ctrl+A`       | Cursor to line start                |
 | `Ctrl+E`       | Cursor to line end                  |
-| `Ctrl+C`       | Quit app                            |
-| `Alt+s`        | Cancel running turn                 |
 
 ### Tag query (`@file` autocomplete popup)
 | Key             | Action           |
@@ -108,7 +109,7 @@ of triggering actions. Use `Esc` (or `Tab` back to panels) to leave the input.
 
 | Key   | Action           |
 |-------|------------------|
-| `f`   | Refresh models   |
+| `r`   | Refresh models   |
 
 ---
 
@@ -150,28 +151,3 @@ of triggering actions. Use `Esc` (or `Tab` back to panels) to leave the input.
 | `Backspace`     | Delete filter char         |
 | any char        | Filter models              |
 | `Esc`           | Close modal                |
-
----
-
-## Card: Tool Output (`x` to expand/collapse)
-
-Tool call cards in the chat log are toggled with `x` (global) when a card is
-focused/expandable. The card shows tool input/output; collapsed by default.
-
-## Card: Diff Approval (file edit preview)
-
-When a tool proposes a file change, a diff approval modal appears.
-
-| Key | Action                    |
-|-----|---------------------------|
-| `y` | Approve + apply diff      |
-| `n` | Reject diff               |
-| `Esc` | Reject / dismiss        |
-
-> Note: `AgentApprovePending` / `AgentRejectPending` actions exist in the
-> action enum but the interactive binding for approval is handled through the
-> diff-approval flow (`DiffApprove` / `DiffReject`).
-
-## Card: Reasoning (`r` to toggle in Chat focus)
-
-Toggles the reasoning/thinking view on assistant messages.
