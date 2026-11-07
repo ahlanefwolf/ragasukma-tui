@@ -83,15 +83,16 @@ impl AgentWorkspaceState {
 
             // Tag query navigation if active.
             // Checked BEFORE the Enter/newline handling below so that when a tag
-            // query is open, Tab selects the tag and Enter is NOT hijacked by the
-            // submit path.
+            // query is open, Tab selects the tag and Enter is swallowed/ignored
+            // so it triggers neither tag selection, newline, nor submit.
             if self.tag_query.is_some() {
                 match code {
                     KeyCode::Esc => return Some(Action::AgentCloseTagQuery),
                     KeyCode::Down => return Some(Action::AgentTagQueryNext),
                     KeyCode::Up => return Some(Action::AgentTagQueryPrev),
-                    // Only Tab applies a tag — Enter must NOT select a tag.
+                    // Only Tab applies a tag — Enter must NOT select a tag or submit.
                     KeyCode::Tab => return Some(Action::AgentApplyTag),
+                    KeyCode::Enter => return None,
                     _ => {}
                 }
             }
@@ -253,5 +254,36 @@ impl AgentWorkspaceState {
             KeyCode::Char('P') => Some(Action::AgentOpenProjectModal),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent_view::types::FileTagQuery;
+    use ratatui::crossterm::event::{KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+
+    #[test]
+    fn test_enter_key_swallowed_when_tag_query_active() {
+        let mut state = AgentWorkspaceState::default();
+        state.is_input_focused = true;
+        state.tag_query = Some(FileTagQuery::new("test".to_string(), vec![], 0));
+
+        let enter_event = KeyEvent {
+            code: KeyCode::Enter,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        };
+
+        // When tag_query is active, Enter must NOT submit or insert text (returns None)
+        assert_eq!(state.handle_key(enter_event), None);
+
+        // When tag_query is closed, Enter submits the prompt
+        state.tag_query = None;
+        assert_eq!(
+            state.handle_key(enter_event),
+            Some(Action::AgentSubmitPrompt)
+        );
     }
 }
