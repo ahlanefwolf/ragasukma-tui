@@ -210,6 +210,7 @@ impl AgentWorkspaceState {
             if is_expanded {
                 collect_visible_children(
                     folder,
+                    folder,
                     1,
                     &self.expanded_dirs,
                     &mut nodes,

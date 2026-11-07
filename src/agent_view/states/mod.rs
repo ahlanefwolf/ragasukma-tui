@@ -161,6 +161,7 @@ pub struct InputVisualLine {
 }
 
 mod helpers;
+mod fs_filter;
 mod method_chat;
 mod method_models;
 mod method_selectors;

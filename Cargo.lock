@@ -1602,6 +1602,7 @@ dependencies = [
  "color-eyre",
  "crossterm",
  "futures-util",
+ "ignore",
  "open",
  "ragasukma-core",
  "ratatui",

@@ -1,3 +1,4 @@
+use super::fs_filter::is_ignored;
 use super::*;
 
 pub(super) fn collect_recursive_tag_items(
@@ -24,12 +25,7 @@ pub(super) fn collect_recursive_tag_items(
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        if name.starts_with('.')
-            || name == "target"
-            || name == "node_modules"
-            || name == ".git"
-            || name == ".cargo"
-        {
+        if is_ignored(root, &path, path.is_dir()) {
             continue;
         }
 
@@ -85,6 +81,7 @@ pub(super) fn collect_recursive_tag_items(
 }
 
 pub(super) fn collect_visible_children(
+    root: &Path,
     dir: &Path,
     depth: usize,
     expanded_dirs: &HashSet<String>,
@@ -107,7 +104,7 @@ pub(super) fn collect_visible_children(
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        if name.starts_with('.') || name == "target" || name == "node_modules" {
+        if is_ignored(root, &path, path.is_dir()) {
             continue;
         }
 
@@ -134,7 +131,14 @@ pub(super) fn collect_visible_children(
         });
 
         if is_expanded {
-            collect_visible_children(&path, depth + 1, expanded_dirs, nodes, Some(path_str));
+            collect_visible_children(
+                root,
+                &path,
+                depth + 1,
+                expanded_dirs,
+                nodes,
+                Some(path_str),
+            );
         }
     }
 
