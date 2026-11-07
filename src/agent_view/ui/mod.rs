@@ -284,7 +284,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             hints.push(Span::raw("Write "));
         }
         AgentFocusArea::Input if state.is_input_focused => {
-            // Input focused = a modal-like trap. Global keys (q, i, b, m, P, x, F5,
+            // Input focused = a modal-like trap. Global keys (q, i, b, m, P, x,
             // 1-6) are ALL dead here and get typed as text. Only Esc and Tab/Shift+Tab
             // stay meaningful — keep the footer strictly to what actually works.
             if state.tag_query.is_some() {
@@ -348,7 +348,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
     }
 
     // Global keys — real in controller.rs, active from any panel while no modal is open.
-    // (Tab/Shift+Tab, i, b, m, F5, x are always bound and listed once here.)
+    // (Tab/Shift+Tab, i, b, m, x are always bound and listed once here.)
     hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
     hints.push(Span::raw("Next "));
     if width > 100 {

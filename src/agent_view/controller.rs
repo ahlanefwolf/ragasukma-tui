@@ -185,10 +185,6 @@ impl AgentWorkspaceState {
             KeyCode::BackTab => Some(Action::AgentFocusPrevPanel),
             KeyCode::Char('b') => Some(Action::AgentToggleSidebar),
             KeyCode::Char('m') => Some(Action::AgentOpenModelModal),
-            KeyCode::Char('f') if self.focus_area == AgentFocusArea::ModelTelemetry => {
-                Some(Action::AgentRefreshModels)
-            }
-            KeyCode::F(5) => Some(Action::AgentRefreshModels),
             KeyCode::Char('s')
                 if matches!(
                     self.focus_area,
