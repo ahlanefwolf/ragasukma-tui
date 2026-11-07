@@ -1,7 +1,6 @@
 use anyhow::Result;
 use ragasukma_core::agent::repository::{list_messages, list_projects, list_sessions};
 use sqlx::SqlitePool;
-use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 use super::types::{
@@ -85,15 +84,15 @@ impl CoreBridge {
             });
         }
 
-        let current_sid = Arc::new(Mutex::new(sid.clone()));
+        // Satu sumber kebenaran untuk sesi aktif: watch channel dari worker.
+        let (sid_watch_tx, _sid_watch_rx) = tokio::sync::watch::channel(sid.clone());
         let worker_project_id = pid.clone();
         let worker_tx = event_tx.clone();
-        let current_sid_clone = Arc::clone(&current_sid);
 
         spawn_core_bridge_worker(
             cmd_rx,
             worker_tx,
-            current_sid_clone,
+            sid_watch_tx,
             worker_project_id,
             sid.clone(),
             db_pool,

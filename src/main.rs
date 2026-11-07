@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(test),
+    deny(clippy::unwrap_used, clippy::expect_used)
+)]
+
 use std::time::Duration;
 
 use color_eyre::Result;

@@ -1,16 +1,131 @@
-use ragasukma_core::agent::events::get_session_sender;
+use ragasukma_core::agent::events::{get_session_sender, is_session_task_running};
 use ragasukma_core::agent::models::AgentSessionEvent;
 use ragasukma_core::agent::repository::{
     create_message, create_project, create_session, delete_project, delete_session, get_project,
     list_messages, list_projects, list_sessions, update_session_model,
 };
 use sqlx::SqlitePool;
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use super::types::{
     CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto, SessionDto,
 };
+
+/// Kumpulan `JoinHandle` tak-terkait yang dimiliki satu worker.
+///
+/// Dipakai untuk dua hal:
+/// 1. **Lifecycle** — saat worker di-`abort()`, `Drop` di sini ikut
+///    membatalkan semua task lepas (`RefreshQuota`, `spawn_blocking` kuota,
+///    subscriber). Tanpa ini task tersebut hidup terus setelah bridge hilang
+///    dan mencoba mengirim ke channel yang sudah tertutup.
+/// 2. **Housekeeping** — `push()` membuang handle yang sudah selesai lebih
+///    dulu, supaya `Vec` tidak tumbuh tanpa batas bila user memicu banyak
+///    refresh.
+///
+/// Housekeeping sengaja ditempel di `push`, bukan diserahkan ke pemanggil:
+/// sebelumnya `reap()` harus dipanggil manual dari loop utama dan ternyata
+/// terlupakan, sehingga `Vec` bocor pelan-pelan. Karena `push` adalah
+/// satu-satunya pintu masuk elemen baru, membersihkan di situ membuat
+/// kebocoran jenis itu mustahil terulang.
+///
+/// `abort()` hanya menghentikan task; ia tidak menunggu, jadi aman dipanggil
+/// dari `Drop` yang sinkron (tidak ada `.await` di dalam Drop).
+#[derive(Default)]
+pub struct TaskGroup {
+    handles: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl TaskGroup {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Ambil alih kepemilikan sebuah `JoinHandle`.
+    ///
+    /// Handle yang sudah selesai dibuang lebih dulu, jadi panjang `Vec`
+    /// mencerminkan jumlah task yang benar-benar masih hidup.
+    pub fn push(&mut self, handle: tokio::task::JoinHandle<()>) {
+        self.handles.retain(|h| !h.is_finished());
+        self.handles.push(handle);
+    }
+
+    /// Benar bila tidak ada task yang masih hidup.
+    pub fn is_empty(&mut self) -> bool {
+        self.handles.retain(|h| !h.is_finished());
+        self.handles.is_empty()
+    }
+}
+
+/// Kumpulan task turn per sesi (`ExecuteTurn` / `RetryTurn`).
+///
+/// Bertanggung jawab atas:
+/// 1. Memastikan hanya ada 1 task turn per `session_id` (task lama otomatis di-abort).
+/// 2. `cancel(session_id)` membatalkan task spesifik dan menghapusnya dari koleksi.
+/// 3. `Drop` membatalkan semua task yang masih hidup saat worker selesai/dibatalkan,
+///    sehingga tidak ada turn yatim yang berjalan di background.
+#[derive(Default)]
+pub struct ActiveTurns {
+    turns: std::collections::HashMap<String, tokio::task::JoinHandle<()>>,
+}
+
+impl ActiveTurns {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Bersihkan handle yang sudah selesai berjalan.
+    pub fn retain_active(&mut self) {
+        self.turns.retain(|_, handle| !handle.is_finished());
+    }
+
+    /// Batalkan task turn pada sesi tertentu jika ada.
+    pub fn cancel(&mut self, session_id: &str) -> bool {
+        if let Some(handle) = self.turns.remove(session_id) {
+            handle.abort();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Daftarkan task turn baru untuk sesi. Jika sesi sebelumnya masih punya task,
+    /// task lama langsung di-abort terlebih dahulu.
+    pub fn insert(&mut self, session_id: String, handle: tokio::task::JoinHandle<()>) {
+        if let Some(old) = self.turns.insert(session_id, handle) {
+            old.abort();
+        }
+    }
+
+    /// Cek apakah turn untuk sesi ini sedang aktif berjalan.
+    #[cfg(test)]
+    pub fn is_active(&mut self, session_id: &str) -> bool {
+        self.retain_active();
+        self.turns.contains_key(session_id)
+    }
+
+    /// Benar bila tidak ada task turn yang aktif.
+    #[cfg(test)]
+    pub fn is_empty(&mut self) -> bool {
+        self.retain_active();
+        self.turns.is_empty()
+    }
+}
+
+impl Drop for ActiveTurns {
+    fn drop(&mut self) {
+        for (_, handle) in self.turns.drain() {
+            handle.abort();
+        }
+    }
+}
+
+impl Drop for TaskGroup {
+    fn drop(&mut self) {
+        for handle in self.handles.drain(..) {
+            handle.abort();
+        }
+    }
+}
 
 pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<CoreBridgeEvent> {
     match event {
@@ -45,19 +160,31 @@ pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<C
     }
 }
 
+/// Forward `AgentSessionEvent` dari broadcast core ke `CoreBridgeEvent`.
+///
+/// Sesi aktif dibaca dari `watch::Receiver` (satu sumber kebenaran, lihat
+/// `spawn_core_bridge_worker`). Tidak ada polling: perubahan sesi memicu
+/// `watch_rx.changed()`, sehingga subscriber hanya bangun saat ada event
+/// stream atau saat sesi aktif benar-benar berubah.
+///
+/// **Lifecycle:** mengembalikan `JoinHandle` yang disimpan di `TaskGroup` milik
+/// `spawn_core_bridge_worker`, sehingga ikut di-`abort()` saat bridge di-drop.
+/// Subscriber juga berhenti sendiri bila `sub_tx` atau `watch_tx` sudah drop.
+///
+/// `active_status` adalah cache status sesi aktif di sisi worker (di-*share* lewat
+/// `Arc<RwLock<String>>`). Cache ini dipakai sebagai *resync*: core hanya
+/// mem-broadcast `StatusChange` saat transisi, jadi kalau subscriber terlambat
+/// berlangganan atau event transisi `running` hilang, TUI tidak akan pernah tahu
+/// sesi sedang berjalan. Setiap `MessageCreated`/`StepInfo` adalah bukti sesi
+/// masih aktif, jadi cache di-`running`-kan lagi dan perbedaannya di-emit.
 pub fn spawn_session_subscriber(
     sub_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
-    sub_sid: Arc<Mutex<String>>,
-) {
+    mut watch_rx: watch::Receiver<String>,
+    active_status: std::sync::Arc<std::sync::RwLock<String>>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut active_sid = {
-            let guard = sub_sid
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            guard.clone()
-        };
+        let mut active_sid = watch_rx.borrow_and_update().clone();
         let mut broadcast_rx = get_session_sender(&active_sid).subscribe();
-        let mut sync_interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
 
         loop {
             if sub_tx.is_closed() {
@@ -65,19 +192,50 @@ pub fn spawn_session_subscriber(
             }
 
             tokio::select! {
-                _ = sync_interval.tick() => {
-                    let cur = {
-                        let guard = sub_sid.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                        guard.clone()
-                    };
+                changed = watch_rx.changed() => {
+                    if changed.is_err() {
+                        // Sender di-drop: worker sudah berhenti, tidak ada lagi
+                        // yang bisa mengubah sesi aktif.
+                        break;
+                    }
+                    let cur = watch_rx.borrow_and_update().clone();
                     if cur != active_sid {
                         active_sid = cur;
                         broadcast_rx = get_session_sender(&active_sid).subscribe();
+                        // Sesi baru: sinkronkan status aktual apakah background task sedang jalan,
+                        // dan emit transisi status ke UI agar sinkron seketika.
+                        let initial_st = if !active_sid.is_empty() && is_session_task_running(&active_sid) {
+                            "running".to_string()
+                        } else {
+                            "idle".to_string()
+                        };
+                        if let Ok(mut st) = active_status.write() {
+                            *st = initial_st.clone();
+                        }
+                        let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
+                            session_id: Some(active_sid.clone()),
+                            status: initial_st,
+                        });
                     }
                 }
                 evt = broadcast_rx.recv() => {
                     match evt {
                         Ok(event) => {
+                            // Transisi status eksplisit dari core adalah sumber
+                            // kebenaran: perbarui cache sebelum event dilewatkan,
+                            // supaya `resync_status` tidak menimpanya balik.
+                            if let AgentSessionEvent::StatusChange { status } = &event
+                                && let Ok(mut st) = active_status.write()
+                            {
+                                st.clone_from(status);
+                            } else if matches!(
+                                event,
+                                AgentSessionEvent::MessageCreated(_) | AgentSessionEvent::StepInfo { .. }
+                            ) {
+                                // Bukti aktivitas tanpa transisi `running` yang
+                                // terlihat (lag / terlambat subscribe) → pulihkan.
+                                resync_status(&sub_tx, &active_sid, &active_status);
+                            }
                             if let Some(bridge_evt) = map_core_event_to_bridge(&active_sid, event)
                                 && sub_tx.send(bridge_evt).is_err()
                             {
@@ -88,13 +246,64 @@ pub fn spawn_session_subscriber(
                             tracing::warn!("Session broadcast subscriber lagged by {missed} events");
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            // Broadcaster ditutup (mis. sesi selesai atau dibersihkan).
+                            // Buat receiver baru langsung tanpa sleep/polling timer.
                             broadcast_rx = get_session_sender(&active_sid).subscribe();
                         }
                     }
                 }
             }
         }
+    })
+}
+
+/// Resync status sesi aktif ke `running` bila cache masih `idle`.
+///
+/// Core hanya mem-broadcast `StatusChange` saat transisi; kalau event transisi
+/// `running` hilang (subscriber lag / terlambat subscribe), TUI akan stuck di
+/// `idle` walau turn sedang berjalan. Bukti aktivitas (`MessageCreated`,
+/// `StepInfo`) dipakai untuk memulihkan state tersebut.
+fn resync_status(
+    sub_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+    sid: &str,
+    active_status: &std::sync::RwLock<String>,
+) {
+    let Ok(mut st) = active_status.write() else {
+        return;
+    };
+    if st.as_str() == "running" {
+        return;
+    }
+    *st = "running".to_string();
+    let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
+        session_id: Some(sid.to_string()),
+        status: "running".to_string(),
+    });
+}
+
+/// Menyetel status sesi aktif secara eksplisit dari sisi worker (bukan dari bukti
+/// aktivitas) dan meng-emit `StatusChange` hanya bila nilainya berubah.
+///
+/// Ini pasangan dari [`resync_status`]: resync memulihkan status dari event stream,
+/// sedangkan fungsi ini menulis kebenaran yang diketahui worker sendiri
+/// (turn dimulai → `running`, turn dibatalkan → `idle`). Keduanya berbagi cache yang
+/// sama supaya transisi tidak dobel-emit.
+fn set_active_status(
+    sub_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+    sid: &str,
+    active_status: &std::sync::RwLock<String>,
+    status: &str,
+) {
+    let Ok(mut st) = active_status.write() else {
+        return;
+    };
+    if st.as_str() == status {
+        return;
+    }
+    *st = status.to_string();
+    let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
+        session_id: Some(sid.to_string()),
+        status: status.to_string(),
     });
 }
 
@@ -200,45 +409,106 @@ async fn execute_turn_pipeline(
     }
 }
 
+/// Helper untuk memancarkan hasil pembaruan kuota pemakaian model (T8 / Fase 5.2).
+fn emit_usage_quota_result(
+    tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+    provider: String,
+    summary: ragasukma_core::llm::usage::LlmUsageSummary,
+) {
+    let _ = tx.send(CoreBridgeEvent::QuotaUpdated {
+        provider,
+        input_tokens: summary.total_input_tokens,
+        output_tokens: summary.total_output_tokens,
+        total_tokens: summary.total_tokens,
+        requests: summary.total_requests,
+    });
+}
+
+/// Helper untuk memancarkan hasil pembaruan kuota per akun provider (T8 / Fase 5.2).
+fn emit_account_quota_result(
+    tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+    provider: String,
+    account_id: String,
+    result: Result<Vec<crate::provider_view::ModelQuotaItem>, String>,
+) {
+    match result {
+        Ok(quotas) if !quotas.is_empty() => {
+            tracing::info!(
+                "Updated {} quotas for account: {} ({})",
+                quotas.len(),
+                account_id,
+                provider
+            );
+            let _ = tx.send(CoreBridgeEvent::AccountQuotaUpdated {
+                provider,
+                account_id,
+                quotas,
+            });
+        }
+        Ok(_) => {}
+        Err(err) => {
+            tracing::warn!(
+                "Failed to fetch quota for account {} ({}): {}",
+                account_id,
+                provider,
+                err
+            );
+            let _ = tx.send(CoreBridgeEvent::StatusChange {
+                session_id: None,
+                status: format!("Failed to load quota for {}: {}", provider, err),
+            });
+        }
+    }
+}
+
 pub fn spawn_core_bridge_worker(
     mut cmd_rx: mpsc::UnboundedReceiver<CoreBridgeCommand>,
     worker_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
-    current_sid_clone: Arc<Mutex<String>>,
+    watch_tx: watch::Sender<String>,
     mut worker_project_id: String,
-    mut active_sid: String,
-    db_pool: SqlitePool,
-) {
+    initial_sid: String,
+    pool: SqlitePool,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let pool_clone = db_pool.clone();
+        let mut active_sid = initial_sid;
+        // Cache status sesi aktif — di-*share* antara worker (penulis status
+        // eksplisit) dan subscriber (resync berbasis bukti aktivitas).
+        let active_status = std::sync::Arc::new(std::sync::RwLock::new("idle".to_string()));
 
-        // Spawn subscriber loop
-        spawn_session_subscriber(worker_tx.clone(), Arc::clone(&current_sid_clone));
+        // Spawn subscriber loop (sesi aktif dipantau lewat watch channel).
+        // Handle disimpan di `tasks` agar subscriber ikut berhenti saat worker
+        // dibatalkan — tanpa ini ia hidup sebagai task yatim.
+        let mut tasks = TaskGroup::new();
+        tasks.push(spawn_session_subscriber(
+            worker_tx.clone(),
+            watch_tx.subscribe(),
+            active_status.clone(),
+        ));
 
-        let mut active_turns: std::collections::HashMap<String, tokio::task::JoinHandle<()>> =
-            std::collections::HashMap::new();
+        let mut active_turns = ActiveTurns::new();
         let mut last_turn_request: Option<(String, Option<String>)> = None;
 
         while let Some(cmd) = cmd_rx.recv().await {
-            // Clean finished tasks from active_turns
-            active_turns.retain(|_, handle| !handle.is_finished());
+            // Bersihkan handle turn yang sudah selesai
+            active_turns.retain_active();
 
             match cmd {
                 CoreBridgeCommand::CancelTurn { session_id } => {
-                    let sid = session_id.unwrap_or_else(|| {
-                        current_sid_clone
-                            .lock()
-                            .map(|g| g.clone())
-                            .unwrap_or_else(|p| p.into_inner().clone())
-                    });
-                    if let Some(handle) = active_turns.remove(&sid) {
-                        handle.abort();
-                    }
+                    // Tanpa session_id eksplisit —> batalkan turn pada sesi aktif.
+                    let sid = match session_id {
+                        Some(sid) => sid,
+                        None => {
+                            set_active_status(&worker_tx, &active_sid, &active_status, "idle");
+                            active_sid.clone()
+                        }
+                    };
+                    active_turns.cancel(&sid);
                 }
                 CoreBridgeCommand::RetryTurn => {
                     if let Some((retry_prompt, model_override)) = last_turn_request.clone() {
                         let sid_exec = active_sid.clone();
                         let exec_tx = worker_tx.clone();
-                        let pool_exec = pool_clone.clone();
+                        let pool = pool.clone();
                         let sid_key = sid_exec.clone();
 
                         let handle = tokio::spawn(async move {
@@ -246,15 +516,13 @@ pub fn spawn_core_bridge_worker(
                                 sid_exec,
                                 model_override,
                                 retry_prompt,
-                                pool_exec,
+                                pool,
                                 exec_tx,
                                 true,
                             )
                             .await;
                         });
-                        if let Some(old) = active_turns.insert(sid_key, handle) {
-                            old.abort();
-                        }
+                        active_turns.insert(sid_key, handle);
                     }
                 }
                 CoreBridgeCommand::CreateProject {
@@ -297,9 +565,7 @@ pub fn spawn_core_bridge_worker(
                             // Auto switch to newly created project
                             worker_project_id = new_proj.id.clone();
                             active_sid = String::new();
-                            if let Ok(mut guard) = current_sid_clone.lock() {
-                                *guard = active_sid.clone();
-                            }
+                            let _ = watch_tx.send(active_sid.clone());
                             let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
                                 project_id: worker_project_id.clone(),
                                 project_name: new_proj.name.clone(),
@@ -369,7 +635,7 @@ pub fn spawn_core_bridge_worker(
                     let _ =
                         sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
                             .bind(&worker_project_id)
-                            .execute(&pool_clone)
+                            .execute(&pool)
                             .await;
                     let prj_opt = get_project(&worker_project_id).await.ok().flatten();
                     let project_name = prj_opt
@@ -384,9 +650,7 @@ pub fn spawn_core_bridge_worker(
                         .as_ref()
                         .map(|s| s.id.clone())
                         .unwrap_or_default();
-                    if let Ok(mut guard) = current_sid_clone.lock() {
-                        *guard = active_sid.clone();
-                    }
+                    let _ = watch_tx.send(active_sid.clone());
                     let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
                         project_id: worker_project_id.clone(),
                         project_name,
@@ -424,9 +688,7 @@ pub fn spawn_core_bridge_worker(
                             let first_sess = sessions.first().cloned();
                             if let Some(fs) = first_sess {
                                 active_sid = fs.id.clone();
-                                if let Ok(mut guard) = current_sid_clone.lock() {
-                                    *guard = active_sid.clone();
-                                }
+                                let _ = watch_tx.send(active_sid.clone());
                                 let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
                                     project_id: worker_project_id.clone(),
                                     project_name: first.name.clone(),
@@ -446,9 +708,7 @@ pub fn spawn_core_bridge_worker(
                             .await
                     {
                         active_sid = new_sess.id.clone();
-                        if let Ok(mut guard) = current_sid_clone.lock() {
-                            *guard = new_sess.id.clone();
-                        }
+                        let _ = watch_tx.send(new_sess.id.clone());
                         let _ = worker_tx.send(CoreBridgeEvent::SessionCreated {
                             id: new_sess.id,
                             title: new_sess.title,
@@ -457,18 +717,16 @@ pub fn spawn_core_bridge_worker(
                 }
                 CoreBridgeCommand::SwitchSession { session_id } => {
                     active_sid = session_id.clone();
-                    if let Ok(mut guard) = current_sid_clone.lock() {
-                        *guard = session_id.clone();
-                    }
+                    let _ = watch_tx.send(session_id.clone());
                     let _ =
                         sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
                             .bind(&active_sid)
-                            .execute(&pool_clone)
+                            .execute(&pool)
                             .await;
                     let _ =
                         sqlx::query("UPDATE projects SET updated_at = unixepoch() WHERE id = ?1")
                             .bind(&worker_project_id)
-                            .execute(&pool_clone)
+                            .execute(&pool)
                             .await;
                     if let Ok(msgs) = list_messages(&session_id).await {
                         let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
@@ -483,7 +741,7 @@ pub fn spawn_core_bridge_worker(
                     let _ =
                         sqlx::query("UPDATE sessions SET updated_at = unixepoch() WHERE id = ?1")
                             .bind(&session_id)
-                            .execute(&pool_clone)
+                            .execute(&pool)
                             .await;
                 }
                 CoreBridgeCommand::DeleteSession { session_id } => {
@@ -504,6 +762,16 @@ pub fn spawn_core_bridge_worker(
                     model_override,
                 } => {
                     let current_turn_sid = active_sid.clone();
+                    // Transisi ke `running` diumumkan worker, bukan subscriber.
+                    //
+                    // Subscriber hanya me-resync status saat melihat bukti aktivitas
+                    // (`MessageCreated`/`StepInfo`), sedangkan `user` message ditulis
+                    // langsung ke DB (tanpa broadcast) dan `StepInfo("thinking")` baru
+                    // muncul setelah pipa turn siap. Akibatnya TUI sempat menampilkan
+                    // status lama selama detik-detik pertama turn, dan `CancelTurn`
+                    // terlihat no-op. Menyetel cache + emit di sini membuat status
+                    // benar sejak perintah diterima.
+                    set_active_status(&worker_tx, &current_turn_sid, &active_status, "running");
                     let _ = create_message(
                         &current_turn_sid,
                         "user",
@@ -522,7 +790,7 @@ pub fn spawn_core_bridge_worker(
 
                     last_turn_request = Some((prompt.clone(), model_override.clone()));
 
-                    let pool_exec = pool_clone.clone();
+                    let pool = pool.clone();
                     let prompt_for_usage = prompt.clone();
                     let sid_key = sid_exec.clone();
                     let handle = tokio::spawn(async move {
@@ -530,36 +798,28 @@ pub fn spawn_core_bridge_worker(
                             sid_exec,
                             model_override,
                             prompt_for_usage,
-                            pool_exec,
+                            pool,
                             exec_tx,
                             false,
                         )
                         .await;
                     });
-                    if let Some(old) = active_turns.insert(sid_key, handle) {
-                        old.abort();
-                    }
+                    active_turns.insert(sid_key, handle);
                 }
                 CoreBridgeCommand::RefreshQuota { provider } => {
-                    let pool_ref = pool_clone.clone();
+                    let pool = pool.clone();
                     let quota_tx = worker_tx.clone();
                     let prov = provider.clone();
-                    tokio::spawn(async move {
+                    tasks.push(tokio::spawn(async move {
                         let summary = ragasukma_core::llm::usage::get_usage_summary_from_pool(
-                            &pool_ref,
+                            &pool,
                             Some(&prov),
                             None,
                         )
                         .await;
 
-                        let _ = quota_tx.send(CoreBridgeEvent::QuotaUpdated {
-                            provider: prov,
-                            input_tokens: summary.total_input_tokens,
-                            output_tokens: summary.total_output_tokens,
-                            total_tokens: summary.total_tokens,
-                            requests: summary.total_requests,
-                        });
-                    });
+                        emit_usage_quota_result(&quota_tx, prov, summary);
+                    }));
                 }
                 CoreBridgeCommand::RefreshAccountQuota {
                     provider,
@@ -568,85 +828,241 @@ pub fn spawn_core_bridge_worker(
                     let quota_tx = worker_tx.clone();
                     let prov = provider.clone();
                     let acc_id = account_id.clone();
-                    tokio::task::spawn_blocking(move || {
-                        let mut quotas = Vec::new();
-                        let mut err_msg = None;
-                        match prov.to_lowercase().as_str() {
+                    tasks.push(tokio::task::spawn_blocking(move || {
+                        let result = match prov.to_lowercase().as_str() {
                             p if p.contains("antigravity") => {
                                 let mut provider = ragasukma_core::llm::providers::antigravity::AntigravityProvider::new();
-                                match provider.get_account_quota(&acc_id) {
-                                    Ok(res) => {
-                                        quotas = crate::provider_view::antigravity::map_antigravity_quotas(res);
-                                    }
-                                    Err(e) => {
-                                        err_msg = Some(e.to_string());
-                                    }
-                                }
+                                provider
+                                    .get_account_quota(&acc_id)
+                                    .map(crate::provider_view::antigravity::map_antigravity_quotas)
+                                    .map_err(|e| e.to_string())
                             }
                             p if p.contains("codex") => {
                                 let mut provider =
                                     ragasukma_core::llm::providers::codex::CodexProvider::new();
-                                match provider.get_account_quota(&acc_id) {
-                                    Ok(res) => {
+                                provider
+                                    .get_account_quota(&acc_id)
+                                    .map(|res| {
                                         let models = provider
                                             .get_dynamic_available_models()
                                             .unwrap_or_default();
-                                        quotas = crate::provider_view::codex::map_codex_quotas(
-                                            res, models,
-                                        );
-                                    }
-                                    Err(e) => {
-                                        err_msg = Some(e.to_string());
-                                    }
-                                }
+                                        crate::provider_view::codex::map_codex_quotas(res, models)
+                                    })
+                                    .map_err(|e| e.to_string())
                             }
                             p if p.contains("claude") => {
                                 let mut provider =
                                     ragasukma_core::llm::providers::claude::ClaudeProvider::new();
-                                match provider.get_account_quota(&acc_id) {
-                                    Ok(res) => {
+                                provider
+                                    .get_account_quota(&acc_id)
+                                    .map(|res| {
                                         let models = provider
                                             .get_dynamic_available_models()
                                             .unwrap_or_default();
-                                        quotas = crate::provider_view::claude::map_claude_quotas(
-                                            res, models,
-                                        );
-                                    }
-                                    Err(e) => {
-                                        err_msg = Some(e.to_string());
-                                    }
-                                }
+                                        crate::provider_view::claude::map_claude_quotas(res, models)
+                                    })
+                                    .map_err(|e| e.to_string())
                             }
-                            _ => {}
-                        }
+                            _ => Ok(Vec::new()),
+                        };
 
-                        if !quotas.is_empty() {
-                            tracing::info!(
-                                "Updated {} quotas for account: {} ({})",
-                                quotas.len(),
-                                acc_id,
-                                prov
-                            );
-                            let _ = quota_tx.send(CoreBridgeEvent::AccountQuotaUpdated {
-                                provider: prov,
-                                account_id: acc_id,
-                                quotas,
-                            });
-                        } else if let Some(err) = err_msg {
-                            tracing::warn!(
-                                "Failed to fetch quota for account {} ({}): {}",
-                                acc_id,
-                                prov,
-                                err
-                            );
-                            let _ = quota_tx.send(CoreBridgeEvent::StatusChange {
-                                session_id: None,
-                                status: format!("Failed to load quota for {}: {}", prov, err),
-                            });
-                        }
-                    });
+                        emit_account_quota_result(&quota_tx, prov, acc_id, result);
+                    }));
                 }
             }
         }
-    });
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ActiveTurns, TaskGroup};
+    use std::time::Duration;
+
+    /// `push` harus membuang handle yang sudah selesai, supaya `Vec` tidak
+    /// tumbuh tanpa batas saat user memicu refresh berkali-kali.
+    #[tokio::test]
+    async fn push_membuang_handle_yang_sudah_selesai() {
+        let mut group = TaskGroup::new();
+
+        for _ in 0..50 {
+            group.push(tokio::spawn(async {}));
+        }
+        // Beri kesempatan task selesai, lalu picu housekeeping via `push`.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        group.push(tokio::spawn(async {}));
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        assert!(
+            group.is_empty(),
+            "handle selesai harus dibuang oleh push(), bukan menumpuk"
+        );
+    }
+
+    /// Task yang masih hidup tidak boleh dibuang oleh housekeeping.
+    #[tokio::test]
+    async fn push_mempertahankan_task_yang_masih_hidup() {
+        let (release, wait) = tokio::sync::oneshot::channel::<()>();
+        let mut group = TaskGroup::new();
+        group.push(tokio::spawn(async move {
+            let _ = wait.await;
+        }));
+        group.push(tokio::spawn(async {}));
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Hanya task pertama (menunggu `release`) yang tersisa.
+        assert!(
+            !group.is_empty(),
+            "task yang belum selesai tidak boleh ikut dibuang"
+        );
+        let _ = release.send(());
+    }
+
+    #[tokio::test]
+    async fn switch_session_2x_berturut_turut_tidak_ada_event_nyasar() {
+        use crate::core_bridge::types::CoreBridgeEvent;
+        use crate::core_bridge::worker::spawn_session_subscriber;
+        use ragasukma_core::agent::events::get_session_sender;
+        use ragasukma_core::agent::models::AgentSessionEvent;
+        use std::sync::{Arc, RwLock};
+        use std::time::Duration;
+        use tokio::sync::{mpsc, watch};
+        use tokio::time::timeout;
+
+        let sid1 = "test-session-1".to_string();
+        let sid2 = "test-session-2".to_string();
+        let sid3 = "test-session-3".to_string();
+
+        let (watch_tx, watch_rx) = watch::channel(sid1.clone());
+        let (sub_tx, mut sub_rx) = mpsc::unbounded_channel();
+        let active_status = Arc::new(RwLock::new("idle".to_string()));
+
+        let handle = spawn_session_subscriber(sub_tx, watch_rx, active_status);
+
+        // Beri waktu subscriber start dan subscribe ke sid1
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        let sender1 = get_session_sender(&sid1);
+        let sender2 = get_session_sender(&sid2);
+        let sender3 = get_session_sender(&sid3);
+
+        // 1. Emit di sid1, harus diterima
+        let _ = sender1.send(AgentSessionEvent::Delta {
+            delta: "hello-1".to_string(),
+        });
+        let mut got_hello1 = false;
+        while let Ok(Some(evt)) = timeout(Duration::from_millis(100), sub_rx.recv()).await {
+            if let CoreBridgeEvent::Delta { session_id, delta } = evt
+                && session_id == sid1
+                && delta == "hello-1"
+            {
+                got_hello1 = true;
+                break;
+            }
+        }
+        assert!(got_hello1, "harus menerima delta dari sid1");
+
+        // 2. Switch ke sid2 (Pindah ke-1)
+        watch_tx.send(sid2.clone()).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Kirim event di sid1 (sesi lama) dan sid2 (sesi baru)
+        let _ = sender1.send(AgentSessionEvent::Delta {
+            delta: "stray-1".to_string(),
+        });
+        let _ = sender2.send(AgentSessionEvent::Delta {
+            delta: "hello-2".to_string(),
+        });
+
+        let mut got_hello2 = false;
+        let mut got_stray1 = false;
+        while let Ok(Some(evt)) = timeout(Duration::from_millis(100), sub_rx.recv()).await {
+            if let CoreBridgeEvent::Delta { session_id, delta } = evt {
+                if delta == "stray-1" {
+                    got_stray1 = true;
+                }
+                if session_id == sid2 && delta == "hello-2" {
+                    got_hello2 = true;
+                    break;
+                }
+            }
+        }
+        assert!(!got_stray1, "tidak boleh menerima event nyasar dari sid1");
+        assert!(got_hello2, "harus menerima delta dari sid2");
+
+        // 3. Switch ke sid3 (Pindah ke-2 berturut-turut)
+        watch_tx.send(sid3.clone()).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Kirim event di sid2 (sesi lama) dan sid3 (sesi baru)
+        let _ = sender2.send(AgentSessionEvent::Delta {
+            delta: "stray-2".to_string(),
+        });
+        let _ = sender3.send(AgentSessionEvent::Delta {
+            delta: "hello-3".to_string(),
+        });
+
+        let mut got_hello3 = false;
+        let mut got_stray2 = false;
+        while let Ok(Some(evt)) = timeout(Duration::from_millis(100), sub_rx.recv()).await {
+            if let CoreBridgeEvent::Delta { session_id, delta } = evt {
+                if delta == "stray-2" {
+                    got_stray2 = true;
+                }
+                if session_id == sid3 && delta == "hello-3" {
+                    got_hello3 = true;
+                    break;
+                }
+            }
+        }
+        assert!(!got_stray2, "tidak boleh menerima event nyasar dari sid2");
+        assert!(got_hello3, "harus menerima delta dari sid3");
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn drop_task_group_dan_active_turns_membatalkan_seluruh_task() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        let flag_tg = Arc::new(AtomicBool::new(false));
+        let flag_at = Arc::new(AtomicBool::new(false));
+
+        {
+            let mut tg = TaskGroup::new();
+            let mut at = ActiveTurns::new();
+
+            let f1 = flag_tg.clone();
+            let h1 = tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                f1.store(true, Ordering::SeqCst);
+            });
+            tg.push(h1);
+
+            let f2 = flag_at.clone();
+            let h2 = tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                f2.store(true, Ordering::SeqCst);
+            });
+            at.insert("sess-drop-test".to_string(), h2);
+
+            // Pada titik ini kedua task sedang berjalan.
+            // Saat keluar blok, tg dan at di-drop.
+        }
+
+        // Beri sedikit jeda agar sinyal abort diproses
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Kedua flag tidak boleh pernah diset true karena task di-abort saat drop
+        assert!(
+            !flag_tg.load(Ordering::SeqCst),
+            "TaskGroup harus membatalkan task saat di-drop"
+        );
+        assert!(
+            !flag_at.load(Ordering::SeqCst),
+            "ActiveTurns harus membatalkan turn saat di-drop"
+        );
+    }
 }
