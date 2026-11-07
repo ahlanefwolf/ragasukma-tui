@@ -307,50 +307,9 @@ fn set_active_status(
     });
 }
 
-fn detect_provider(model: &str) -> &'static str {
-    let lower = model.to_lowercase();
-    if lower.contains("claude") {
-        "claude"
-    } else if lower.contains("codex") || lower.contains("openai") || lower.contains("gpt") {
-        "codex"
-    } else {
-        "antigravity"
-    }
-}
-
-async fn record_turn_usage(
-    pool: &SqlitePool,
-    model: &str,
-    input_text: &str,
-    output_text: &str,
-    duration_ms: u64,
-    status: &str,
-) {
-    let input_tokens = (input_text.len() / 4).max(1);
-    let output_tokens = output_text.len() / 4;
-    let provider = detect_provider(model);
-
-    if let Err(e) = ragasukma_core::llm::usage::record_usage_to_pool(
-        pool,
-        provider,
-        model,
-        input_tokens,
-        0,
-        output_tokens,
-        duration_ms,
-        status,
-    )
-    .await
-    {
-        tracing::warn!("Failed to record turn usage to pool: {e}");
-    }
-}
-
 async fn execute_turn_pipeline(
     session_id: String,
     model_override: Option<String>,
-    prompt_for_usage: String,
-    pool: SqlitePool,
     worker_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
     is_retry: bool,
 ) {
@@ -360,27 +319,14 @@ async fn execute_turn_pipeline(
         tracing::info!("Executing session turn for session: {session_id}");
     }
 
-    let turn_start = std::time::Instant::now();
     let res = ragasukma_core::agent::executor::execute_session_turn(
         &session_id,
         model_override.as_deref(),
     )
     .await;
 
-    let duration_ms = turn_start.elapsed().as_millis() as u64;
-    let chosen_model = model_override.as_deref().unwrap_or("antigravity");
-
     match res {
         Ok(reply) => {
-            record_turn_usage(
-                &pool,
-                chosen_model,
-                &prompt_for_usage,
-                &reply,
-                duration_ms,
-                "success",
-            )
-            .await;
             let _ = worker_tx.send(CoreBridgeEvent::TurnCompleted {
                 session_id,
                 summary: reply,
@@ -392,15 +338,6 @@ async fn execute_turn_pipeline(
             } else {
                 tracing::error!("Execute session turn error: {e:?}");
             }
-            record_turn_usage(
-                &pool,
-                chosen_model,
-                &prompt_for_usage,
-                "",
-                duration_ms,
-                "error",
-            )
-            .await;
             let _ = worker_tx.send(CoreBridgeEvent::TurnFailed {
                 session_id,
                 error: e.to_string(),
@@ -505,24 +442,30 @@ pub fn spawn_core_bridge_worker(
                     active_turns.cancel(&sid);
                 }
                 CoreBridgeCommand::RetryTurn => {
-                    if let Some((retry_prompt, model_override)) = last_turn_request.clone() {
+                    if let Some((_retry_prompt, model_override)) = last_turn_request.clone() {
                         let sid_exec = active_sid.clone();
                         let exec_tx = worker_tx.clone();
-                        let pool = pool.clone();
                         let sid_key = sid_exec.clone();
+
+                        let _ = worker_tx.send(CoreBridgeEvent::StatusChange {
+                            session_id: Some(sid_exec.clone()),
+                            status: "running".to_string(),
+                        });
 
                         let handle = tokio::spawn(async move {
                             execute_turn_pipeline(
                                 sid_exec,
                                 model_override,
-                                retry_prompt,
-                                pool,
                                 exec_tx,
                                 true,
                             )
                             .await;
                         });
                         active_turns.insert(sid_key, handle);
+                    } else {
+                        let _ = worker_tx.send(CoreBridgeEvent::Error(
+                            "Cannot retry: no previous prompt turn found".to_string(),
+                        ));
                     }
                 }
                 CoreBridgeCommand::CreateProject {
@@ -790,15 +733,11 @@ pub fn spawn_core_bridge_worker(
 
                     last_turn_request = Some((prompt.clone(), model_override.clone()));
 
-                    let pool = pool.clone();
-                    let prompt_for_usage = prompt.clone();
                     let sid_key = sid_exec.clone();
                     let handle = tokio::spawn(async move {
                         execute_turn_pipeline(
                             sid_exec,
                             model_override,
-                            prompt_for_usage,
-                            pool,
                             exec_tx,
                             false,
                         )
