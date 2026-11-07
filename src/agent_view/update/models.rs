@@ -46,12 +46,8 @@ pub(crate) fn handle_action(
             agent.select_prev_modal_model();
             None
         }
-        Action::AgentModelModalChar(c) => {
-            agent.model_modal_push_char(c);
-            None
-        }
-        Action::AgentModelModalBackspace => {
-            agent.model_modal_backspace();
+        Action::AgentModelModalKey(key) => {
+            agent.model_modal_handle_key(key);
             None
         }
         Action::AgentApplyModalModel => {

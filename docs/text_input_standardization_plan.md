@@ -1,6 +1,6 @@
 # Rencana Implementasi: Standarisasi Reactive Text Input System di Terminal
 
-> **Status:** Draft / Siap Dieksekusi  
+> **Status:** In Progress (Fase 1, Fase 2, Fase 3, Fase 4, & Fase 5 Selesai)  
 > **Target:** `@ragasukma-tui/`  
 > **Tujuan Utama:** Menghapus duplikasi kode string & kursor di seluruh view/modal, menyatukan keyboard handling ke dalam komponen terpadu `TextInput`, menjamin isolasi event reaktif saat input aktif, dan menyediakan pengalaman pengguna (UX) terminal standar (CLI/Readline shortcuts).
 
@@ -182,16 +182,16 @@ pub fn render_text_input(
 ### Fase 1: Core Component & Unit Tests
 **Target Lokasi:** `src/ui/text_input.rs`, `src/ui.rs`
 
-- [ ] Definisikan struct `TextInput` dan enum `InputResult`.
-- [ ] Implementasikan operasi dasar string berorientasi batas karakter UTF-8 (`is_char_boundary`).
-- [ ] Implementasikan Readline shortcuts:
+- [x] Definisikan struct `TextInput` dan enum `InputResult`.
+- [x] Implementasikan operasi dasar string berorientasi batas karakter UTF-8 (`is_char_boundary`).
+- [x] Implementasikan Readline shortcuts:
   - `Ctrl+W`: Hapus kata sebelumnya.
   - `Ctrl+U`: Hapus hingga awal baris.
   - `Ctrl+K`: Hapus hingga akhir baris.
   - `Ctrl+A` / `Home`: Pindah kursor ke awal.
   - `Ctrl+E` / `End`: Pindah kursor ke akhir.
-- [ ] Implementasikan `handle_key(&mut self, key: KeyEvent) -> InputResult`.
-- [ ] Buat comprehensive unit tests:
+- [x] Implementasikan `handle_key(&mut self, key: KeyEvent) -> InputResult`.
+- [x] Buat comprehensive unit tests:
   - Input karakter ASCII dan UTF-8 multibyte.
   - Edge case kursor di indeks 0 dan di akhir string.
   - Paste teks panjang dan pergeseran kursor yang tepat.
@@ -202,36 +202,47 @@ pub fn render_text_input(
 ### Fase 2: Ratatui UI Widget & Precise Cursor Rendering
 **Target Lokasi:** `src/ui/text_input.rs`
 
-- [ ] Implementasikan fungsi render:
+- [x] Implementasikan fungsi render:
   `pub fn render_text_input(frame: &mut Frame, area: Rect, input: &TextInput, title: &str, theme: &Theme)`
-- [ ] Tambahkan kalkulasi horizontal scroll: jika panjang teks melebihi lebar area input, kursor tetap terlihat di viewport aktif dengan auto-scroll horizontal.
-- [ ] Tampilkan placeholder jika buffer kosong dan tidak sedang difokuskan (atau redup saat difokuskan).
-- [ ] Terapkan mask untuk field bertipe password/API key (`•` atau `*`).
-- [ ] Otomatis set `frame.set_cursor_position()` hanya bila `input.is_focused == true`.
+- [x] Tambahkan kalkulasi horizontal scroll: jika panjang teks melebihi lebar area input, kursor tetap terlihat di viewport aktif dengan auto-scroll horizontal.
+- [x] Tampilkan placeholder jika buffer kosong dan tidak sedang difokuskan (atau redup saat difokuskan).
+- [x] Terapkan mask untuk field bertipe password/API key (`•` atau `*`).
+- [x] Otomatis set `frame.set_cursor_position()` hanya bila `input.is_focused == true`.
+
+> **Catatan Penyelesaian Fase 2:**
+> - Fungsi `render_text_input` dan helper method `TextInput::render` diimplementasikan dengan rendering `Block` ber-border aktif/subtle, judul badge emas, dan styling placeholder miring/redup.
+> - Logika kalkulasi scrolling kursor horizontal (`TextInput::calculate_scroll`, `TextInput::update_scroll`) dan multiline editor viewport vertical scrolling.
+> - Dukungan masking password via `TextInput::display_content()` menggunakan karakter bullet `•`.
+> - Pengaturan kursor presisi terminal dengan `frame.set_cursor_position` yang dikurung (*clamped*) ketat di dalam `inner_area` widget.
+> - Re-ekspor `render_text_input` di `src/ui.rs`.
+> - 7 unit tests baru dengan `ratatui::backend::TestBackend` lulus 100% (total 33 unit tests aktif).
 
 ---
 
 ### Fase 3: Migrasi Modal Input Sederhana (Quick Wins)
-**Target Lokasi:** `src/agent_view/states/modal.rs`, `src/agent_view/controller.rs`, `src/agent_view/ui/modals.rs`
+**Target Lokasi:** `src/agent_view/states/`, `src/agent_view/controller.rs`, `src/agent_view/ui/modals.rs`
 
-- [ ] **Add Folder Modal**:
-  - Ganti `add_folder_modal_path: String` dengan `folder_path_input: TextInput`.
-  - Hapus action `AgentAddFolderChar` dan `AgentAddFolderBackspace`.
-  - Pasang `render_text_input` di dialog render modal.
-- [ ] **Create Project Modal**:
-  - Ganti `create_project_name: String` dengan `project_name_input: TextInput`.
-  - Hapus action `AgentCreateProjectChar` dan `AgentCreateProjectBackspace`.
-- [ ] **Model Search Modal**:
-  - Ganti `model_query: String` dengan `model_search_input: TextInput`.
-  - Hapus action `AgentModelModalChar` dan `AgentModelModalBackspace`.
-- [ ] Jalankan verifikasi `cargo check` & `cargo test` untuk memastikan modal berfungsi normal.
+- [x] **Add Folder Modal**:
+  - Ganti `add_folder_modal.input_path: String` dengan `input_path: TextInput`.
+  - Hapus action `AgentAddFolderChar` dan `AgentAddFolderBackspace`, ganti dengan `AgentAddFolderKey(KeyEvent)` dengan navigasi kursor, word jump, paste, dan delete lengkap.
+  - Pasang `render_text_input` di dialog render modal `render_add_folder_modal`.
+- [x] **Create Project Modal**:
+  - Ganti `create_project_modal.name_input: String` dengan `name_input: TextInput`.
+  - Hapus action `AgentCreateProjectChar` dan `AgentCreateProjectBackspace`, ganti dengan `AgentCreateProjectKey(KeyEvent)`.
+  - Pasang `render_text_input` di `render_create_project_modal`.
+- [x] **Model Search Modal**:
+  - Ganti `model_modal.search_query: String` dengan `search_input: TextInput`.
+  - Hapus action `AgentModelModalChar` dan `AgentModelModalBackspace`, ganti dengan `AgentModelModalKey(KeyEvent)`.
+  - Pasang `render_text_input` di header search filter model list `render_model_selector_modal`.
+- [x] Jalankan verifikasi `cargo check` & `cargo test` untuk memastikan modal berfungsi normal.
+- *(Selesai diverifikasi - 33 unit test lulus & cargo clippy bersih).*
 
 ---
 
 ### Fase 4: Migrasi Form Tab View (`custom_llm_view` & `mcp_server_view`)
 **Target Lokasi:** `src/custom_llm_view/`, `src/mcp_server_view/`
 
-- [ ] **Custom LLM View**:
+- [x] **Custom LLM View**:
   - Refactor field form modal menjadi `TextInput`:
     - `form_prefix: TextInput`
     - `form_name: TextInput`
@@ -239,24 +250,37 @@ pub fn render_text_input(
     - `form_api_key: TextInput` (dengan `is_password = true`)
   - Navigasi antar field menggunakan kembalian `InputResult::NextField` dan `InputResult::PrevField`.
   - Gunakan `render_text_input` pada form layout.
-- [ ] **MCP Server View**:
-  - Ganti `form_name`, `form_json`, `name_cursor`, `json_cursor` dengan `name_input: TextInput` dan `json_input: TextInput`.
-  - Hilangkan state kursor manual.
-- [ ] Pangkas routing key di controller masing-masing tab sehingga tidak lagi mem-parsing tombol karakter satu per satu secara manual.
+- [x] **MCP Server View**:
+  - Ganti `form_name`, `form_json`, `name_cursor`, `json_cursor` dengan `TextInput` terstandarisasi (`form_name: TextInput` single line & `form_json: TextInput` multiline editor).
+  - Hilangkan state kursor dan scrolling manual (`name_cursor`, `json_cursor`, `json_scroll`).
+  - Pasang `render_text_input` pada form layout modal.
+- [x] Pangkas routing key di controller masing-masing tab sehingga tidak lagi mem-parsing tombol karakter satu per satu secara manual (menggunakan `Action::FormKey(KeyEvent)` terpadu).
+- [x] Jalankan verifikasi `cargo test` untuk memastikan kedua modul form berjalan stabil tanpa regresi.
+
+> **Catatan Penyelesaian Fase 4:**
+> - Seluruh field form di `custom_llm_view` dan `mcp_server_view` telah bermigrasi ke struct `TextInput`.
+> - Kursor dan scrolling manual telah dihilangkan dan digantikan secara deklaratif oleh helper `render_text_input`.
+> - Pengujian unit `cargo test` lulus 100% (33 passed, 0 failed).
 
 ---
 
 ### Fase 5: Standarisasi Multi-line & Prompt Agent View
 **Target Lokasi:** `src/agent_view/states/method_input.rs`, `src/agent_view/controller.rs`
 
-- [ ] Evaluasi penggabungan `input_buffer` agent ke `TextInput` yang mendukung multi-line:
+- [x] Evaluasi penggabungan `input_buffer` agent ke `TextInput` yang mendukung multi-line:
   - Pertahankan shortcut khusus terminal: `Alt+J` untuk newline.
   - Deteksi opsional `Shift+Enter` jika terminal mendukung protokol keyboard modern.
-- [ ] **Prompt History Navigation**:
+- [x] **Prompt History Navigation**:
   - Tambahkan `history: Vec<String>` dan `history_index: Option<usize>`.
   - Navigasi `Up` pada buffer kosong atau baris paling atas untuk memuat riwayat prompt sebelumnya.
   - Navigasi `Down` untuk kembali ke prompt terbaru / draft saat ini.
-- [ ] Integrasikan autocomplete tag popover (`@folder`, `#file`) agar terpicu mulus setelah perubahan buffer di `TextInput`.
+- [x] Integrasikan autocomplete tag popover (`@folder`, `#file`) agar terpicu mulus setelah perubahan buffer di `TextInput`.
+
+> **Catatan Penyelesaian Fase 5:**
+> - Navigasi riwayat prompt terintegrasi penuh pada `AgentWorkspaceState` via `cursor_up()` / `cursor_down()`, penyimpanan otomatis saat `submit_prompt()`, deduplikasi entri berturut-turut, dan restorasi draft buffer saat kembali ke bawah.
+> - Shortcut terminal modern `Shift+Enter` serta deterministik `Alt+J` aktif untuk memasukkan baris baru multiline, dengan swallowing aman dead keys modifier Enter lain.
+> - Shortcut readline CLI (`Ctrl+W`, `Ctrl+U`, `Ctrl+K`) aktif di controller dan terhubung ke sinkronisasi visual buffer & tag popover query.
+> - Seluruh pengujian unit `cargo test` lulus 100% (35 passed, 0 failed) bebas warning kompilasi.
 
 ---
 

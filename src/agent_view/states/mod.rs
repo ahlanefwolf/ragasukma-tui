@@ -42,6 +42,11 @@ pub struct AgentWorkspaceState {
     pub auto_scroll: bool,
     pub spinner_tick: usize,
 
+    // Phase 5: Prompt History Navigation
+    pub history: Vec<String>,
+    pub history_index: Option<usize>,
+    pub history_draft: String,
+
     // Multi-Folder Workspace Support (1:1 with web agent)
     pub workspace_folders: Vec<PathBuf>,
     pub active_folder_idx: usize,
@@ -118,6 +123,9 @@ impl Default for AgentWorkspaceState {
             reasoning_expanded: false,
             auto_scroll: true,
             spinner_tick: 0,
+            history: Vec::new(),
+            history_index: None,
+            history_draft: String::new(),
             workspace_files: Vec::new(),
             selected_file_idx: 0,
             workspace_folders: Vec::new(),

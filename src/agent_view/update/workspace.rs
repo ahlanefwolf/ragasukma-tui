@@ -19,12 +19,8 @@ pub(crate) fn handle_action(
             agent.close_add_folder_modal();
             Some("Cancelled adding folder".to_string())
         }
-        Action::AgentAddFolderChar(c) => {
-            agent.add_folder_modal.input_path.push(c);
-            None
-        }
-        Action::AgentAddFolderBackspace => {
-            agent.add_folder_modal.input_path.pop();
+        Action::AgentAddFolderKey(key) => {
+            agent.add_folder_modal.input_path.handle_key(key);
             None
         }
         Action::AgentSubmitAddFolder => match agent.submit_add_folder() {
@@ -101,8 +97,8 @@ pub(crate) fn handle_action(
                 .map(|f| format!("Active folder: {}", f.display()))
         }
         Action::AgentBrowseFolderDialog => {
-            let initial = if !agent.add_folder_modal.input_path.trim().is_empty() {
-                Some(agent.add_folder_modal.input_path.as_str())
+            let initial = if !agent.add_folder_modal.input_path.value.trim().is_empty() {
+                Some(agent.add_folder_modal.input_path.value.as_str())
             } else {
                 agent
                     .workspace_folders
@@ -113,7 +109,7 @@ pub(crate) fn handle_action(
             match ragasukma_core::agent::tools::pick_folder_dialog(initial) {
                 Ok(Some(selected_path)) => {
                     let result = if agent.add_folder_modal.is_open {
-                        agent.add_folder_modal.input_path = selected_path;
+                        agent.add_folder_modal.input_path.set_value(&selected_path);
                         agent.submit_add_folder()
                     } else {
                         agent.add_workspace_folder(std::path::PathBuf::from(selected_path))
@@ -292,16 +288,12 @@ pub(crate) fn handle_action(
             agent.create_project_modal.is_open = false;
             None
         }
-        Action::AgentCreateProjectChar(c) => {
-            agent.create_project_modal.name_input.push(c);
-            None
-        }
-        Action::AgentCreateProjectBackspace => {
-            agent.create_project_modal.name_input.pop();
+        Action::AgentCreateProjectKey(key) => {
+            agent.create_project_modal.name_input.handle_key(key);
             None
         }
         Action::AgentSubmitCreateProject => {
-            let name = agent.create_project_modal.name_input.trim().to_string();
+            let name = agent.create_project_modal.name_input.value.trim().to_string();
             let res = if !name.is_empty() {
                 if let Some(tx) = bridge_cmd_tx {
                     let _ = tx.send(CoreBridgeCommand::CreateProject {

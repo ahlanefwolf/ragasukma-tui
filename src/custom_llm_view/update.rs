@@ -9,16 +9,12 @@ pub fn handle_custom_llm_action(
     action: &Action,
 ) -> Option<Option<String>> {
     match action {
-        Action::FormChar(c) if state.is_form_open => {
-            state.form_input(*c);
+        Action::FormKey(key) if state.is_form_open => {
+            state.form_handle_key(*key);
             Some(None)
         }
         Action::FormPaste(text) if state.is_form_open => {
             state.form_paste(text);
-            Some(None)
-        }
-        Action::FormBackspace if state.is_form_open => {
-            state.form_backspace();
             Some(None)
         }
         Action::FormNextField if state.is_form_open => {

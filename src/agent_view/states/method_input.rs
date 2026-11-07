@@ -193,6 +193,9 @@ impl AgentWorkspaceState {
         let vlines = self.compute_visual_lines(wrap);
         let (row, col) = self.get_cursor_visual_position(wrap);
         if row == 0 {
+            if self.history_prev() {
+                return;
+            }
             self.cursor_home();
             return;
         }
@@ -219,6 +222,9 @@ impl AgentWorkspaceState {
         let vlines = self.compute_visual_lines(wrap);
         let (row, col) = self.get_cursor_visual_position(wrap);
         if row + 1 >= vlines.len() {
+            if self.history_index.is_some() && self.history_next() {
+                return;
+            }
             self.cursor_end();
             return;
         }
@@ -237,6 +243,61 @@ impl AgentWorkspaceState {
             self.adjust_input_scroll();
             self.check_and_update_tag_query();
         }
+    }
+
+    pub fn history_prev(&mut self) -> bool {
+        if self.history.is_empty() {
+            return false;
+        }
+
+        if self.history_index.is_none() {
+            self.history_draft = self.input_buffer.clone();
+        }
+
+        let next_index = match self.history_index {
+            None => self.history.len().saturating_sub(1),
+            Some(idx) if idx > 0 => idx - 1,
+            Some(_) => return false,
+        };
+
+        self.history_index = Some(next_index);
+        if let Some(entry) = self.history.get(next_index) {
+            self.input_buffer = entry.clone();
+            self.cursor_pos = self.input_buffer.len();
+            self.ensure_valid_cursor();
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+            return true;
+        }
+        false
+    }
+
+    pub fn history_next(&mut self) -> bool {
+        let Some(idx) = self.history_index else {
+            return false;
+        };
+
+        if idx + 1 < self.history.len() {
+            let next_index = idx + 1;
+            self.history_index = Some(next_index);
+            if let Some(entry) = self.history.get(next_index) {
+                self.input_buffer = entry.clone();
+                self.cursor_pos = self.input_buffer.len();
+                self.ensure_valid_cursor();
+                self.adjust_input_scroll();
+                self.check_and_update_tag_query();
+                return true;
+            }
+        } else {
+            self.history_index = None;
+            self.input_buffer = self.history_draft.clone();
+            self.cursor_pos = self.input_buffer.len();
+            self.ensure_valid_cursor();
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+            return true;
+        }
+        false
     }
 
     pub fn insert_newline(&mut self) {
@@ -407,11 +468,84 @@ impl AgentWorkspaceState {
         }
     }
 
+    pub fn delete_word_backward(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos == 0 {
+            return;
+        }
+
+        let prefix = &self.input_buffer[..self.cursor_pos];
+        let mut chars = prefix.char_indices().rev().peekable();
+
+        // Skip trailing spaces
+        while let Some(&(_, c)) = chars.peek() {
+            if c.is_whitespace() {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        // Consume non-whitespace word characters
+        let mut target_byte = 0;
+        for (idx, c) in chars {
+            if c.is_whitespace() {
+                target_byte = idx + c.len_utf8();
+                break;
+            }
+        }
+
+        if self.input_buffer.is_char_boundary(target_byte)
+            && self.input_buffer.is_char_boundary(self.cursor_pos)
+        {
+            self.input_buffer.replace_range(target_byte..self.cursor_pos, "");
+            self.cursor_pos = target_byte;
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn clear_to_start(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos > 0 && self.input_buffer.is_char_boundary(self.cursor_pos) {
+            let line_start = self.input_buffer[..self.cursor_pos]
+                .rfind('\n')
+                .map(|idx| idx + 1)
+                .unwrap_or(0);
+            self.input_buffer.replace_range(line_start..self.cursor_pos, "");
+            self.cursor_pos = line_start;
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
+    pub fn clear_to_end(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos < self.input_buffer.len()
+            && self.input_buffer.is_char_boundary(self.cursor_pos)
+        {
+            let line_end = self.input_buffer[self.cursor_pos..]
+                .find('\n')
+                .map(|idx| self.cursor_pos + idx)
+                .unwrap_or(self.input_buffer.len());
+            self.input_buffer.replace_range(self.cursor_pos..line_end, "");
+            self.adjust_input_scroll();
+            self.check_and_update_tag_query();
+        }
+    }
+
     pub fn submit_prompt(&mut self) -> Option<String> {
         let trimmed = self.input_buffer.trim().to_string();
         if trimmed.is_empty() {
             None
         } else {
+            // Save prompt to history, deduplicating consecutive identical entries
+            if self.history.last().map(|s| s.as_str()) != Some(&trimmed) {
+                self.history.push(trimmed.clone());
+            }
+            self.history_index = None;
+            self.history_draft.clear();
+
             self.input_buffer.clear();
             self.cursor_pos = 0;
             self.tag_query = None;
@@ -509,5 +643,77 @@ impl AgentWorkspaceState {
     pub fn scroll_to_top(&mut self) {
         self.scroll_offset = self.chat_max_scroll.get();
         self.auto_scroll = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prompt_history_submission_and_navigation() {
+        let mut state = AgentWorkspaceState::default();
+
+        state.input_buffer = "first prompt".to_string();
+        state.cursor_pos = state.input_buffer.len();
+        assert_eq!(state.submit_prompt(), Some("first prompt".to_string()));
+
+        // Consecutive duplicate is ignored in history
+        state.input_buffer = "first prompt".to_string();
+        state.cursor_pos = state.input_buffer.len();
+        assert_eq!(state.submit_prompt(), Some("first prompt".to_string()));
+        assert_eq!(state.history.len(), 1);
+
+        state.input_buffer = "second prompt".to_string();
+        state.cursor_pos = state.input_buffer.len();
+        assert_eq!(state.submit_prompt(), Some("second prompt".to_string()));
+        assert_eq!(state.history.len(), 2);
+
+        // User starts typing a draft prompt
+        state.input_buffer = "my draft".to_string();
+        state.cursor_pos = state.input_buffer.len();
+
+        // Up arrow: recall second prompt (most recent)
+        state.cursor_up();
+        assert_eq!(state.input_buffer, "second prompt");
+        assert_eq!(state.history_index, Some(1));
+
+        // Up arrow again: recall first prompt
+        state.cursor_up();
+        assert_eq!(state.input_buffer, "first prompt");
+        assert_eq!(state.history_index, Some(0));
+
+        // Down arrow: recall second prompt
+        state.cursor_down();
+        assert_eq!(state.input_buffer, "second prompt");
+        assert_eq!(state.history_index, Some(1));
+
+        // Down arrow: restore draft
+        state.cursor_down();
+        assert_eq!(state.input_buffer, "my draft");
+        assert_eq!(state.history_index, None);
+    }
+
+    #[test]
+    fn test_readline_shortcuts_in_agent_input() {
+        let mut state = AgentWorkspaceState::default();
+        state.input_buffer = "hello brave new world".to_string();
+        state.cursor_pos = state.input_buffer.len();
+
+        // Ctrl+W delete word backward
+        state.delete_word_backward();
+        assert_eq!(state.input_buffer, "hello brave new ");
+        assert_eq!(state.cursor_pos, state.input_buffer.len());
+
+        // Ctrl+U clear to start of line
+        state.clear_to_start();
+        assert_eq!(state.input_buffer, "");
+        assert_eq!(state.cursor_pos, 0);
+
+        // Clear to end
+        state.input_buffer = "abc def".to_string();
+        state.cursor_pos = 3;
+        state.clear_to_end();
+        assert_eq!(state.input_buffer, "abc");
     }
 }

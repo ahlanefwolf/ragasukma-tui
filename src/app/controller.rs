@@ -10,7 +10,8 @@ impl App {
                 || self.agent.add_folder_modal.is_open
                 || self.agent.create_project_modal.is_open
                 || self.agent.pending_approval.is_some()
-                || self.agent.project_modal.is_open))
+                || self.agent.project_modal.is_open
+                || self.agent.model_modal.is_open))
             || (self.active_tab == 4 && self.custom_llm.is_form_open)
             || (self.active_tab == 5
                 && (self.mcp_server.is_form_open || self.mcp_server.delete_confirm_id.is_some()))

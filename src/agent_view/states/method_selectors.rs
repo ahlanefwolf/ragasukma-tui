@@ -155,17 +155,19 @@ impl AgentWorkspaceState {
     pub fn open_add_folder_modal(&mut self) {
         self.add_folder_modal.is_open = true;
         self.add_folder_modal.input_path.clear();
+        self.add_folder_modal.input_path.focus();
         self.add_folder_modal.validation_message = None;
     }
 
     pub fn close_add_folder_modal(&mut self) {
         self.add_folder_modal.is_open = false;
         self.add_folder_modal.input_path.clear();
+        self.add_folder_modal.input_path.unfocus();
         self.add_folder_modal.validation_message = None;
     }
 
     pub fn submit_add_folder(&mut self) -> Result<(), String> {
-        let input = self.add_folder_modal.input_path.trim().to_string();
+        let input = self.add_folder_modal.input_path.value.trim().to_string();
         if input.is_empty() {
             self.add_folder_modal.validation_message =
                 Some((false, "Path cannot be empty".to_string()));

@@ -1,3 +1,6 @@
+pub mod text_input;
+pub use text_input::{render_text_input, InputResult, TextInput, TextInputMode};
+
 use crate::app::App;
 use crate::theme::Theme;
 use ratatui::{

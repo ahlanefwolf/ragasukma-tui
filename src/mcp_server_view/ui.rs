@@ -8,6 +8,7 @@ use ratatui::{
 
 use super::types::{McpFormField, McpServerTabState};
 use crate::theme::Theme;
+use crate::ui::render_text_input;
 
 #[must_use]
 pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
@@ -177,77 +178,8 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
         ])
         .split(inner_area);
 
-    // 1. Name input
-    let name_focused = state.focused_field == McpFormField::Name;
-    let name_border_color = if name_focused {
-        Theme::BORDER_GOLD
-    } else {
-        Theme::BORDER_SUBTLE
-    };
-    let name_widget = Paragraph::new(state.form_name.as_str()).block(
-        Block::default()
-            .title(" Server Name ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(name_border_color)),
-    );
-    frame.render_widget(name_widget, inner[0]);
-
-    if name_focused {
-        let name_col_offset = state.form_name[..state.name_cursor.min(state.form_name.len())]
-            .chars()
-            .count() as u16;
-        let max_col = inner[0].width.saturating_sub(2);
-        let cursor_x = inner[0].x + 1 + name_col_offset.min(max_col.saturating_sub(1));
-        let cursor_y = inner[0].y + 1;
-        frame.set_cursor_position((cursor_x, cursor_y));
-    }
-
-    // 2. JSON Config input
-    let json_focused = state.focused_field == McpFormField::JsonConfig;
-    let json_border_color = if json_focused {
-        Theme::BORDER_GOLD
-    } else {
-        Theme::BORDER_SUBTLE
-    };
-
-    let visible_height = (inner[1].height.saturating_sub(2)) as usize;
-    let (cursor_line, cursor_col) =
-        super::state::get_line_and_col(&state.form_json, state.json_cursor);
-
-    let scroll = if cursor_line < state.json_scroll {
-        cursor_line
-    } else if cursor_line >= state.json_scroll + visible_height && visible_height > 0 {
-        cursor_line + 1 - visible_height
-    } else {
-        state.json_scroll
-    };
-
-    let all_lines: Vec<&str> = if state.form_json.is_empty() {
-        vec![""]
-    } else {
-        state.form_json.split('\n').collect()
-    };
-    let display_lines: Vec<Line> = all_lines
-        .into_iter()
-        .skip(scroll)
-        .take(visible_height)
-        .map(Line::from)
-        .collect();
-
-    let json_widget = Paragraph::new(display_lines).block(
-        Block::default()
-            .title(" Configuration (Markdown format) ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(json_border_color)),
-    );
-    frame.render_widget(json_widget, inner[1]);
-
-    if json_focused {
-        let cursor_y = inner[1].y + 1 + (cursor_line.saturating_sub(scroll)) as u16;
-        let max_col = inner[1].width.saturating_sub(2);
-        let cursor_x = inner[1].x + 1 + (cursor_col as u16).min(max_col.saturating_sub(1));
-        frame.set_cursor_position((cursor_x, cursor_y));
-    }
+    render_text_input(frame, inner[0], &state.form_name, "Server Name", &Theme);
+    render_text_input(frame, inner[1], &state.form_json, "Configuration", &Theme);
 
     // 3. Status (Enabled/Disabled toggle)
     let enabled_focused = state.focused_field == McpFormField::Enabled;

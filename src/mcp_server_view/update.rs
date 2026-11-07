@@ -9,48 +9,12 @@ pub fn handle_mcp_server_action(
     action: &Action,
 ) -> Option<Option<String>> {
     match action {
-        Action::FormChar(c) if state.is_form_open => {
-            state.form_input_char(*c);
-            Some(None)
-        }
-        Action::FormNewline if state.is_form_open => {
-            state.insert_newline();
-            Some(None)
-        }
-        Action::FormDelete if state.is_form_open => {
-            state.delete_forward();
-            Some(None)
-        }
-        Action::FormCursorLeft if state.is_form_open => {
-            state.cursor_left();
-            Some(None)
-        }
-        Action::FormCursorRight if state.is_form_open => {
-            state.cursor_right();
-            Some(None)
-        }
-        Action::FormCursorUp if state.is_form_open => {
-            state.cursor_up();
-            Some(None)
-        }
-        Action::FormCursorDown if state.is_form_open => {
-            state.cursor_down();
-            Some(None)
-        }
-        Action::FormCursorHome if state.is_form_open => {
-            state.cursor_home();
-            Some(None)
-        }
-        Action::FormCursorEnd if state.is_form_open => {
-            state.cursor_end();
+        Action::FormKey(key) if state.is_form_open => {
+            state.form_handle_key(*key);
             Some(None)
         }
         Action::FormPaste(text) if state.is_form_open => {
             state.form_paste(text);
-            Some(None)
-        }
-        Action::FormBackspace if state.is_form_open => {
-            state.form_backspace();
             Some(None)
         }
         Action::FormNextField if state.is_form_open => {

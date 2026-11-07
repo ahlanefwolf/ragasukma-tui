@@ -25,16 +25,7 @@ impl CustomLlmTabState {
                 KeyCode::Tab | KeyCode::Down => Some(Action::FormNextField),
                 KeyCode::BackTab | KeyCode::Up => Some(Action::FormPrevField),
                 KeyCode::Enter => Some(Action::FormSubmit),
-                KeyCode::Backspace => Some(Action::FormBackspace),
-                KeyCode::Char(c)
-                    if !key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::CONTROL)
-                        && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT) =>
-                {
-                    Some(Action::FormChar(c))
-                }
-                _ => None,
+                _ => Some(Action::FormKey(key)),
             };
         }
 

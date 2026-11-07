@@ -56,7 +56,7 @@ impl AgentWorkspaceState {
     }
 
     pub fn filtered_modal_models(&self) -> Vec<String> {
-        let q = self.model_modal.search_query.trim().to_lowercase();
+        let q = self.model_modal.search_input.value.trim().to_lowercase();
         if q.is_empty() {
             self.available_models.clone()
         } else {
@@ -70,7 +70,8 @@ impl AgentWorkspaceState {
 
     pub fn open_model_modal(&mut self) {
         self.model_modal.is_open = true;
-        self.model_modal.search_query.clear();
+        self.model_modal.search_input.clear();
+        self.model_modal.search_input.focus();
         let filtered = self.filtered_modal_models();
         if let Some(idx) = filtered.iter().position(|m| m == &self.active_model) {
             self.model_modal.selected_idx = idx;
@@ -81,19 +82,12 @@ impl AgentWorkspaceState {
 
     pub fn close_model_modal(&mut self) {
         self.model_modal.is_open = false;
-        self.model_modal.search_query.clear();
+        self.model_modal.search_input.clear();
+        self.model_modal.search_input.unfocus();
     }
 
-    pub fn model_modal_push_char(&mut self, c: char) {
-        self.model_modal.search_query.push(c);
-        let filtered = self.filtered_modal_models();
-        if self.model_modal.selected_idx >= filtered.len() {
-            self.model_modal.selected_idx = 0;
-        }
-    }
-
-    pub fn model_modal_backspace(&mut self) {
-        self.model_modal.search_query.pop();
+    pub fn model_modal_handle_key(&mut self, key: crossterm::event::KeyEvent) {
+        self.model_modal.search_input.handle_key(key);
         let filtered = self.filtered_modal_models();
         if self.model_modal.selected_idx >= filtered.len() {
             self.model_modal.selected_idx = 0;
@@ -124,7 +118,8 @@ impl AgentWorkspaceState {
             self.active_model = m.clone();
         }
         self.model_modal.is_open = false;
-        self.model_modal.search_query.clear();
+        self.model_modal.search_input.clear();
+        self.model_modal.search_input.unfocus();
     }
 
     pub fn start_turn(&mut self) {

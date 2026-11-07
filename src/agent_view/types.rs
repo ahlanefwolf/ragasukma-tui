@@ -1,3 +1,5 @@
+use crate::ui::TextInput;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MessageRole {
     User,
@@ -207,11 +209,23 @@ pub struct WorkspaceFolderItem {
     pub is_valid: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddFolderModalState {
     pub is_open: bool,
-    pub input_path: String,
+    pub input_path: TextInput,
     pub validation_message: Option<(bool, String)>,
+}
+
+impl Default for AddFolderModalState {
+    fn default() -> Self {
+        Self {
+            is_open: false,
+            input_path: TextInput::new_single_line()
+                .with_placeholder("Enter folder path (e.g. C:/Projects/my-app)")
+                .with_focus(true),
+            validation_message: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,11 +236,23 @@ pub struct ProjectItem {
     pub root_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelSelectorModalState {
     pub is_open: bool,
     pub selected_idx: usize,
-    pub search_query: String,
+    pub search_input: TextInput,
+}
+
+impl Default for ModelSelectorModalState {
+    fn default() -> Self {
+        Self {
+            is_open: false,
+            selected_idx: 0,
+            search_input: TextInput::new_single_line()
+                .with_placeholder("Type model name or keyword to filter...")
+                .with_focus(true),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -235,12 +261,25 @@ pub struct ProjectSwitcherModalState {
     pub selected_idx: usize,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateProjectModalState {
     pub is_open: bool,
-    pub name_input: String,
+    pub name_input: TextInput,
     pub description_input: String,
-    pub cursor_pos: usize,
     pub active_field: usize, // 0: Name, 1: Description
     pub error_message: Option<String>,
+}
+
+impl Default for CreateProjectModalState {
+    fn default() -> Self {
+        Self {
+            is_open: false,
+            name_input: TextInput::new_single_line()
+                .with_placeholder("Enter project name...")
+                .with_focus(true),
+            description_input: String::new(),
+            active_field: 0,
+            error_message: None,
+        }
+    }
 }

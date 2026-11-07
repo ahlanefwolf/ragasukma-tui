@@ -1,10 +1,12 @@
 use ragasukma_core::llm::providers::custom::{
-    CustomLlmAccount, load_accounts, save_accounts, validate_account,
+    load_accounts, save_accounts, CustomLlmAccount,
 };
+use crate::ui::TextInput;
 
 use super::types::{CustomLlmTabState, FormField};
 
 impl CustomLlmTabState {
+    #[must_use]
     pub fn new() -> Self {
         let accounts = load_accounts();
         let models = Vec::new();
@@ -18,10 +20,12 @@ impl CustomLlmTabState {
             selected_model_idx: 0,
             is_form_open: false,
             editing_prefix: None,
-            form_prefix: String::new(),
-            form_name: String::new(),
-            form_base_url: String::new(),
-            form_api_key: String::new(),
+            form_prefix: TextInput::new_single_line().with_placeholder("e.g. groq"),
+            form_name: TextInput::new_single_line().with_placeholder("e.g. Groq Cloud"),
+            form_base_url: TextInput::new_single_line()
+                .with_placeholder("e.g. https://api.groq.com/openai/v1"),
+            form_api_key: TextInput::new_single_line()
+                .with_placeholder("e.g. gsk_... (leave empty for local)"),
             form_enabled: true,
             focused_field: FormField::Prefix,
             form_error: None,
@@ -104,6 +108,13 @@ impl CustomLlmTabState {
         }
     }
 
+    pub fn update_field_focus(&mut self) {
+        self.form_prefix.is_focused = self.focused_field == FormField::Prefix;
+        self.form_name.is_focused = self.focused_field == FormField::Name;
+        self.form_base_url.is_focused = self.focused_field == FormField::BaseUrl;
+        self.form_api_key.is_focused = self.focused_field == FormField::ApiKey;
+    }
+
     pub fn open_add_form(&mut self) {
         self.editing_prefix = None;
         self.form_prefix.clear();
@@ -114,20 +125,22 @@ impl CustomLlmTabState {
         self.focused_field = FormField::Prefix;
         self.form_error = None;
         self.is_form_open = true;
+        self.update_field_focus();
     }
 
     pub fn open_edit_form(&mut self) {
         let acc_opt = self.selected_account().cloned();
         if let Some(acc) = acc_opt {
             self.editing_prefix = Some(acc.prefix.clone());
-            self.form_prefix = acc.prefix.clone();
-            self.form_name = acc.name.clone();
-            self.form_base_url = acc.base_url.clone();
-            self.form_api_key = acc.api_key.clone();
+            self.form_prefix.set_value(&acc.prefix);
+            self.form_name.set_value(&acc.name);
+            self.form_base_url.set_value(&acc.base_url);
+            self.form_api_key.set_value(&acc.api_key);
             self.form_enabled = acc.enabled;
             self.focused_field = FormField::Name;
             self.form_error = None;
             self.is_form_open = true;
+            self.update_field_focus();
         }
     }
 
@@ -147,58 +160,36 @@ impl CustomLlmTabState {
 
     pub fn form_next_field(&mut self) {
         self.focused_field = self.focused_field.next();
+        self.update_field_focus();
     }
 
     pub fn form_prev_field(&mut self) {
         self.focused_field = self.focused_field.prev();
+        self.update_field_focus();
     }
 
-    pub fn sanitize_form_text(text: &str) -> String {
-        text.replace(['\r', '\n', '\t'], " ")
-            .chars()
-            .filter(|c| !c.is_control())
-            .collect::<String>()
-    }
-
-    pub fn form_paste(&mut self, text: &str) {
-        let cleaned = Self::sanitize_form_text(text);
-        if cleaned.is_empty() {
-            return;
-        }
-
+    pub fn form_handle_key(&mut self, key: crossterm::event::KeyEvent) {
         match self.focused_field {
             FormField::Prefix => {
-                for c in cleaned.chars() {
+                if let crossterm::event::KeyCode::Char(c) = key.code {
                     if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
-                        self.form_prefix.push(c.to_ascii_lowercase());
+                        self.form_prefix.insert_char(c.to_ascii_lowercase());
                     }
+                } else {
+                    self.form_prefix.handle_key(key);
                 }
             }
             FormField::Name => {
-                self.form_name.push_str(&cleaned);
+                self.form_name.handle_key(key);
             }
             FormField::BaseUrl => {
-                self.form_base_url.push_str(cleaned.trim());
+                self.form_base_url.handle_key(key);
             }
             FormField::ApiKey => {
-                self.form_api_key.push_str(cleaned.trim());
+                self.form_api_key.handle_key(key);
             }
-            FormField::Enabled | FormField::SaveBtn | FormField::CancelBtn => {}
-        }
-    }
-
-    pub fn form_input(&mut self, c: char) {
-        match self.focused_field {
-            FormField::Prefix => {
-                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
-                    self.form_prefix.push(c.to_ascii_lowercase());
-                }
-            }
-            FormField::Name => self.form_name.push(c),
-            FormField::BaseUrl => self.form_base_url.push(c),
-            FormField::ApiKey => self.form_api_key.push(c),
             FormField::Enabled => {
-                if c == ' ' {
+                if key.code == crossterm::event::KeyCode::Char(' ') {
                     self.form_enabled = !self.form_enabled;
                 }
             }
@@ -206,20 +197,18 @@ impl CustomLlmTabState {
         }
     }
 
-    pub fn form_backspace(&mut self) {
+    pub fn form_paste(&mut self, text: &str) {
         match self.focused_field {
             FormField::Prefix => {
-                self.form_prefix.pop();
+                for c in text.chars() {
+                    if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                        self.form_prefix.insert_char(c.to_ascii_lowercase());
+                    }
+                }
             }
-            FormField::Name => {
-                self.form_name.pop();
-            }
-            FormField::BaseUrl => {
-                self.form_base_url.pop();
-            }
-            FormField::ApiKey => {
-                self.form_api_key.pop();
-            }
+            FormField::Name => self.form_name.paste(text),
+            FormField::BaseUrl => self.form_base_url.paste(text),
+            FormField::ApiKey => self.form_api_key.paste(text),
             _ => {}
         }
     }
@@ -231,24 +220,19 @@ impl CustomLlmTabState {
     pub fn form_submit(&mut self) -> Result<String, String> {
         let existing = self
             .editing_prefix
-            .as_deref()
-            .and_then(|orig| self.accounts.iter().find(|a| a.prefix == orig));
+            .as_ref()
+            .and_then(|p| self.accounts.iter().find(|a| &a.prefix == p));
 
         let candidate = CustomLlmAccount {
-            prefix: self.form_prefix.trim().to_string(),
-            name: self.form_name.trim().to_string(),
-            base_url: self.form_base_url.trim().to_string(),
-            api_key: self.form_api_key.trim().to_string(),
+            prefix: self.form_prefix.value.trim().to_string(),
+            name: self.form_name.value.trim().to_string(),
+            base_url: self.form_base_url.value.trim().to_string(),
+            api_key: self.form_api_key.value.trim().to_string(),
             enabled: self.form_enabled,
-            context_window: existing.and_then(|a| a.context_window),
             native_reasoning: existing.and_then(|a| a.native_reasoning),
+            context_window: existing.and_then(|a| a.context_window),
         };
 
-        if let Err(err) = validate_account(&candidate) {
-            let msg = err.to_string();
-            self.form_error = Some(msg.clone());
-            return Err(msg);
-        }
 
         let is_editing = self.editing_prefix.is_some();
         let original_prefix = self.editing_prefix.as_deref().unwrap_or("");

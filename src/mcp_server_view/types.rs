@@ -1,4 +1,5 @@
 use ragasukma_core::agent::models::{McpServer, McpServerTool};
+use crate::ui::TextInput;
 
 pub trait McpServerExt {
     fn config_value(&self) -> serde_json::Value;
@@ -51,14 +52,11 @@ pub struct McpServerTabState {
     // Form modal state
     pub is_form_open: bool,
     pub editing_id: Option<String>,
-    pub form_name: String,
-    pub form_json: String,
+    pub form_name: TextInput,
+    pub form_json: TextInput,
     pub form_enabled: bool,
     pub focused_field: McpFormField,
     pub form_error: Option<String>,
-    pub name_cursor: usize,
-    pub json_cursor: usize,
-    pub json_scroll: usize,
 
     // Tools list modal state
     pub is_tools_modal_open: bool,

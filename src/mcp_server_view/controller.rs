@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 
 use super::types::McpServerTabState;
 use crate::app::Action;
@@ -50,34 +50,16 @@ impl McpServerTabState {
                 KeyCode::Esc => Some(Action::CancelForm),
                 KeyCode::Tab => Some(Action::FormNextField),
                 KeyCode::BackTab => Some(Action::FormPrevField),
-                KeyCode::Left => Some(Action::FormCursorLeft),
-                KeyCode::Right => Some(Action::FormCursorRight),
-                KeyCode::Up => Some(Action::FormCursorUp),
-                KeyCode::Down => Some(Action::FormCursorDown),
-                KeyCode::Home => Some(Action::FormCursorHome),
-                KeyCode::End => Some(Action::FormCursorEnd),
-                KeyCode::Delete => Some(Action::FormDelete),
-                KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    Some(Action::FormCursorHome)
-                }
-                KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    Some(Action::FormCursorEnd)
-                }
                 KeyCode::Enter if self.focused_field == super::types::McpFormField::CancelBtn => {
                     Some(Action::CancelForm)
                 }
-                KeyCode::Enter if self.focused_field == super::types::McpFormField::JsonConfig => {
-                    Some(Action::FormNewline)
+                KeyCode::Enter if self.focused_field == super::types::McpFormField::SaveBtn => {
+                    Some(Action::FormSubmit)
                 }
-                KeyCode::Enter => Some(Action::FormSubmit),
-                KeyCode::Backspace => Some(Action::FormBackspace),
-                KeyCode::Char(c)
-                    if !key.modifiers.contains(KeyModifiers::CONTROL)
-                        && !key.modifiers.contains(KeyModifiers::ALT) =>
-                {
-                    Some(Action::FormChar(c))
+                KeyCode::Enter if self.focused_field == super::types::McpFormField::Name => {
+                    Some(Action::FormNextField)
                 }
-                _ => None,
+                _ => Some(Action::FormKey(key)),
             };
         }
 

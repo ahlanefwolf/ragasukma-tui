@@ -55,6 +55,18 @@ pub(crate) fn handle_action(
             agent.cursor_end();
             None
         }
+        Action::AgentInputDeleteWordBackward => {
+            agent.delete_word_backward();
+            None
+        }
+        Action::AgentInputClearToStart => {
+            agent.clear_to_start();
+            None
+        }
+        Action::AgentInputClearToEnd => {
+            agent.clear_to_end();
+            None
+        }
         Action::AgentClearInput => {
             agent.clear_input();
             agent.close_tag_query();

@@ -25,9 +25,7 @@ impl AgentWorkspaceState {
                 KeyCode::Esc => Some(Action::AgentCloseAddFolderModal),
                 KeyCode::Enter => Some(Action::AgentSubmitAddFolder),
                 KeyCode::Tab => Some(Action::AgentBrowseFolderDialog),
-                KeyCode::Backspace => Some(Action::AgentAddFolderBackspace),
-                KeyCode::Char(c) => Some(Action::AgentAddFolderChar(c)),
-                _ => None,
+                _ => Some(Action::AgentAddFolderKey(key)),
             };
         }
 
@@ -49,9 +47,7 @@ impl AgentWorkspaceState {
             return match code {
                 KeyCode::Esc => Some(Action::AgentCloseCreateProjectModal),
                 KeyCode::Enter => Some(Action::AgentSubmitCreateProject),
-                KeyCode::Backspace => Some(Action::AgentCreateProjectBackspace),
-                KeyCode::Char(c) => Some(Action::AgentCreateProjectChar(c)),
-                _ => None,
+                _ => Some(Action::AgentCreateProjectKey(key)),
             };
         }
 
@@ -59,16 +55,14 @@ impl AgentWorkspaceState {
         if self.model_modal.is_open {
             return match code {
                 KeyCode::Esc => Some(Action::AgentCloseModelModal),
-                KeyCode::Down | KeyCode::Tab | KeyCode::Char('j') => {
+                KeyCode::Down | KeyCode::Tab => {
                     Some(Action::AgentSelectNextModalModel)
                 }
-                KeyCode::Up | KeyCode::BackTab | KeyCode::Char('k') => {
+                KeyCode::Up | KeyCode::BackTab => {
                     Some(Action::AgentSelectPrevModalModel)
                 }
                 KeyCode::Enter => Some(Action::AgentApplyModalModel),
-                KeyCode::Backspace => Some(Action::AgentModelModalBackspace),
-                KeyCode::Char(c) => Some(Action::AgentModelModalChar(c)),
-                _ => None,
+                _ => Some(Action::AgentModelModalKey(key)),
             };
         }
 
@@ -114,11 +108,14 @@ impl AgentWorkspaceState {
                     return Some(Action::AgentInputNewline);
                 }
 
-                // Bare Enter = send. Any other Enter/modifier combo is a DEAD KEY:
-                // swallowed so it triggers neither newline nor submit.
+                // Bare Enter = send. Shift+Enter = newline (modern terminal enhanced protocol).
+                // Other Enter combos remain swallowed dead keys.
                 if code == KeyCode::Enter {
                     if !shift && !ctrl && !alt {
                         return Some(Action::AgentSubmitPrompt);
+                    }
+                    if shift && !ctrl && !alt {
+                        return Some(Action::AgentInputNewline);
                     }
                     return None;
                 }
@@ -129,6 +126,9 @@ impl AgentWorkspaceState {
                     KeyCode::Char('q') => Some(Action::Quit),
                     KeyCode::Char('a') => Some(Action::AgentInputCursorHome),
                     KeyCode::Char('e') => Some(Action::AgentInputCursorEnd),
+                    KeyCode::Char('w') => Some(Action::AgentInputDeleteWordBackward),
+                    KeyCode::Char('u') => Some(Action::AgentInputClearToStart),
+                    KeyCode::Char('k') => Some(Action::AgentInputClearToEnd),
                     _ => None,
                 };
             }
@@ -284,6 +284,20 @@ mod tests {
         assert_eq!(
             state.handle_key(enter_event),
             Some(Action::AgentSubmitPrompt)
+        );
+
+        // Shift+Enter inserts newline
+        let shift_enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT);
+        assert_eq!(
+            state.handle_key(shift_enter),
+            Some(Action::AgentInputNewline)
+        );
+
+        // Ctrl+W deletes word backward
+        let ctrl_w = KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL);
+        assert_eq!(
+            state.handle_key(ctrl_w),
+            Some(Action::AgentInputDeleteWordBackward)
         );
     }
 }

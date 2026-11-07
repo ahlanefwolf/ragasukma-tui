@@ -14,6 +14,7 @@ use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::{AddFolderModalState, CreateProjectModalState, FileTagQuery};
 use crate::app::types::{DiffApprovalState, DiffLineType};
 use crate::theme::Theme;
+use crate::ui::render_text_input;
 
 pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &AgentWorkspaceState) {
     let popup_area = centered_rect(60, 50, area);
@@ -100,37 +101,42 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
 }
 
 pub fn render_create_project_modal(frame: &mut Frame, area: Rect, modal: &CreateProjectModalState) {
-    let popup_area = centered_rect(50, 20, area);
+    let popup_area = centered_rect(55, 20, area);
     frame.render_widget(Clear, popup_area);
 
-    let block = Block::default()
+    let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
         .title(Span::styled("  Create New Project ", Theme::badge_gold()));
 
-    let content = vec![
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "Project Name: ",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(&modal.name_input, Style::default().fg(Theme::TEXT_PRIMARY)),
-            Span::styled("█", Style::default().fg(Color::White)),
-        ]),
-    ];
+    let inner_area = outer_block.inner(popup_area);
+    frame.render_widget(outer_block, popup_area);
 
-    let paragraph = Paragraph::new(content).block(block);
-    frame.render_widget(paragraph, popup_area);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Input field
+            Constraint::Min(1),    // Hint
+        ])
+        .split(inner_area);
+
+    render_text_input(frame, chunks[0], &modal.name_input, "Project Name", &Theme);
+
+    let hint = Paragraph::new(Line::from(vec![
+        Span::styled("  Press ", Style::default().fg(Theme::TEXT_MUTED)),
+        Span::styled("Enter", Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)),
+        Span::styled(" to create, ", Style::default().fg(Theme::TEXT_MUTED)),
+        Span::styled("Esc", Style::default().fg(Theme::TEXT_SECONDARY)),
+        Span::styled(" to cancel", Style::default().fg(Theme::TEXT_MUTED)),
+    ]));
+    frame.render_widget(hint, chunks[1]);
 }
 
 pub fn render_add_folder_modal(frame: &mut Frame, area: Rect, modal: &AddFolderModalState) {
-    let popup_area = centered_rect(55, 22, area);
+    let popup_area = centered_rect(60, 24, area);
     frame.render_widget(Clear, popup_area);
 
-    let block = Block::default()
+    let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border_focused())
         .title(Span::styled(
@@ -138,37 +144,41 @@ pub fn render_add_folder_modal(frame: &mut Frame, area: Rect, modal: &AddFolderM
             Theme::badge_gold(),
         ));
 
-    let mut lines = vec![
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "Folder Path: ",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(&modal.input_path, Style::default().fg(Theme::TEXT_PRIMARY)),
-            Span::styled("█", Style::default().fg(Color::White)),
-        ]),
-        Line::from(""),
-    ];
+    let inner_area = outer_block.inner(popup_area);
+    frame.render_widget(outer_block, popup_area);
 
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Input field
+            Constraint::Min(2),    // Status / hint
+        ])
+        .split(inner_area);
+
+    render_text_input(frame, chunks[0], &modal.input_path, "Folder Path", &Theme);
+
+    let mut info_lines = Vec::new();
     if let Some((is_valid, ref msg)) = modal.validation_message {
         let style = if is_valid {
             Style::default().fg(Color::Green)
         } else {
             Style::default().fg(Color::Red)
         };
-        lines.push(Line::from(Span::styled(format!("  {}", msg), style)));
+        info_lines.push(Line::from(Span::styled(format!("  {}", msg), style)));
     } else {
-        lines.push(Line::from(Span::styled(
-            "  Press Enter to validate & add folder, Esc to cancel",
-            Style::default().fg(Theme::TEXT_SECONDARY),
-        )));
+        info_lines.push(Line::from(vec![
+            Span::styled("  Press ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Enter", Style::default().fg(Theme::CYAN_ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled(" to validate & add, ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Tab", Style::default().fg(Theme::CYAN_ACCENT)),
+            Span::styled(" to browse, ", Style::default().fg(Theme::TEXT_MUTED)),
+            Span::styled("Esc", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled(" to cancel", Style::default().fg(Theme::TEXT_MUTED)),
+        ]));
     }
 
-    let p = Paragraph::new(lines).block(block);
-    frame.render_widget(p, popup_area);
+    let p = Paragraph::new(info_lines);
+    frame.render_widget(p, chunks[1]);
 }
 
 pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTagQuery) {
@@ -377,33 +387,14 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
         .split(inner_area);
 
     // Render Search input box
-    let search_query = &state.model_modal.search_query;
-    let query_display = if search_query.is_empty() {
-        Span::styled(
-            "Type model name or keyword to filter... ",
-            Style::default().fg(Theme::TEXT_SECONDARY),
-        )
-    } else {
-        Span::styled(
-            format!("{}_", search_query),
-            Style::default().fg(Theme::TEXT_PRIMARY),
-        )
-    };
-
-    let search_box = Paragraph::new(Line::from(vec![
-        Span::styled("  ", Style::default().fg(Theme::CYAN_ACCENT)),
-        query_display,
-    ]))
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Theme::border_focused())
-            .title(Span::styled(
-                format!(" Search [{}/{}] ", total, state.available_models.len()),
-                Theme::badge_gold(),
-            )),
+    let search_title = format!(" Search [{}/{}] ", total, state.available_models.len());
+    render_text_input(
+        frame,
+        chunks[0],
+        &state.model_modal.search_input,
+        &search_title,
+        &Theme,
     );
-    frame.render_widget(search_box, chunks[0]);
 
     // Render Model list
     let list_area = chunks[1];
@@ -418,6 +409,7 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
     let mut items: Vec<ListItem> = Vec::new();
 
     if total == 0 {
+        let search_query = &state.model_modal.search_input.value;
         let msg = if search_query.is_empty() {
             " [No models available] "
         } else {

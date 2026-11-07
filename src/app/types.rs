@@ -1,3 +1,5 @@
+use crossterm::event::KeyEvent;
+
 use crate::core_bridge::{CoreBridgeCommand, CoreBridgeEvent};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,6 +81,9 @@ pub enum Action {
     AgentInputCursorDown,
     AgentInputCursorHome,
     AgentInputCursorEnd,
+    AgentInputDeleteWordBackward,
+    AgentInputClearToStart,
+    AgentInputClearToEnd,
     AgentClearInput,
     AgentClearChat,
     AgentSubmitPrompt,
@@ -133,8 +138,7 @@ pub enum Action {
     AgentSelectNextModalModel,
     AgentSelectPrevModalModel,
     AgentApplyModalModel,
-    AgentModelModalChar(char),
-    AgentModelModalBackspace,
+    AgentModelModalKey(KeyEvent),
     AgentRefreshModels,
 
     // Project-scoped MCP server toggling (inspector panel)
@@ -146,8 +150,7 @@ pub enum Action {
     // Multi-Folder Workspace Support (1:1 with web agent)
     AgentOpenAddFolderModal,
     AgentCloseAddFolderModal,
-    AgentAddFolderChar(char),
-    AgentAddFolderBackspace,
+    AgentAddFolderKey(KeyEvent),
     AgentSubmitAddFolder,
     AgentRemoveActiveFolder,
     AgentNextFolder,
@@ -164,24 +167,14 @@ pub enum Action {
     AgentDeleteProject,
     AgentOpenCreateProjectModal,
     AgentCloseCreateProjectModal,
-    AgentCreateProjectChar(char),
-    AgentCreateProjectBackspace,
+    AgentCreateProjectKey(KeyEvent),
     AgentSubmitCreateProject,
 
     AgentPasteClipboard,
     AgentCopyActive,
     AgentSelectAllInput,
 
-    FormChar(char),
-    FormBackspace,
-    FormDelete,
-    FormNewline,
-    FormCursorLeft,
-    FormCursorRight,
-    FormCursorUp,
-    FormCursorDown,
-    FormCursorHome,
-    FormCursorEnd,
+    FormKey(KeyEvent),
     FormPaste(String),
     FormNextField,
     FormPrevField,

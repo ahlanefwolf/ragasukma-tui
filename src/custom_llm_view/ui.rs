@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::custom_llm_view::types::{CustomLlmFocus, CustomLlmTabState, FormField};
 use crate::theme::Theme;
-
+use crate::ui::render_text_input;
 pub fn render_custom_llm_tab(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -294,54 +294,14 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
         ])
         .split(inner_area);
 
-    let prefix_focused = state.focused_field == FormField::Prefix;
-    render_text_field(
-        frame,
-        inner[1],
-        "Model Prefix",
-        "",
-        state.form_prefix.as_str(),
-        prefix_focused,
-        "e.g. groq, vllm, ollama",
-    );
-
-    let name_focused = state.focused_field == FormField::Name;
-    render_text_field(
-        frame,
-        inner[3],
-        "Display Name",
-        "",
-        state.form_name.as_str(),
-        name_focused,
-        "e.g. Groq Cloud LPU",
-    );
-
-    let url_focused = state.focused_field == FormField::BaseUrl;
-    render_text_field(
-        frame,
-        inner[5],
-        "Base URL",
-        "",
-        state.form_base_url.as_str(),
-        url_focused,
-        "e.g. https://api.groq.com/openai/v1",
-    );
+    render_text_input(frame, inner[1], &state.form_prefix, "Model Prefix", &Theme);
+    render_text_input(frame, inner[3], &state.form_name, "Display Name", &Theme);
+    render_text_input(frame, inner[5], &state.form_base_url, "Base URL", &Theme);
 
     let key_focused = state.focused_field == FormField::ApiKey;
-    let masked_key: String = if key_focused {
-        state.form_api_key.clone()
-    } else {
-        "•".repeat(state.form_api_key.len())
-    };
-    render_text_field(
-        frame,
-        inner[7],
-        "API Key",
-        "",
-        &masked_key,
-        key_focused,
-        "e.g. gsk_... (leave empty for local)",
-    );
+    let mut api_key_input = state.form_api_key.clone();
+    api_key_input.is_password = !key_focused;
+    render_text_input(frame, inner[7], &api_key_input, "API Key", &Theme);
 
     let enabled_text = if state.form_enabled {
         " [✓] Provider Enabled for auto-routing "
@@ -441,80 +401,6 @@ fn render_delete_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
     };
 
     frame.render_widget(para, inner_area);
-}
-
-fn render_text_field(
-    frame: &mut Frame,
-    area: Rect,
-    title: &str,
-    icon: &str,
-    value: &str,
-    is_focused: bool,
-    placeholder: &str,
-) {
-    let title_text = if is_focused {
-        format!(" {icon} {title} [Active] ")
-    } else {
-        format!(" {icon} {title} ")
-    };
-
-    let title_span = if is_focused {
-        Span::styled(title_text, Theme::badge_gold())
-    } else {
-        Span::styled(title_text, Theme::badge_gray())
-    };
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(if is_focused {
-            Theme::border_focused()
-        } else {
-            Theme::border_subtle()
-        })
-        .title(title_span)
-        .style(Theme::block_base());
-
-    let prompt_prefix = if is_focused {
-        Span::styled(
-            "❯ ",
-            ratatui::style::Style::default()
-                .fg(Theme::GOLD_PRIMARY)
-                .add_modifier(Modifier::BOLD),
-        )
-    } else {
-        Span::styled("❯ ", Theme::text_secondary())
-    };
-
-    let prompt_width = 2usize;
-    let available_width = (area.width.saturating_sub(2) as usize).saturating_sub(prompt_width);
-
-    let content_span = if value.is_empty() {
-        Span::styled(
-            placeholder,
-            Theme::text_secondary().add_modifier(Modifier::ITALIC),
-        )
-    } else {
-        let total_chars = value.chars().count();
-        let scroll_offset = if total_chars > available_width && available_width > 0 {
-            total_chars - available_width
-        } else {
-            0
-        };
-        let visible_slice: String = value.chars().skip(scroll_offset).collect();
-        Span::styled(visible_slice, Theme::text_primary())
-    };
-
-    let para = Paragraph::new(Line::from(vec![prompt_prefix, content_span])).block(block);
-    frame.render_widget(para, area);
-
-    if is_focused {
-        let prompt_width_u16 = 2u16; // "❯ "
-        let cursor_offset = (value.chars().count() as u16).min(available_width as u16);
-        let cursor_x = (area.x + 1 + prompt_width_u16 + cursor_offset)
-            .min(area.x + area.width.saturating_sub(2));
-        let cursor_y = area.y + 1;
-        frame.set_cursor_position((cursor_x, cursor_y));
-    }
 }
 
 pub fn get_footer_key_hints(state: &CustomLlmTabState) -> Vec<Span<'static>> {

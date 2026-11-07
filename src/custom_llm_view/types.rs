@@ -1,4 +1,5 @@
 use ragasukma_core::llm::providers::custom::CustomLlmAccount;
+use crate::ui::TextInput;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormField {
@@ -56,10 +57,10 @@ pub struct CustomLlmTabState {
     // Modal Form State (Add / Edit)
     pub is_form_open: bool,
     pub editing_prefix: Option<String>,
-    pub form_prefix: String,
-    pub form_name: String,
-    pub form_base_url: String,
-    pub form_api_key: String,
+    pub form_prefix: TextInput,
+    pub form_name: TextInput,
+    pub form_base_url: TextInput,
+    pub form_api_key: TextInput,
     pub form_enabled: bool,
     pub focused_field: FormField,
     pub form_error: Option<String>,
