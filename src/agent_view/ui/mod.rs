@@ -210,7 +210,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         hints.push(Span::styled(" [TAG POPUP] ", Theme::badge_cyan()));
         hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
         hints.push(Span::raw("Select "));
-        hints.push(Span::styled(" [Enter/Tab] ", Theme::key_badge()));
+        hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
         hints.push(Span::raw("Insert "));
         hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
         hints.push(Span::raw("Close "));
@@ -290,7 +290,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
             if state.tag_query.is_some() {
                 hints.push(Span::styled(" [↑/↓] ", Theme::key_badge()));
                 hints.push(Span::raw("Select Tag "));
-                hints.push(Span::styled(" [Tab/Enter] ", Theme::key_badge()));
+                hints.push(Span::styled(" [Tab] ", Theme::key_badge()));
                 hints.push(Span::raw("Apply "));
                 hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
                 hints.push(Span::raw("Cancel "));
@@ -304,6 +304,8 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
                 }
                 hints.push(Span::styled(" [Alt+J] ", Theme::key_badge()));
                 hints.push(Span::raw("Newline "));
+                hints.push(Span::styled(" [@] ", Theme::key_badge()));
+                hints.push(Span::raw("Tag "));
                 hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
                 hints.push(Span::raw("Exit Insert "));
             }

@@ -81,6 +81,21 @@ impl AgentWorkspaceState {
                 return None;
             }
 
+            // Tag query navigation if active.
+            // Checked BEFORE the Enter/newline handling below so that when a tag
+            // query is open, Tab selects the tag and Enter is NOT hijacked by the
+            // submit path.
+            if self.tag_query.is_some() {
+                match code {
+                    KeyCode::Esc => return Some(Action::AgentCloseTagQuery),
+                    KeyCode::Down => return Some(Action::AgentTagQueryNext),
+                    KeyCode::Up => return Some(Action::AgentTagQueryPrev),
+                    // Only Tab applies a tag — Enter must NOT select a tag.
+                    KeyCode::Tab => return Some(Action::AgentApplyTag),
+                    _ => {}
+                }
+            }
+
             // --- Newline: EXCLUSIVELY Alt+J. Nothing else may produce a newline. ---
             // Checked BEFORE the CONTROL shortcut block below so no other combo can
             // ever reach the newline path.
@@ -115,17 +130,6 @@ impl AgentWorkspaceState {
                     KeyCode::Char('e') => Some(Action::AgentInputCursorEnd),
                     _ => None,
                 };
-            }
-
-            // Tag query navigation if active
-            if self.tag_query.is_some() {
-                match code {
-                    KeyCode::Esc => return Some(Action::AgentCloseTagQuery),
-                    KeyCode::Down => return Some(Action::AgentTagQueryNext),
-                    KeyCode::Up => return Some(Action::AgentTagQueryPrev),
-                    KeyCode::Tab | KeyCode::Enter => return Some(Action::AgentApplyTag),
-                    _ => {}
-                }
             }
 
             return match code {

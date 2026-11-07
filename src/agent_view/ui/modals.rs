@@ -295,7 +295,7 @@ pub fn render_tag_query_popup(frame: &mut Frame, anchor_area: Rect, tq: &FileTag
     let bottom_line = Line::from(vec![
         Span::styled(" [↑/↓] ", Theme::key_badge()),
         Span::raw("Scroll "),
-        Span::styled(" [Tab/Enter] ", Theme::key_badge()),
+        Span::styled(" [Tab] ", Theme::key_badge()),
         Span::raw("Tag "),
         Span::styled(" [Esc] ", Theme::key_badge()),
         Span::raw("Close "),
