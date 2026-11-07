@@ -165,7 +165,7 @@ fn render_error_modal(frame: &mut Frame, err_msg: &str, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Theme::status_danger())
         .title(Span::styled(
-            " ⚠ SYSTEM ERROR ",
+            " ! SYSTEM ERROR ",
             Theme::status_danger().add_modifier(Modifier::BOLD),
         ));
     frame.render_widget(outer_block, popup_area);

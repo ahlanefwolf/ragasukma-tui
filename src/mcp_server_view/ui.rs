@@ -224,7 +224,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
     // 3. Status (Enabled/Disabled toggle)
     let enabled_focused = state.focused_field == McpFormField::Enabled;
     let (box_char, status_text) = if state.form_enabled {
-        ("[✔]", "Enabled")
+        ("[✓]", "Enabled")
     } else {
         ("[ ]", "Disabled")
     };
@@ -247,7 +247,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
     // 4. Error line
     if let Some(err) = &state.form_error {
         let err_widget =
-            Paragraph::new(format!("⚠ {err}")).style(Style::default().fg(Theme::STATUS_ERROR));
+            Paragraph::new(format!("! {err}")).style(Style::default().fg(Theme::STATUS_ERROR));
         frame.render_widget(err_widget, inner[3]);
     }
 

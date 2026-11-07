@@ -344,7 +344,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
     );
 
     let enabled_text = if state.form_enabled {
-        " [✔] Provider Enabled for auto-routing "
+        " [✓] Provider Enabled for auto-routing "
     } else {
         " [ ] Provider Disabled "
     };
@@ -366,7 +366,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState) {
 
     if let Some(err) = &state.form_error {
         let err_para = Paragraph::new(Line::from(vec![
-            Span::styled(" ⚠ ", Theme::text_gold()),
+            Span::styled(" ! ", Theme::text_gold()),
             Span::styled(err, Theme::text_gold()),
         ]));
         frame.render_widget(err_para, inner[10]);
@@ -401,7 +401,7 @@ fn render_delete_modal(frame: &mut Frame, area: Rect, state: &CustomLlmTabState)
         .borders(Borders::ALL)
         .border_style(Theme::text_gold())
         .title(Span::styled(
-            " ⚠ Confirm Deletion ",
+            " ! Confirm Deletion ",
             Theme::text_gold().add_modifier(Modifier::BOLD),
         ))
         .style(Theme::block_base());

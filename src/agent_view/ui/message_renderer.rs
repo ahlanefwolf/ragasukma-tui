@@ -265,7 +265,7 @@ pub fn render_message_to_lines<'a>(
             ToolExecutionStatus::Running => "⏳ Running...",
             ToolExecutionStatus::Success => "✓ Completed",
             ToolExecutionStatus::Failed => "✗ Failed",
-            ToolExecutionStatus::PendingApproval => "⚠ Pending Approval",
+            ToolExecutionStatus::PendingApproval => "! Pending Approval",
         };
         let status_color = match tc.status {
             ToolExecutionStatus::Running => Theme::CYAN_ACCENT,

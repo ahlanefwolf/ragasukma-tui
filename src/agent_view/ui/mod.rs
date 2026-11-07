@@ -195,7 +195,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // 4. Modal: Pending Tool Approval / Diff Review
     if state.pending_approval.is_some() {
-        hints.push(Span::styled(" [⚠ APPROVAL] ", Theme::badge_gold()));
+        hints.push(Span::styled(" [! APPROVAL] ", Theme::badge_gold()));
         hints.push(Span::styled(" [y] ", Theme::key_badge()));
         hints.push(Span::raw("Approve "));
         hints.push(Span::styled(" [n] ", Theme::key_badge()));
