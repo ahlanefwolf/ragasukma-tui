@@ -126,32 +126,45 @@ pub fn render_message_to_lines<'a>(
             (None, std::borrow::Cow::Borrowed(msg.content.as_str()))
         };
 
-    // Render Reasoning (always shown inline with subtle gutter styling)
+    // Render Reasoning (supporting collapsed and expanded views)
     if let Some(reasoning) = effective_reasoning.as_deref()
         && !reasoning.is_empty()
     {
-        lines.push(Line::from(vec![
-            Span::styled("    │ ", Theme::dim()),
-            Span::styled(
-                "Thinking Process",
-                Style::default()
-                    .fg(Theme::TEXT_MUTED)
-                    .add_modifier(Modifier::ITALIC | Modifier::BOLD),
-            ),
-        ]));
-        for raw_line in reasoning.lines() {
-            let clean = sanitize_terminal_line(raw_line, config.tab_size);
+        if !config.reasoning_expanded {
             lines.push(Line::from(vec![
                 Span::styled("    │ ", Theme::dim()),
                 Span::styled(
-                    clean,
+                    "Thinking Process (collapsed)",
                     Style::default()
                         .fg(Theme::TEXT_MUTED)
                         .add_modifier(Modifier::ITALIC),
                 ),
             ]));
+            lines.push(Line::from(""));
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled("    │ ", Theme::dim()),
+                Span::styled(
+                    "Thinking Process",
+                    Style::default()
+                        .fg(Theme::TEXT_MUTED)
+                        .add_modifier(Modifier::ITALIC | Modifier::BOLD),
+                ),
+            ]));
+            for raw_line in reasoning.lines() {
+                let clean = sanitize_terminal_line(raw_line, config.tab_size);
+                lines.push(Line::from(vec![
+                    Span::styled("    │ ", Theme::dim()),
+                    Span::styled(
+                        clean,
+                        Style::default()
+                            .fg(Theme::TEXT_MUTED)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
+            }
+            lines.push(Line::from(""));
         }
-        lines.push(Line::from(""));
     }
 
     // 3. Render Message Content
@@ -386,9 +399,15 @@ pub fn wrap_lines_to_width(lines: Vec<Line<'_>>, available_width: usize) -> Vec<
         let mut current_line_spans: Vec<Span<'static>> = Vec::new();
         let mut current_line_width = 0;
 
-        for span in line.spans {
+        for (span_idx, span) in line.spans.into_iter().enumerate() {
             let span_style = span.style;
             let text = span.content;
+
+            if span_idx == 0 && can_apply_prefix {
+                current_line_spans.push(Span::styled(text.into_owned(), span_style));
+                current_line_width += prefix_width;
+                continue;
+            }
 
             for word in text.split_inclusive(' ') {
                 // Zero-allocation word width check using borrowed span
@@ -542,7 +561,14 @@ mod tests {
 
     #[test]
     fn test_tool_and_reasoning_expansion() {
-        let mut msg = ChatMessage::assistant("Hello world");
+        let mut msg = ChatMessage {
+            role: MessageRole::Assistant,
+            sender_name: "Assistant".into(),
+            content: "Hello world".into(),
+            timestamp: "now".into(),
+            tool_calls: Vec::new(),
+            reasoning: None,
+        };
         msg.reasoning = Some("Detailed step 1\nDetailed step 2".into());
 
         // Collapsed reasoning

@@ -394,8 +394,31 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 Span::styled(title_str, Theme::header_title())
             };
 
+            let title_bottom = if chunks[2].width >= 46 {
+                Line::from(vec![
+                    Span::styled(" [", Style::default().fg(Color::DarkGray)),
+                    Span::styled(".skills/", Style::default().fg(Color::Cyan)),
+                    Span::styled(" or ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(".skill/", Style::default().fg(Color::Cyan)),
+                    Span::styled(" auto-injected to prompt] ", Style::default().fg(Color::DarkGray)),
+                ])
+            } else if chunks[2].width >= 32 {
+                Line::from(vec![
+                    Span::styled(" [", Style::default().fg(Color::DarkGray)),
+                    Span::styled(".skills/", Style::default().fg(Color::Cyan)),
+                    Span::styled(" auto-injected to prompt] ", Style::default().fg(Color::DarkGray)),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::styled(" [", Style::default().fg(Color::DarkGray)),
+                    Span::styled(".skills/ -> prompt", Style::default().fg(Color::Cyan)),
+                    Span::styled("] ", Style::default().fg(Color::DarkGray)),
+                ])
+            };
+
             let block = Block::default()
                 .title(title)
+                .title_bottom(title_bottom)
                 .borders(Borders::ALL)
                 .border_style(border_style)
                 .style(Theme::block_base());
