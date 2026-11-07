@@ -41,22 +41,27 @@ pub fn spawn_oauth_listener(
             };
 
         let redirect_uri = match kind {
-            OAuthProviderKind::Antigravity => format!("http://localhost:{}/oauth/callback", port),
-            OAuthProviderKind::Codex => {
-                ragasukma_core::llm::providers::codex::constants::CODEX_REDIRECT_URI.to_string()
+            OAuthProviderKind::Antigravity => {
+                ragasukma_core::llm::providers::antigravity::constants::ANTIGRAVITY_OAUTH_REDIRECT_URI
             }
-            OAuthProviderKind::Claude => format!("http://localhost:{}/oauth/callback", port),
+            OAuthProviderKind::Codex => {
+                ragasukma_core::llm::providers::codex::constants::CODEX_REDIRECT_URI
+            }
+            OAuthProviderKind::Claude => {
+                ragasukma_core::llm::providers::claude::constants::CLAUDE_REDIRECT_URI
+            }
         };
+
         let exchange_res = match kind {
             OAuthProviderKind::Antigravity => {
-                antigravity::exchange_antigravity_token(&callback_data.code, &redirect_uri).await
+                antigravity::exchange_antigravity_token(&callback_data.code, redirect_uri).await
             }
             OAuthProviderKind::Codex => {
-                codex::exchange_codex_token(&callback_data.code, &redirect_uri, &expected_state)
+                codex::exchange_codex_token(&callback_data.code, redirect_uri, &expected_state)
                     .await
             }
             OAuthProviderKind::Claude => {
-                claude::exchange_claude_token(&callback_data.code, &redirect_uri, &expected_state)
+                claude::exchange_claude_token(&callback_data.code, redirect_uri, &expected_state)
                     .await
             }
         };

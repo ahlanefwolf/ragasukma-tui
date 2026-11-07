@@ -229,12 +229,19 @@ impl CustomLlmTabState {
     }
 
     pub fn form_submit(&mut self) -> Result<String, String> {
+        let existing = self
+            .editing_prefix
+            .as_deref()
+            .and_then(|orig| self.accounts.iter().find(|a| a.prefix == orig));
+
         let candidate = CustomLlmAccount {
             prefix: self.form_prefix.trim().to_string(),
             name: self.form_name.trim().to_string(),
             base_url: self.form_base_url.trim().to_string(),
             api_key: self.form_api_key.trim().to_string(),
             enabled: self.form_enabled,
+            context_window: existing.and_then(|a| a.context_window),
+            native_reasoning: existing.and_then(|a| a.native_reasoning),
         };
 
         if let Err(err) = validate_account(&candidate) {

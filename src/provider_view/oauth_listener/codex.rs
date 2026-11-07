@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 pub async fn exchange_codex_token(
     code: &str,
     redirect_uri: &str,
@@ -11,29 +9,28 @@ pub async fn exchange_codex_token(
 
     tokio::task::spawn_blocking(move || {
         let code_verifier = ragasukma_core::llm::providers::codex::oauth::take_oauth_state(&state)
-            .ok_or_else(|| "PKCE code verifier not found".to_string())?;
+            .ok_or_else(|| "PKCE code verifier not found or expired".to_string())?;
 
-        let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| e.to_string())?;
+        let mut provider = ragasukma_core::llm::providers::codex::CodexProvider::new();
 
         let account = ragasukma_core::llm::providers::codex::oauth::complete_oauth_flow(
-            &client,
+            &provider.client,
             &code,
             &redirect_uri,
             &code_verifier,
         )
         .map_err(|e| e.to_string())?;
 
-        let mut provider = ragasukma_core::llm::providers::codex::CodexProvider::new();
-        let email = account
-            .email
-            .clone()
-            .unwrap_or_else(|| "codex-user".to_string());
-        provider
+        let id = provider
             .add_oauth_account(account)
             .map_err(|e| e.to_string())?;
+
+        let email = provider
+            .accounts
+            .iter()
+            .find(|a| a.id == id)
+            .and_then(|a| a.email.clone())
+            .unwrap_or(id);
 
         Ok::<String, String>(email)
     })

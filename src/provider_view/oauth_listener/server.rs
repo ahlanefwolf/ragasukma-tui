@@ -23,91 +23,102 @@ pub async fn listen_for_oauth_callback(
         .map_err(|e| format!("Failed to listen on {}: {}", addr, e))?;
 
     let timeout_duration = Duration::from_secs(180);
+    let start_time = tokio::time::Instant::now();
 
-    let accept_res = tokio::time::timeout(timeout_duration, listener.accept()).await;
-    let (mut stream, _) = match accept_res {
-        Ok(Ok(pair)) => pair,
-        Ok(Err(e)) => return Err(format!("Socket accept error: {}", e)),
-        Err(_) => return Err("Authentication timed out (3 minute limit)".to_string()),
-    };
-
-    let mut buffer = [0u8; 4096];
-    let bytes_read = stream
-        .read(&mut buffer)
-        .await
-        .map_err(|e| format!("Failed to read request from browser: {}", e))?;
-
-    let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
-    let first_line = request_str.lines().next().unwrap_or_default();
-    let query_string = if let Some(path) = first_line.split_whitespace().nth(1) {
-        path.split('?').nth(1).unwrap_or_default()
-    } else {
-        ""
-    };
-
-    let query_params: HashMap<String, String> = query_string
-        .split('&')
-        .filter_map(|pair| {
-            let (key, value) = pair.split_once('=')?;
-            let decoded = urlencoding_decode(value);
-            Some((key.to_string(), decoded))
-        })
-        .collect();
-
-    if let Some(err) = query_params.get("error") {
-        let err_desc = query_params
-            .get("error_description")
-            .cloned()
-            .unwrap_or_default();
-        let fallback = if err_desc.trim().is_empty() {
-            err
-        } else {
-            &err_desc
-        };
-        let html_response = format!(
-            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
-            <html><body style='font-family: sans-serif; text-align: center; padding: 50px;'>\
-            <h1 style='color: #ef4444;'>Authentication Denied</h1>\
-            <p>{}</p>\
-            <p>You can close this window now.</p>\
-            </body></html>",
-            fallback
-        );
-        let _ = stream.write_all(html_response.as_bytes()).await;
-        return Err(format!("{}: {}", err, err_desc));
-    }
-
-    let code = match query_params.get("code") {
-        Some(c) if !c.is_empty() => c.clone(),
-        _ => {
-            let html_response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
-                <html><body><h1>Error: OAuth code not found</h1></body></html>";
-            let _ = stream.write_all(html_response.as_bytes()).await;
-            return Err("OAuth code not found in callback request".to_string());
+    loop {
+        let remaining = timeout_duration.saturating_sub(start_time.elapsed());
+        if remaining.is_zero() {
+            return Err("Authentication timed out (3 minute limit)".to_string());
         }
-    };
 
-    if let Some(state) = query_params.get("state")
-        && state != expected_state
-    {
-        let html_response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
-            <html><body><h1>Error: Invalid OAuth state (CSRF mismatch)</h1></body></html>";
-        let _ = stream.write_all(html_response.as_bytes()).await;
-        return Err("State mismatch: potential CSRF attack or session expired".to_string());
+        let (mut stream, _) = match tokio::time::timeout(remaining, listener.accept()).await {
+            Ok(Ok(pair)) => pair,
+            Ok(Err(e)) => return Err(format!("Socket accept error: {}", e)),
+            Err(_) => return Err("Authentication timed out (3 minute limit)".to_string()),
+        };
+
+        let mut buffer = [0u8; 4096];
+        let bytes_read = match stream.read(&mut buffer).await {
+            Ok(n) if n > 0 => n,
+            _ => continue,
+        };
+
+        let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
+        let first_line = request_str.lines().next().unwrap_or_default();
+        let path_and_query = first_line.split_whitespace().nth(1).unwrap_or_default();
+
+        // Ignore browser favicon requests
+        if path_and_query.starts_with("/favicon.ico") {
+            let res = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = stream.write_all(res.as_bytes()).await;
+            continue;
+        }
+
+        let query_string = path_and_query.split('?').nth(1).unwrap_or_default();
+        let query_params: HashMap<String, String> = query_string
+            .split('&')
+            .filter_map(|pair| {
+                let (key, value) = pair.split_once('=')?;
+                let decoded = urlencoding_decode(value);
+                Some((key.to_string(), decoded))
+            })
+            .collect();
+
+        if let Some(err) = query_params.get("error") {
+            let err_desc = query_params
+                .get("error_description")
+                .cloned()
+                .unwrap_or_default();
+            let fallback = if err_desc.trim().is_empty() {
+                err
+            } else {
+                &err_desc
+            };
+            let html_response = format!(
+                "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
+                <html><body style='font-family: sans-serif; text-align: center; padding: 50px;'>\
+                <h1 style='color: #ef4444;'>Authentication Denied</h1>\
+                <p>{}</p>\
+                <p>You can close this window now.</p>\
+                </body></html>",
+                fallback
+            );
+            let _ = stream.write_all(html_response.as_bytes()).await;
+            return Err(format!("{}: {}", err, err_desc));
+        }
+
+        let code = match query_params.get("code") {
+            Some(c) if !c.is_empty() => c.clone(),
+            _ => {
+                // If this is some other ping or preflight without code, ignore and continue
+                let res = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(res.as_bytes()).await;
+                continue;
+            }
+        };
+
+        if let Some(state) = query_params.get("state")
+            && state != expected_state
+        {
+            let html_response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
+                <html><body><h1>Error: Invalid OAuth state (CSRF mismatch)</h1></body></html>";
+            let _ = stream.write_all(html_response.as_bytes()).await;
+            return Err("State mismatch: potential CSRF attack or session expired".to_string());
+        }
+
+        return Ok((
+            stream,
+            OAuthCallbackData {
+                code,
+                state: query_params.get("state").cloned(),
+            },
+        ));
     }
-
-    Ok((
-        stream,
-        OAuthCallbackData {
-            code,
-            state: query_params.get("state").cloned(),
-        },
-    ))
 }
 
 pub async fn respond_success(mut stream: tokio::net::TcpStream, email: &str) {
     let html_response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
         <!DOCTYPE html>\
         <html>\
         <head><title>Ragasukma OAuth - Success</title></head>\
@@ -127,7 +138,7 @@ pub async fn respond_success(mut stream: tokio::net::TcpStream, email: &str) {
 
 pub async fn respond_error(mut stream: tokio::net::TcpStream, err: &str) {
     let html_response = format!(
-        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
+        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
         <!DOCTYPE html>\
         <html>\
         <head><title>Ragasukma OAuth - Error</title></head>\

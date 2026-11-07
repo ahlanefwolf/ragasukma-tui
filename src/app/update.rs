@@ -152,7 +152,7 @@ impl App {
                 self.error_modal = Some(err);
             }
             Action::StartAntigravityOAuth => {
-                let port = 51121;
+                let port = 42128;
                 let state = format!(
                     "ragasukma_{}",
                     std::time::SystemTime::now()
@@ -160,9 +160,10 @@ impl App {
                         .unwrap_or_default()
                         .as_secs()
                 );
-                let redirect_uri = format!("http://localhost:{}/oauth/callback", port);
+                let redirect_uri =
+                    ragasukma_core::llm::providers::antigravity::constants::ANTIGRAVITY_OAUTH_REDIRECT_URI;
                 let auth_url = ragasukma_core::llm::providers::antigravity::oauth::build_auth_url(
-                    &redirect_uri,
+                    redirect_uri,
                     &state,
                 );
 
@@ -183,11 +184,12 @@ impl App {
                 let (code_verifier, code_challenge) =
                     ragasukma_core::llm::providers::codex::oauth::generate_pkce();
                 let state = format!(
-                    "ragasukma_codex_{}",
+                    "ragasukma_codex_{}_{}",
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
-                        .as_secs()
+                        .as_secs(),
+                    std::process::id()
                 );
                 ragasukma_core::llm::providers::codex::oauth::store_oauth_state(
                     &state,
@@ -215,7 +217,8 @@ impl App {
             }
             Action::StartClaudeOAuth => {
                 let port = 54321;
-                let redirect_uri = format!("http://localhost:{}/oauth/callback", port);
+                let redirect_uri =
+                    ragasukma_core::llm::providers::claude::constants::CLAUDE_REDIRECT_URI;
                 let (code_verifier, code_challenge) =
                     ragasukma_core::llm::providers::claude::oauth::generate_pkce();
                 let state = format!(
@@ -231,7 +234,7 @@ impl App {
                     &code_verifier,
                 );
                 let auth_url = ragasukma_core::llm::providers::claude::oauth::build_auth_url(
-                    &redirect_uri,
+                    redirect_uri,
                     &state,
                     &code_challenge,
                 );

@@ -13,7 +13,7 @@ pub async fn exchange_antigravity_token(code: &str, redirect_uri: &str) -> Resul
             .iter()
             .find(|a| a.id == account_id)
             .and_then(|a| a.email.clone())
-            .unwrap_or_else(|| account_id.clone());
+            .unwrap_or(account_id);
 
         Ok::<String, String>(email)
     })
