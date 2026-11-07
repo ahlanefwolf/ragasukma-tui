@@ -6,7 +6,9 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-use super::message_renderer::{render_message_standard, wrap_lines_to_width};
+use super::message_renderer::{
+    render_message_to_lines, wrap_lines_to_width, MessageRenderConfig,
+};
 use crate::agent_view::states::AgentWorkspaceState;
 use crate::agent_view::types::AgentFocusArea;
 use crate::theme::Theme;
@@ -44,6 +46,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let last_content_len = state.messages.last().map(|m| m.content.len()).unwrap_or(0);
     let is_running = state.is_running;
     let expanded_tools_len = state.expanded_tools.len();
+    let reasoning_expanded = state.reasoning_expanded;
 
     let mut cache = state.chat_layout_cache.borrow_mut();
     let is_cache_valid = cache.width == text_width
@@ -51,6 +54,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         && cache.last_content_len == last_content_len
         && cache.is_running == is_running
         && cache.expanded_tools_len == expanded_tools_len
+        && cache.reasoning_expanded == reasoning_expanded
         && !cache.lines.is_empty();
 
     if !is_cache_valid {
@@ -70,8 +74,14 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
                 ),
             ]));
         } else {
-            for msg in &state.messages {
-                chat_lines.extend(render_message_standard(msg));
+            for (idx, msg) in state.messages.iter().enumerate() {
+                let config = MessageRenderConfig {
+                    tab_size: 4,
+                    max_tool_lines: 40,
+                    reasoning_expanded,
+                    tool_expanded: state.expanded_tools.contains(&idx),
+                };
+                chat_lines.extend(render_message_to_lines(msg, &config));
             }
         }
 
@@ -100,6 +110,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         cache.last_content_len = last_content_len;
         cache.is_running = is_running;
         cache.expanded_tools_len = expanded_tools_len;
+        cache.reasoning_expanded = reasoning_expanded;
     }
 
     let total_visual_lines = cache.lines.len();

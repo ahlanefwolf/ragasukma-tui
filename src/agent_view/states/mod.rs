@@ -10,14 +10,15 @@ pub struct ChatLayoutCache {
     pub last_content_len: usize,
     pub is_running: bool,
     pub expanded_tools_len: usize,
+    pub reasoning_expanded: bool,
     pub lines: Vec<Line<'static>>,
 }
 
 use super::types::{
     AddFolderModalState, AgentFocusArea, AgentSidebarTab, ApprovalRequest, ChatMessage,
     CreateProjectModalState, FileTagQuery, MessageRole, ModelSelectorModalState, ProjectItem,
-    ProjectSwitcherModalState, TagItem, TaskSessionItem, TokenBreakdown, ToolFilter,
-    WorkspaceFileNode, WorkspaceFolderItem,
+    ProjectSwitcherModalState, TagItem, TaskSessionItem, TokenBreakdown, ToolCallInfo,
+    ToolExecutionStatus, ToolFilter, WorkspaceFileNode, WorkspaceFolderItem,
 };
 use crate::core_bridge::PersistedMessageDto;
 
@@ -201,13 +202,81 @@ impl AgentWorkspaceState {
                     "system" => MessageRole::System,
                     _ => MessageRole::Tool,
                 };
+
+                let mut content = dto.content.unwrap_or_default();
+                let mut reasoning = dto.thought;
+
+                // Extract <think>...</think> if thought is missing
+                if reasoning.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true)
+                    && let Some(start_idx) = content.find("<think>")
+                    && let Some(end_idx) = content[start_idx..].find("</think>")
+                {
+                    let think_content =
+                        &content[start_idx + 7..start_idx + end_idx];
+                    reasoning = Some(think_content.trim().to_string());
+                    let after = &content[start_idx + end_idx + 8..];
+                    content = format!("{}{}", &content[..start_idx], after).trim().to_string();
+                }
+
+                // Parse persisted tool calls if present
+                let mut tool_calls = Vec::new();
+                if let Some(tc_json) = dto.tool_calls.as_deref().filter(|s| !s.trim().is_empty())
+                    && let Ok(v) = serde_json::from_str::<serde_json::Value>(tc_json)
+                    && let Some(arr) = v.as_array()
+                {
+                    for item in arr {
+                        let id = item.get("id").and_then(|x| x.as_str()).unwrap_or_default().to_string();
+                        let name = item
+                            .get("function")
+                            .and_then(|f| f.get("name"))
+                            .and_then(|x| x.as_str())
+                            .or_else(|| item.get("name").and_then(|x| x.as_str()))
+                            .unwrap_or("unknown_tool")
+                            .to_string();
+
+                        let args_summary = item
+                            .get("function")
+                            .and_then(|f| f.get("arguments"))
+                            .map(|a| {
+                                if let Some(s) = a.as_str() {
+                                    s.to_string()
+                                } else {
+                                    a.to_string()
+                                }
+                            })
+                            .or_else(|| {
+                                item.get("args").map(|a| {
+                                    if let Some(s) = a.as_str() {
+                                        s.to_string()
+                                    } else {
+                                        a.to_string()
+                                    }
+                                })
+                            })
+                            .unwrap_or_default();
+
+                        tool_calls.push(ToolCallInfo {
+                            id,
+                            name,
+                            args_summary,
+                            output_summary: None,
+                            status: ToolExecutionStatus::Success,
+                            duration_ms: None,
+                            stdout: None,
+                            stderr: None,
+                            exit_code: None,
+                            diff_preview: None,
+                        });
+                    }
+                }
+
                 ChatMessage {
                     role,
                     sender_name: "Agent".to_string(),
-                    content: dto.content.unwrap_or_default(),
+                    content,
                     timestamp: dto.created_at.to_string(),
-                    tool_calls: Vec::new(),
-                    reasoning: dto.thought,
+                    tool_calls,
+                    reasoning,
                 }
             })
             .collect();
