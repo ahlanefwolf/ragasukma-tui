@@ -1,4 +1,4 @@
-use ragasukma_core::agent::models::McpServer;
+use ragasukma_core::agent::models::{McpServer, McpServerTool};
 
 pub trait McpServerExt {
     fn config_value(&self) -> serde_json::Value;
@@ -6,7 +6,7 @@ pub trait McpServerExt {
 
 impl McpServerExt for McpServer {
     fn config_value(&self) -> serde_json::Value {
-        serde_json::from_str(&self.config).unwrap_or(serde_json::Value::Null)
+        self.config_value()
     }
 }
 
@@ -59,6 +59,18 @@ pub struct McpServerTabState {
     pub name_cursor: usize,
     pub json_cursor: usize,
     pub json_scroll: usize,
+
+    // Tools list modal state
+    pub is_tools_modal_open: bool,
+    pub server_tools: Vec<McpServerTool>,
+    pub tools_selected_idx: usize,
+
+    // Sync modal state & model runner
+    pub is_sync_modal_open: bool,
+    pub available_models: Vec<String>,
+    pub selected_model_idx: usize,
+    pub is_syncing: bool,
+    pub sync_status_message: Option<String>,
 
     // Delete confirm modal
     pub delete_confirm_id: Option<String>,

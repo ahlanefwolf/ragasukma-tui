@@ -125,6 +125,42 @@ pub fn handle_mcp_server_action(
             state.cancel_delete();
             Some(Some("Deletion canceled".to_string()))
         }
+        Action::McpServerViewTools => {
+            state.open_tools_modal();
+            Some(None)
+        }
+        Action::McpServerCloseTools => {
+            state.close_tools_modal();
+            Some(None)
+        }
+        Action::McpServerToolsNext => {
+            state.tools_select_next();
+            Some(None)
+        }
+        Action::McpServerToolsPrev => {
+            state.tools_select_prev();
+            Some(None)
+        }
+        Action::McpServerSyncTools => {
+            state.open_sync_modal();
+            Some(None)
+        }
+        Action::McpServerSyncModalClose => {
+            state.close_sync_modal();
+            Some(None)
+        }
+        Action::McpServerSyncModelNext => {
+            state.sync_model_next();
+            Some(None)
+        }
+        Action::McpServerSyncModelPrev => {
+            state.sync_model_prev();
+            Some(None)
+        }
+        Action::McpServerSyncConfirm => match state.execute_sync() {
+            Ok(msg) => Some(Some(msg)),
+            Err(e) => Some(Some(format!("Sync error: {e}"))),
+        },
         Action::McpServerSelectNext => {
             if state.is_form_open || state.delete_confirm_id.is_some() {
                 return None;

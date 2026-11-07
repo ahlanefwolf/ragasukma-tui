@@ -116,43 +116,43 @@ Cari repository GitHub berdasarkan query teks atau topik.
 ## 4. Urutan Pengerjaan Fase demi Fase
 
 ### Fase 1: Database Migration & Core Entities (`ragasukma-core`)
-- [ ] **1.1** Buat file migrasi `ragasukma-core/migrations/0010_mcp_server_tools.sql`.
-- [ ] **1.2** Tambahkan struct entitas `McpServerTool` di `ragasukma-core/src/agent/models.rs`.
-- [ ] **1.3** Implementasikan query repository:
+- [x] **1.1** Buat file migrasi `ragasukma-core/migrations/0010_mcp_server_tools.sql`.
+- [x] **1.2** Tambahkan struct entitas `McpServerTool` di `ragasukma-core/src/agent/models.rs`.
+- [x] **1.3** Implementasikan query repository:
   - `upsert_mcp_server_tool(pool, server_id, name, config)`
   - `list_mcp_server_tools(pool, server_id)`
   - `delete_mcp_server_tool(pool, server_id, name)`
   - `delete_mcp_server_tools_by_server(pool, server_id)`
-- [ ] **1.4** Perbarui parser helper di `McpServer` agar dapat mengekstrak blok eksekusi baik dari JSON legacy maupun blok ` ```exec ` / frontmatter YAML pada Markdown.
-- [ ] **1.5** Jalankan `cargo test -p ragasukma-core` untuk memastikan migrasi dan entitas lolos verifikasi.
+- [x] **1.4** Perbarui parser helper di `McpServer` agar dapat mengekstrak blok eksekusi baik dari JSON legacy maupun blok ` ```exec ` / frontmatter YAML pada Markdown.
+- [x] **1.5** Jalankan `cargo test -p ragasukma-core` untuk memastikan migrasi dan entitas lolos verifikasi.
 
 ### Fase 2: TUI Editor Update (`ragasukma-tui/src/mcp_server_view`)
-- [ ] **2.1** Ubah UI input field dari `JsonConfig` menjadi `MarkdownConfig` pada `types.rs` dan `state.rs`.
-- [ ] **2.2** Hapus validasi kaku `serde_json::from_str` saat menyimpan konfigurasi server, ganti dengan validasi non-empty teks Markdown.
-- [ ] **2.3** Sesuaikan tampilan preview list server (ganti preview JSON keys menjadi snippet/summary teks Markdown).
-- [ ] **2.4** Sediakan tab / modal untuk melihat daftar tools yang tersinkronisasi di server yang dipilih (`mcp_server_tools`).
+- [x] **2.1** Ubah UI input field dari `JsonConfig` menjadi `MarkdownConfig` pada `types.rs` dan `state.rs`.
+- [x] **2.2** Hapus validasi kaku `serde_json::from_str` saat menyimpan konfigurasi server, ganti dengan validasi non-empty teks Markdown.
+- [x] **2.3** Sesuaikan tampilan preview list server (ganti preview JSON keys menjadi snippet/summary teks Markdown).
+- [x] **2.4** Sediakan tab / modal untuk melihat daftar tools yang tersinkronisasi di server yang dipilih (`mcp_server_tools`).
 
 ### Fase 3: Tool Discovery Engine & Model Runner (`ragasukma-core`)
-- [ ] **3.1** Buat modul `ragasukma-core/src/agent/mcp/discovery.rs`:
+- [x] **3.1** Buat modul `ragasukma-core/src/agent/mcp/discovery.rs`:
   - Mengambil daftar tools (baik via native handshake RPC maupun analisis dokumentasi via LLM).
   - Prompt template untuk LLM runner: *"Pelajari dokumentasi MCP server berikut, lalu hasilkan daftar tool dalam format Markdown terstruktur untuk masing-masing tool."*
-- [ ] **3.2** Integrasikan runner dengan client inference yang sudah ada (menggunakan model provider yang dipilih).
-- [ ] **3.3** Fungsi sync yang menerima respon LLM, mem-parsing per-tool, dan melakukan upsert ke database `mcp_server_tools`.
+- [x] **3.2** Integrasikan runner dengan client inference yang sudah ada (menggunakan model provider yang dipilih).
+- [x] **3.3** Fungsi sync yang menerima respon LLM, mem-parsing per-tool, dan melakukan upsert ke database `mcp_server_tools`.
 
 ### Fase 4: TUI Sync Modal & Model Selector (`ragasukma-tui`)
-- [ ] **4.1** Tambahkan aksi/tombol `[S] Sync Tools` di `mcp_server_view`.
-- [ ] **4.2** Tampilkan popup/modal pemilihan model runner (mengambil daftar model aktif yang tersedia seperti pada `agent_view`).
-- [ ] **4.3** Tampilkan status progress sinkronisasi (Spinner / Toast notification).
-- [ ] **4.4** Muat ulang daftar tools di view setelah proses sinkronisasi selesai.
+- [x] **4.1** Tambahkan aksi/tombol `[S] Sync Tools` di `mcp_server_view`.
+- [x] **4.2** Tampilkan popup/modal pemilihan model runner (mengambil daftar model aktif yang tersedia seperti pada `agent_view`).
+- [x] **4.3** Tampilkan status progress sinkronisasi (Spinner / Toast notification).
+- [x] **4.4** Muat ulang daftar tools di view setelah proses sinkronisasi selesai.
 
 ### Fase 5: Chat Loop & Runtime Integration (`ragasukma-core`)
-- [ ] **5.1** Saat sesi agent chat dimulai, load tools dari `mcp_server_tools` aktif ke dalam sistem prompt context (sebagai instruksi Markdown).
-- [ ] **5.2** Uji eksekusi tool dari LLM: LLM memanggil tool -> core memvalidasi dengan contract -> mengeksekusi -> mengembalikan hasil.
+- [x] **5.1** Saat sesi agent chat dimulai, load tools dari `mcp_server_tools` aktif ke dalam sistem prompt context (sebagai instruksi Markdown).
+- [x] **5.2** Uji eksekusi tool dari LLM: LLM memanggil tool -> core memvalidasi dengan contract -> mengeksekusi -> mengembalikan hasil.
 
 ### Fase 6: Pengujian, Hygiene & Verifikasi Menyeluruh
-- [ ] **6.1** Unit tests di `ragasukma-core` untuk parser config Markdown dan sync tool.
-- [ ] **6.2** UI / State tests di `ragasukma-tui` untuk form input Markdown dan integrasi event sync.
-- [ ] **6.3** Verifikasi build dan linting:
+- [x] **6.1** Unit tests di `ragasukma-core` untuk parser config Markdown dan sync tool.
+- [x] **6.2** UI / State tests di `ragasukma-tui` untuk form input Markdown dan integrasi event sync.
+- [x] **6.3** Verifikasi build dan linting:
   ```bash
   cargo clippy --workspace --all-targets
   cargo test --workspace

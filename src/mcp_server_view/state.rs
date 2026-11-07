@@ -38,35 +38,28 @@ pub fn truncate_chars(s: &str, max: usize) -> String {
 #[must_use]
 pub fn config_preview_summary(servers: &[McpServer], selected_idx: usize) -> Option<String> {
     let server = servers.get(selected_idx)?;
-    let config = server.config_value();
-    let is_object = config.is_object();
 
     let detail = match (server.command(), server.url()) {
         (Some(cmd), _) => cmd,
         (None, Some(url)) => url,
         (None, None) => {
-            if is_object {
-                let keys = config.as_object().map_or(0, serde_json::Map::len);
-                format!("{keys} keys")
+            let mut preview = String::new();
+            for line in server.config.lines() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() && !trimmed.starts_with('#') && !trimmed.starts_with("```") {
+                    preview = trimmed.to_string();
+                    break;
+                }
+            }
+            if preview.is_empty() {
+                format!("{}B markdown", server.config.chars().count())
             } else {
-                format!("{}B", server.config.chars().count())
+                truncate_chars(&preview, 24)
             }
         }
     };
 
-    let extra_keys = config.as_object().map_or(0, |m| {
-        m.keys()
-            .filter(|k| !matches!(k.as_str(), "command" | "url" | "transport" | "args" | "env"))
-            .count()
-    });
-
-    let suffix = if extra_keys > 0 {
-        format!(" +{extra_keys}")
-    } else {
-        String::new()
-    };
-
-    let raw = format!("{} [{}] {detail}{suffix}", server.name, server.transport());
+    let raw = format!("{} [{}] {detail}", server.name, server.transport());
     Some(truncate_chars(&raw, CONFIG_PREVIEW_MAX_CHARS))
 }
 
@@ -104,6 +97,14 @@ impl McpServerTabState {
             name_cursor: 0,
             json_cursor: 0,
             json_scroll: 0,
+            is_tools_modal_open: false,
+            server_tools: Vec::new(),
+            tools_selected_idx: 0,
+            is_sync_modal_open: false,
+            available_models: Vec::new(),
+            selected_model_idx: 0,
+            is_syncing: false,
+            sync_status_message: None,
             delete_confirm_id: None,
         }
     }
@@ -164,10 +165,20 @@ impl McpServerTabState {
         self.is_form_open = true;
         self.editing_id = None;
         self.form_name.clear();
-        self.form_json = r#"{
-  "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-everything"]
-}"#
+        self.form_json = r#"# MCP Server Configuration
+
+## Runtime Execution
+```exec
+transport: stdio
+command: npx
+args:
+  - "-y"
+  - "@modelcontextprotocol/server-everything"
+```
+
+## Notes & Capabilities
+Server capabilities and parameter specifications.
+"#
         .to_string();
         self.form_enabled = true;
         self.focused_field = McpFormField::Name;
@@ -213,6 +224,99 @@ impl McpServerTabState {
         self.is_form_open = false;
         self.editing_id = None;
         self.form_error = None;
+    }
+
+    pub fn open_tools_modal(&mut self) {
+        if let Some(srv) = self.selected_server() {
+            let id = srv.id.clone();
+            match service::load_server_tools(&id) {
+                Ok(tools) => {
+                    self.server_tools = tools;
+                    self.tools_selected_idx = 0;
+                    self.is_tools_modal_open = true;
+                }
+                Err(e) => {
+                    self.form_error = Some(e);
+                }
+            }
+        }
+    }
+
+    pub fn close_tools_modal(&mut self) {
+        self.is_tools_modal_open = false;
+        self.server_tools.clear();
+        self.tools_selected_idx = 0;
+    }
+
+    pub fn tools_select_next(&mut self) {
+        if !self.server_tools.is_empty() {
+            self.tools_selected_idx =
+                (self.tools_selected_idx + 1).min(self.server_tools.len() - 1);
+        }
+    }
+
+    pub fn tools_select_prev(&mut self) {
+        self.tools_selected_idx = self.tools_selected_idx.saturating_sub(1);
+    }
+
+    pub fn open_sync_modal(&mut self) {
+        if self.selected_server().is_some() {
+            let mut models = crate::agent_view::models::fetch_core_available_models();
+            if models.is_empty() {
+                models.push("gemini-2.5-flash".to_string());
+            }
+            self.available_models = models;
+            self.selected_model_idx = 0;
+            self.sync_status_message = None;
+            self.is_syncing = false;
+            self.is_sync_modal_open = true;
+        }
+    }
+
+    pub fn close_sync_modal(&mut self) {
+        self.is_sync_modal_open = false;
+        self.is_syncing = false;
+        self.sync_status_message = None;
+    }
+
+    pub fn sync_model_next(&mut self) {
+        if !self.available_models.is_empty() {
+            self.selected_model_idx =
+                (self.selected_model_idx + 1).min(self.available_models.len() - 1);
+        }
+    }
+
+    pub fn sync_model_prev(&mut self) {
+        self.selected_model_idx = self.selected_model_idx.saturating_sub(1);
+    }
+
+    pub fn execute_sync(&mut self) -> Result<String, String> {
+        let Some(server) = self.selected_server().cloned() else {
+            return Err("No server selected for sync".to_string());
+        };
+
+        let chosen_model = self
+            .available_models
+            .get(self.selected_model_idx)
+            .map(|s| s.as_str());
+
+        self.is_syncing = true;
+        match service::sync_tools_for_server(&server, chosen_model) {
+            Ok(tools) => {
+                let count = tools.len();
+                self.server_tools = tools;
+                self.is_syncing = false;
+                self.is_sync_modal_open = false;
+                let msg = format!("Successfully synced {count} tools for server '{}'", server.name);
+                self.sync_status_message = Some(msg.clone());
+                Ok(msg)
+            }
+            Err(e) => {
+                self.is_syncing = false;
+                self.sync_status_message = Some(format!("Sync failed: {e}"));
+                Err(e)
+            }
+        }
     }
 
     pub fn next_field(&mut self) {
@@ -468,18 +572,12 @@ impl McpServerTabState {
             return Err("JSON configuration cannot be empty".to_string());
         }
 
-        // Validate JSON
-        let parsed: serde_json::Value = match serde_json::from_str(json_str) {
-            Ok(v) => v,
-            Err(e) => {
-                let err_msg = format!("Invalid JSON: {e}");
-                self.form_error = Some(err_msg.clone());
-                return Err(err_msg);
-            }
-        };
-
-        // Format raw JSON for storage
-        let config_str = serde_json::to_string(&parsed).unwrap_or_else(|_| json_str.to_string());
+        let config_str = self.form_json.trim();
+        if config_str.is_empty() {
+            let err_msg = "Configuration cannot be empty".to_string();
+            self.form_error = Some(err_msg.clone());
+            return Err(err_msg);
+        }
 
         let id = match &self.editing_id {
             Some(existing) => existing.clone(),
@@ -489,7 +587,7 @@ impl McpServerTabState {
             }
         };
 
-        service::save_server(&id, &name, &config_str, self.form_enabled)?;
+        service::save_server(&id, &name, config_str, self.form_enabled)?;
         let is_edit = self.editing_id.is_some();
         self.close_form();
         self.reload()?;
@@ -621,4 +719,90 @@ fn uuid_prefix() -> String {
         .unwrap_or_default()
         .as_millis();
     format!("{now:x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mcp_form_markdown_editing() {
+        let mut state = McpServerTabState::default();
+        state.open_add_form();
+        assert!(state.is_form_open);
+        assert_eq!(state.focused_field, McpFormField::Name);
+
+        // Edit Name
+        state.insert_char('M');
+        state.insert_char('y');
+        state.insert_char('S');
+        state.insert_char('r');
+        state.insert_char('v');
+        assert_eq!(state.form_name, "MySrv");
+
+        // Switch to Markdown Config
+        state.next_field();
+        assert_eq!(state.focused_field, McpFormField::JsonConfig);
+
+        // Input Markdown Content
+        state.form_json.clear();
+        state.json_cursor = 0;
+        for c in "# Header".chars() {
+            state.insert_char(c);
+        }
+        state.insert_newline();
+        for c in "Some markdown description".chars() {
+            state.insert_char(c);
+        }
+
+        assert_eq!(state.form_json, "# Header\nSome markdown description");
+    }
+
+    #[test]
+    fn test_sync_modal_flow() {
+        let mut state = McpServerTabState::default();
+        let server = McpServer {
+            id: "srv-1".into(),
+            name: "Server 1".into(),
+            config: "# Demo".into(),
+            is_enabled: 1,
+            created_at: 1000,
+        };
+        state.set_servers(vec![server]);
+        state.open_sync_modal();
+        assert!(state.is_sync_modal_open);
+        assert!(!state.available_models.is_empty());
+        assert_eq!(state.selected_model_idx, 0);
+
+        state.available_models = vec!["model-a".to_string(), "model-b".to_string()];
+        state.sync_model_next();
+        assert_eq!(state.selected_model_idx, 1);
+
+        // Boundary check (clamped to len - 1)
+        state.sync_model_next();
+        assert_eq!(state.selected_model_idx, 1);
+
+        state.sync_model_prev();
+        assert_eq!(state.selected_model_idx, 0);
+
+        state.close_sync_modal();
+        assert!(!state.is_sync_modal_open);
+    }
+
+    #[test]
+    fn test_markdown_summary_preview() {
+        let md = "# My MCP Server\n\n```exec\ntransport: stdio\ncommand: npx\n```\n";
+        let server = McpServer {
+            id: "1".into(),
+            name: "Test".into(),
+            config: md.into(),
+            is_enabled: 1,
+            created_at: 1000,
+        };
+        let servers = vec![server];
+        let summary = config_preview_summary(&servers, 0);
+        assert!(summary.is_some());
+        let text = summary.unwrap();
+        assert!(text.contains("stdio") || text.contains("npx") || text.contains("transport"));
+    }
 }

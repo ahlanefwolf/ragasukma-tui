@@ -204,6 +204,15 @@ pub enum Action {
     McpServerRefresh,
     McpServerSelectNext,
     McpServerSelectPrev,
+    McpServerViewTools,
+    McpServerCloseTools,
+    McpServerToolsNext,
+    McpServerToolsPrev,
+    McpServerSyncTools,
+    McpServerSyncModalClose,
+    McpServerSyncModelNext,
+    McpServerSyncModelPrev,
+    McpServerSyncConfirm,
 
     ShowDiffPreview {
         file_path: String,

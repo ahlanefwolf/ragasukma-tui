@@ -21,7 +21,30 @@ impl McpServerTabState {
             };
         }
 
-        // 2. Add / Edit form modal
+        // 2. Tools list modal
+        if self.is_tools_modal_open {
+            return match code {
+                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('t') => {
+                    Some(Action::McpServerCloseTools)
+                }
+                KeyCode::Down | KeyCode::Char('j') => Some(Action::McpServerToolsNext),
+                KeyCode::Up | KeyCode::Char('k') => Some(Action::McpServerToolsPrev),
+                _ => None,
+            };
+        }
+
+        // 3. Sync Tools modal
+        if self.is_sync_modal_open {
+            return match code {
+                KeyCode::Esc | KeyCode::Char('q') => Some(Action::McpServerSyncModalClose),
+                KeyCode::Down | KeyCode::Char('j') => Some(Action::McpServerSyncModelNext),
+                KeyCode::Up | KeyCode::Char('k') => Some(Action::McpServerSyncModelPrev),
+                KeyCode::Enter => Some(Action::McpServerSyncConfirm),
+                _ => None,
+            };
+        }
+
+        // 3. Add / Edit form modal
         if self.is_form_open {
             return match code {
                 KeyCode::Esc => Some(Action::CancelForm),
@@ -66,6 +89,8 @@ impl McpServerTabState {
             KeyCode::Char('a') | KeyCode::Char('n') => Some(Action::McpServerAdd),
             KeyCode::Char('e') => Some(Action::McpServerEdit),
             KeyCode::Char('d') => Some(Action::McpServerDelete),
+            KeyCode::Char('t') | KeyCode::Char('T') => Some(Action::McpServerViewTools),
+            KeyCode::Char('s') | KeyCode::Char('S') => Some(Action::McpServerSyncTools),
             KeyCode::Char('r') => Some(Action::McpServerRefresh),
             _ => None,
         }

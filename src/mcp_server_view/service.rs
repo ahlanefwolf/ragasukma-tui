@@ -1,4 +1,4 @@
-use ragasukma_core::agent::models::McpServer;
+use ragasukma_core::agent::models::{McpServer, McpServerTool};
 use ragasukma_core::agent::repository::projects_and_sessions::{
     create_or_update_mcp_server, delete_mcp_server, get_project_mcp_server_ids, list_mcp_servers,
     set_project_mcp_servers,
@@ -33,12 +33,30 @@ pub fn load_servers() -> Result<Vec<McpServer>, String> {
     block_on(list_mcp_servers())?.map_err(|e| e.to_string())
 }
 
+pub fn load_server_tools(
+    server_id: &str,
+) -> Result<Vec<ragasukma_core::agent::models::McpServerTool>, String> {
+    block_on(ragasukma_core::agent::repository::list_mcp_server_tools(server_id))?
+        .map_err(|e| e.to_string())
+}
+
 pub fn save_server(id: &str, name: &str, config: &str, is_enabled: bool) -> Result<(), String> {
     block_on(create_or_update_mcp_server(id, name, config, is_enabled))?.map_err(|e| e.to_string())
 }
 
 pub fn remove_server(id: &str) -> Result<(), String> {
     block_on(delete_mcp_server(id))?.map_err(|e| e.to_string())
+}
+
+/// Synchronize tools for an MCP server using discovery and model runner
+pub fn sync_tools_for_server(
+    server: &McpServer,
+    model_name: Option<&str>,
+) -> Result<Vec<McpServerTool>, String> {
+    let _ = block_on(ragasukma_core::agent::mcp::discovery::sync_server_tools(
+        server, model_name,
+    ))?;
+    load_server_tools(&server.id)
 }
 
 /// Load all MCP servers together with the ids that are active for a project.

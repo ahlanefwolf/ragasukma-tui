@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, TableState},
 };
 
 use super::types::{McpFormField, McpServerTabState};
@@ -16,6 +16,22 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
             Span::styled(" [y/Enter] ", Theme::key_badge()),
             Span::raw("Confirm Delete "),
             Span::styled(" [n/Esc] ", Theme::key_badge()),
+            Span::raw("Cancel "),
+        ]
+    } else if state.is_tools_modal_open {
+        vec![
+            Span::styled(" [j/k] ", Theme::key_badge()),
+            Span::raw("Navigate Tools "),
+            Span::styled(" [Esc/q/t] ", Theme::key_badge()),
+            Span::raw("Close "),
+        ]
+    } else if state.is_sync_modal_open {
+        vec![
+            Span::styled(" [j/k] ", Theme::key_badge()),
+            Span::raw("Select Model "),
+            Span::styled(" [Enter] ", Theme::key_badge()),
+            Span::raw("Start Sync "),
+            Span::styled(" [Esc/q] ", Theme::key_badge()),
             Span::raw("Cancel "),
         ]
     } else if state.is_form_open {
@@ -37,6 +53,10 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
             Span::raw("Add "),
             Span::styled(" [e] ", Theme::key_badge()),
             Span::raw("Edit "),
+            Span::styled(" [t] ", Theme::key_badge()),
+            Span::raw("Tools "),
+            Span::styled(" [s] ", Theme::key_badge()),
+            Span::raw("Sync Tools "),
             Span::styled(" [d] ", Theme::key_badge()),
             Span::raw("Delete "),
             Span::styled(" [r] ", Theme::key_badge()),
@@ -50,6 +70,14 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
 pub fn render_mcp_server_tab(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
     // Render full-height so the card matches every other tab (no bottom gap).
     render_server_table(frame, area, state);
+
+    if state.is_tools_modal_open {
+        render_tools_modal(frame, area, state);
+    }
+
+    if state.is_sync_modal_open {
+        render_sync_modal(frame, area, state);
+    }
 
     if state.is_form_open {
         render_form_modal(frame, area, state);
@@ -208,7 +236,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
 
     let json_widget = Paragraph::new(display_lines).block(
         Block::default()
-            .title(" Configuration (JSON format) ")
+            .title(" Configuration (Markdown format) ")
             .borders(Borders::ALL)
             .border_style(Style::default().fg(json_border_color)),
     );
@@ -363,4 +391,140 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+fn render_tools_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
+    let popup_area = centered_rect(75, 75, area);
+    frame.render_widget(Clear, popup_area);
+
+    let server_name = state
+        .selected_server()
+        .map_or("Unknown", |s| s.name.as_str());
+    let title = format!(" Tools for Server: {} ([Esc/q] Close) ", server_name);
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Theme::GOLD_PRIMARY));
+
+    if state.server_tools.is_empty() {
+        let msg = Paragraph::new("No tools registered or synced for this server yet.\nRun sync or add tools to mcp_server_tools.")
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(Theme::TEXT_MUTED))
+            .block(block);
+        frame.render_widget(msg, popup_area);
+        return;
+    }
+
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+        .split(block.inner(popup_area));
+
+    frame.render_widget(block, popup_area);
+
+    let items: Vec<ListItem> = state
+        .server_tools
+        .iter()
+        .enumerate()
+        .map(|(idx, tool)| {
+            let is_sel = idx == state.tools_selected_idx;
+            let style = if is_sel {
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Theme::TEXT_PRIMARY)
+            };
+            let prefix = if is_sel { "> " } else { "  " };
+            ListItem::new(format!("{prefix}{}", tool.name)).style(style)
+        })
+        .collect();
+
+    let list_block = Block::default()
+        .title(" Tools List ")
+        .borders(Borders::RIGHT)
+        .border_style(Style::default().fg(Theme::BORDER_SUBTLE));
+    let list = List::new(items).block(list_block);
+    frame.render_widget(list, chunks[0]);
+
+    if let Some(selected_tool) = state.server_tools.get(state.tools_selected_idx) {
+        let doc = Paragraph::new(selected_tool.config.as_str())
+            .block(
+                Block::default()
+                    .title(format!(" Spec: {} ", selected_tool.name))
+                    .borders(Borders::NONE),
+            )
+            .style(Style::default().fg(Theme::TEXT_PRIMARY));
+        frame.render_widget(doc, chunks[1]);
+    }
+}
+
+fn render_sync_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
+    let popup_area = centered_rect(55, 45, area);
+    frame.render_widget(Clear, popup_area);
+
+    let server_name = state
+        .selected_server()
+        .map_or("Unknown", |s| s.name.as_str());
+
+    let block = Block::default()
+        .title(format!(" Sync Tools: {} ", server_name))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Theme::GOLD_PRIMARY));
+
+    let inner = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // Description / instructions
+            Constraint::Min(3),    // Model list
+            Constraint::Length(2), // Status / Hint
+        ])
+        .split(inner);
+
+    let intro = Paragraph::new("Select model to execute server tools & Markdown sync:")
+        .style(Style::default().fg(Theme::TEXT_MUTED));
+    frame.render_widget(intro, chunks[0]);
+
+    let items: Vec<ListItem> = state
+        .available_models
+        .iter()
+        .enumerate()
+        .map(|(idx, model)| {
+            let is_sel = idx == state.selected_model_idx;
+            let style = if is_sel {
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Theme::TEXT_PRIMARY)
+            };
+            let prefix = if is_sel { "▶ " } else { "  " };
+            ListItem::new(format!("{}{}", prefix, model)).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Theme::BORDER_SUBTLE))
+            .title(" Available Models "),
+    );
+    frame.render_widget(list, chunks[1]);
+
+    let status_text = if state.is_syncing {
+        "⏳ Syncing tools and generating Markdown documentation...".to_string()
+    } else if let Some(ref msg) = state.sync_status_message {
+        msg.clone()
+    } else {
+        "[Enter] Start Sync    [Esc/q] Cancel".to_string()
+    };
+
+    let status_paragraph = Paragraph::new(status_text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Theme::GOLD_PRIMARY));
+    frame.render_widget(status_paragraph, chunks[2]);
 }
