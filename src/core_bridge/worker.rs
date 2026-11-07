@@ -11,25 +11,25 @@ use super::types::{
     CoreBridgeCommand, CoreBridgeEvent, PersistedMessageDto, ProjectDto, SessionDto,
 };
 
-/// Kumpulan `JoinHandle` tak-terkait yang dimiliki satu worker.
+/// A collection of detached `JoinHandle`s owned by a single worker.
 ///
-/// Dipakai untuk dua hal:
-/// 1. **Lifecycle** — saat worker di-`abort()`, `Drop` di sini ikut
-///    membatalkan semua task lepas (`RefreshQuota`, `spawn_blocking` kuota,
-///    subscriber). Tanpa ini task tersebut hidup terus setelah bridge hilang
-///    dan mencoba mengirim ke channel yang sudah tertutup.
-/// 2. **Housekeeping** — `push()` membuang handle yang sudah selesai lebih
-///    dulu, supaya `Vec` tidak tumbuh tanpa batas bila user memicu banyak
-///    refresh.
+/// Used for two purposes:
+/// 1. **Lifecycle** - when the worker is `abort()`ed, the `Drop` here also
+///    cancels all detached tasks (`RefreshQuota`, quota `spawn_blocking`,
+///    subscriber). Without this, those tasks keep running after the bridge is
+///    gone and try to send to a channel that is already closed.
+/// 2. **Housekeeping** - `push()` discards already-finished handles first, so
+///    the `Vec` does not grow without bound when the user triggers many
+///    refreshes.
 ///
-/// Housekeeping sengaja ditempel di `push`, bukan diserahkan ke pemanggil:
-/// sebelumnya `reap()` harus dipanggil manual dari loop utama dan ternyata
-/// terlupakan, sehingga `Vec` bocor pelan-pelan. Karena `push` adalah
-/// satu-satunya pintu masuk elemen baru, membersihkan di situ membuat
-/// kebocoran jenis itu mustahil terulang.
+/// Housekeeping is deliberately attached to `push`, not delegated to the
+/// caller: previously `reap()` had to be called manually from the main loop and
+/// was eventually forgotten, so the `Vec` leaked slowly. Because `push` is the
+/// only entry point for new elements, cleaning up there makes that kind of leak
+/// impossible to happen again.
 ///
-/// `abort()` hanya menghentikan task; ia tidak menunggu, jadi aman dipanggil
-/// dari `Drop` yang sinkron (tidak ada `.await` di dalam Drop).
+/// `abort()` only stops the task; it does not wait, so it is safe to call from
+/// a synchronous `Drop` (there is no `.await` inside Drop).
 #[derive(Default)]
 pub struct TaskGroup {
     handles: Vec<tokio::task::JoinHandle<()>>,
@@ -40,29 +40,29 @@ impl TaskGroup {
         Self::default()
     }
 
-    /// Ambil alih kepemilikan sebuah `JoinHandle`.
+    /// Take ownership of a `JoinHandle`.
     ///
-    /// Handle yang sudah selesai dibuang lebih dulu, jadi panjang `Vec`
-    /// mencerminkan jumlah task yang benar-benar masih hidup.
+    /// Already-finished handles are discarded first, so the length of the `Vec`
+    /// reflects the number of tasks that are truly still alive.
     pub fn push(&mut self, handle: tokio::task::JoinHandle<()>) {
         self.handles.retain(|h| !h.is_finished());
         self.handles.push(handle);
     }
 
-    /// Benar bila tidak ada task yang masih hidup.
+    /// True if there are no tasks still alive.
     pub fn is_empty(&mut self) -> bool {
         self.handles.retain(|h| !h.is_finished());
         self.handles.is_empty()
     }
 }
 
-/// Kumpulan task turn per sesi (`ExecuteTurn` / `RetryTurn`).
+/// A collection of turn tasks per session (`ExecuteTurn` / `RetryTurn`).
 ///
-/// Bertanggung jawab atas:
-/// 1. Memastikan hanya ada 1 task turn per `session_id` (task lama otomatis di-abort).
-/// 2. `cancel(session_id)` membatalkan task spesifik dan menghapusnya dari koleksi.
-/// 3. `Drop` membatalkan semua task yang masih hidup saat worker selesai/dibatalkan,
-///    sehingga tidak ada turn yatim yang berjalan di background.
+/// Responsible for:
+/// 1. Ensuring there is only 1 turn task per `session_id` (the old task is aborted automatically).
+/// 2. `cancel(session_id)` cancels the specific task and removes it from the collection.
+/// 3. `Drop` cancels all still-alive tasks when the worker finishes/is cancelled,
+///    so no orphan turn keeps running in the background.
 #[derive(Default)]
 pub struct ActiveTurns {
     turns: std::collections::HashMap<String, tokio::task::JoinHandle<()>>,
@@ -73,12 +73,12 @@ impl ActiveTurns {
         Self::default()
     }
 
-    /// Bersihkan handle yang sudah selesai berjalan.
+    /// Clean up handles that have already finished running.
     pub fn retain_active(&mut self) {
         self.turns.retain(|_, handle| !handle.is_finished());
     }
 
-    /// Batalkan task turn pada sesi tertentu jika ada.
+    /// Cancel the turn task for a specific session if present.
     pub fn cancel(&mut self, session_id: &str) -> bool {
         if let Some(handle) = self.turns.remove(session_id) {
             handle.abort();
@@ -88,22 +88,22 @@ impl ActiveTurns {
         }
     }
 
-    /// Daftarkan task turn baru untuk sesi. Jika sesi sebelumnya masih punya task,
-    /// task lama langsung di-abort terlebih dahulu.
+    /// Register a new turn task for a session. If the session already has a task,
+    /// the old task is aborted first.
     pub fn insert(&mut self, session_id: String, handle: tokio::task::JoinHandle<()>) {
         if let Some(old) = self.turns.insert(session_id, handle) {
             old.abort();
         }
     }
 
-    /// Cek apakah turn untuk sesi ini sedang aktif berjalan.
+    /// Check whether the turn for this session is currently active.
     #[cfg(test)]
     pub fn is_active(&mut self, session_id: &str) -> bool {
         self.retain_active();
         self.turns.contains_key(session_id)
     }
 
-    /// Benar bila tidak ada task turn yang aktif.
+    /// True if there is no active turn task.
     #[cfg(test)]
     pub fn is_empty(&mut self) -> bool {
         self.retain_active();
@@ -162,20 +162,20 @@ pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<C
 
 /// Forward `AgentSessionEvent` dari broadcast core ke `CoreBridgeEvent`.
 ///
-/// Sesi aktif dibaca dari `watch::Receiver` (satu sumber kebenaran, lihat
-/// `spawn_core_bridge_worker`). Tidak ada polling: perubahan sesi memicu
+/// The active session is read from `watch::Receiver` (single source of truth, see
+/// `spawn_core_bridge_worker`). There is no polling: session changes trigger
 /// `watch_rx.changed()`, sehingga subscriber hanya bangun saat ada event
-/// stream atau saat sesi aktif benar-benar berubah.
+/// event or when the active session actually changes.
 ///
 /// **Lifecycle:** mengembalikan `JoinHandle` yang disimpan di `TaskGroup` milik
 /// `spawn_core_bridge_worker`, sehingga ikut di-`abort()` saat bridge di-drop.
 /// Subscriber juga berhenti sendiri bila `sub_tx` atau `watch_tx` sudah drop.
 ///
-/// `active_status` adalah cache status sesi aktif di sisi worker (di-*share* lewat
+/// `active_status` is the worker-side cache of the active session status (shared via
 /// `Arc<RwLock<String>>`). Cache ini dipakai sebagai *resync*: core hanya
-/// mem-broadcast `StatusChange` saat transisi, jadi kalau subscriber terlambat
-/// berlangganan atau event transisi `running` hilang, TUI tidak akan pernah tahu
-/// sesi sedang berjalan. Setiap `MessageCreated`/`StepInfo` adalah bukti sesi
+/// broadcasts `StatusChange` on transitions, so if the subscriber subscribes too late
+/// or the `running` transition event is lost, the TUI would never know the
+/// session is running. Every `MessageCreated`/`StepInfo` is evidence the session
 /// masih aktif, jadi cache di-`running`-kan lagi dan perbedaannya di-emit.
 pub fn spawn_session_subscriber(
     sub_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
@@ -194,16 +194,16 @@ pub fn spawn_session_subscriber(
             tokio::select! {
                 changed = watch_rx.changed() => {
                     if changed.is_err() {
-                        // Sender di-drop: worker sudah berhenti, tidak ada lagi
-                        // yang bisa mengubah sesi aktif.
+                        // Sender dropped: the worker has stopped, nothing can
+                        // change the active session anymore.
                         break;
                     }
                     let cur = watch_rx.borrow_and_update().clone();
                     if cur != active_sid {
                         active_sid = cur;
                         broadcast_rx = get_session_sender(&active_sid).subscribe();
-                        // Sesi baru: sinkronkan status aktual apakah background task sedang jalan,
-                        // dan emit transisi status ke UI agar sinkron seketika.
+                        // New session: sync the actual status of whether the background task is running,
+                        // and emit the status transition to the UI so it syncs immediately.
                         let initial_st = if !active_sid.is_empty() && is_session_task_running(&active_sid) {
                             "running".to_string()
                         } else {
@@ -221,9 +221,9 @@ pub fn spawn_session_subscriber(
                 evt = broadcast_rx.recv() => {
                     match evt {
                         Ok(event) => {
-                            // Transisi status eksplisit dari core adalah sumber
-                            // kebenaran: perbarui cache sebelum event dilewatkan,
-                            // supaya `resync_status` tidak menimpanya balik.
+                            // An explicit status transition from the core is the source
+                            // of truth: update the cache before the event is forwarded,
+                            // so `resync_status` does not overwrite it back.
                             if let AgentSessionEvent::StatusChange { status } = &event
                                 && let Ok(mut st) = active_status.write()
                             {
@@ -232,8 +232,8 @@ pub fn spawn_session_subscriber(
                                 event,
                                 AgentSessionEvent::MessageCreated(_) | AgentSessionEvent::StepInfo { .. }
                             ) {
-                                // Bukti aktivitas tanpa transisi `running` yang
-                                // terlihat (lag / terlambat subscribe) → pulihkan.
+                                // Activity evidence without a visible `running` transition
+                                // (lag / late subscribe) -> recover.
                                 resync_status(&sub_tx, &active_sid, &active_status);
                             }
                             if let Some(bridge_evt) = map_core_event_to_bridge(&active_sid, event)
@@ -246,8 +246,8 @@ pub fn spawn_session_subscriber(
                             tracing::warn!("Session broadcast subscriber lagged by {missed} events");
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                            // Broadcaster ditutup (mis. sesi selesai atau dibersihkan).
-                            // Buat receiver baru langsung tanpa sleep/polling timer.
+                            // Broadcaster closed (e.g. session finished or cleaned up).
+                            // Create a new receiver immediately without a sleep/polling timer.
                             broadcast_rx = get_session_sender(&active_sid).subscribe();
                         }
                     }
@@ -257,11 +257,11 @@ pub fn spawn_session_subscriber(
     })
 }
 
-/// Resync status sesi aktif ke `running` bila cache masih `idle`.
+/// Resync the active session status to `running` if the cache is still `idle`.
 ///
-/// Core hanya mem-broadcast `StatusChange` saat transisi; kalau event transisi
-/// `running` hilang (subscriber lag / terlambat subscribe), TUI akan stuck di
-/// `idle` walau turn sedang berjalan. Bukti aktivitas (`MessageCreated`,
+/// The core only broadcasts `StatusChange` on transitions; if the transition event
+/// `running` is lost (subscriber lag / late subscribe), the TUI would be stuck in
+/// `idle` even though the turn is running. Activity evidence (`MessageCreated`,
 /// `StepInfo`) dipakai untuk memulihkan state tersebut.
 fn resync_status(
     sub_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
@@ -281,13 +281,13 @@ fn resync_status(
     });
 }
 
-/// Menyetel status sesi aktif secara eksplisit dari sisi worker (bukan dari bukti
-/// aktivitas) dan meng-emit `StatusChange` hanya bila nilainya berubah.
+/// Explicitly set the active session status from the worker side (not from activity
+/// evidence) and emit `StatusChange` only if the value changed.
 ///
-/// Ini pasangan dari [`resync_status`]: resync memulihkan status dari event stream,
-/// sedangkan fungsi ini menulis kebenaran yang diketahui worker sendiri
-/// (turn dimulai → `running`, turn dibatalkan → `idle`). Keduanya berbagi cache yang
-/// sama supaya transisi tidak dobel-emit.
+/// This is the counterpart of [`resync_status`]: resync restores the status from the event stream,
+/// while this function writes the truth known by the worker itself
+/// (turn started -> `running`, turn cancelled -> `idle`). Both share the same cache
+/// so transitions are not double-emitted.
 fn set_active_status(
     sub_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
     sid: &str,
@@ -471,13 +471,13 @@ pub fn spawn_core_bridge_worker(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut active_sid = initial_sid;
-        // Cache status sesi aktif — di-*share* antara worker (penulis status
-        // eksplisit) dan subscriber (resync berbasis bukti aktivitas).
+        // Active session status cache — shared between the worker (explicit status
+        // writer) and the subscriber (resync based on activity evidence).
         let active_status = std::sync::Arc::new(std::sync::RwLock::new("idle".to_string()));
 
-        // Spawn subscriber loop (sesi aktif dipantau lewat watch channel).
-        // Handle disimpan di `tasks` agar subscriber ikut berhenti saat worker
-        // dibatalkan — tanpa ini ia hidup sebagai task yatim.
+        // Spawn the subscriber loop (the active session is monitored via a watch channel).
+        // The handle is stored in `tasks` so the subscriber also stops when the worker
+        // is cancelled — without this it lives on as an orphan task.
         let mut tasks = TaskGroup::new();
         tasks.push(spawn_session_subscriber(
             worker_tx.clone(),
@@ -489,12 +489,12 @@ pub fn spawn_core_bridge_worker(
         let mut last_turn_request: Option<(String, Option<String>)> = None;
 
         while let Some(cmd) = cmd_rx.recv().await {
-            // Bersihkan handle turn yang sudah selesai
+            // Clean up finished turn handles
             active_turns.retain_active();
 
             match cmd {
                 CoreBridgeCommand::CancelTurn { session_id } => {
-                    // Tanpa session_id eksplisit —> batalkan turn pada sesi aktif.
+                    // Without an explicit session_id —> cancel the turn on the active session.
                     let sid = match session_id {
                         Some(sid) => sid,
                         None => {
@@ -762,15 +762,15 @@ pub fn spawn_core_bridge_worker(
                     model_override,
                 } => {
                     let current_turn_sid = active_sid.clone();
-                    // Transisi ke `running` diumumkan worker, bukan subscriber.
+                    // The transition to `running` is announced by the worker, not the subscriber.
                     //
-                    // Subscriber hanya me-resync status saat melihat bukti aktivitas
+                    // The subscriber only resyncs the status when it sees activity evidence
                     // (`MessageCreated`/`StepInfo`), sedangkan `user` message ditulis
-                    // langsung ke DB (tanpa broadcast) dan `StepInfo("thinking")` baru
-                    // muncul setelah pipa turn siap. Akibatnya TUI sempat menampilkan
-                    // status lama selama detik-detik pertama turn, dan `CancelTurn`
-                    // terlihat no-op. Menyetel cache + emit di sini membuat status
-                    // benar sejak perintah diterima.
+                    // directly to the DB (without broadcast) and `StepInfo("thinking")` only
+                    // appears once the turn pipeline is ready. As a result the TUI briefly shows
+                    // the old status during the first seconds of the turn, and `CancelTurn`
+                    // looks like a no-op. Setting the cache + emitting here makes the status
+                    // correct from the moment the command is received.
                     set_active_status(&worker_tx, &current_turn_sid, &active_status, "running");
                     let _ = create_message(
                         &current_turn_sid,
@@ -879,29 +879,29 @@ mod tests {
     use super::{ActiveTurns, TaskGroup};
     use std::time::Duration;
 
-    /// `push` harus membuang handle yang sudah selesai, supaya `Vec` tidak
-    /// tumbuh tanpa batas saat user memicu refresh berkali-kali.
+    /// `push` must discard finished handles so the `Vec` does not
+    /// grow unbounded when the user triggers refresh repeatedly.
     #[tokio::test]
-    async fn push_membuang_handle_yang_sudah_selesai() {
+    async fn push_discards_finished_handles() {
         let mut group = TaskGroup::new();
 
         for _ in 0..50 {
             group.push(tokio::spawn(async {}));
         }
-        // Beri kesempatan task selesai, lalu picu housekeeping via `push`.
+        // Give tasks a chance to finish, then trigger housekeeping via `push`.
         tokio::time::sleep(Duration::from_millis(20)).await;
         group.push(tokio::spawn(async {}));
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         assert!(
             group.is_empty(),
-            "handle selesai harus dibuang oleh push(), bukan menumpuk"
+            "finished handles must be discarded by push(), not accumulate"
         );
     }
 
-    /// Task yang masih hidup tidak boleh dibuang oleh housekeeping.
+    /// Still-alive tasks must not be discarded by housekeeping.
     #[tokio::test]
-    async fn push_mempertahankan_task_yang_masih_hidup() {
+    async fn push_retains_still_alive_tasks() {
         let (release, wait) = tokio::sync::oneshot::channel::<()>();
         let mut group = TaskGroup::new();
         group.push(tokio::spawn(async move {
@@ -910,16 +910,16 @@ mod tests {
         group.push(tokio::spawn(async {}));
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        // Hanya task pertama (menunggu `release`) yang tersisa.
+        // Only the first task (waiting on `release`) remains.
         assert!(
             !group.is_empty(),
-            "task yang belum selesai tidak boleh ikut dibuang"
+            "unfinished tasks must not be discarded"
         );
         let _ = release.send(());
     }
 
     #[tokio::test]
-    async fn switch_session_2x_berturut_turut_tidak_ada_event_nyasar() {
+    async fn switch_session_twice_in_a_row_no_stray_events() {
         use crate::core_bridge::types::CoreBridgeEvent;
         use crate::core_bridge::worker::spawn_session_subscriber;
         use ragasukma_core::agent::events::get_session_sender;
@@ -939,14 +939,14 @@ mod tests {
 
         let handle = spawn_session_subscriber(sub_tx, watch_rx, active_status);
 
-        // Beri waktu subscriber start dan subscribe ke sid1
+        // Give the subscriber time to start and subscribe to sid1
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         let sender1 = get_session_sender(&sid1);
         let sender2 = get_session_sender(&sid2);
         let sender3 = get_session_sender(&sid3);
 
-        // 1. Emit di sid1, harus diterima
+        // 1. Emit on sid1, must be received
         let _ = sender1.send(AgentSessionEvent::Delta {
             delta: "hello-1".to_string(),
         });
@@ -960,13 +960,13 @@ mod tests {
                 break;
             }
         }
-        assert!(got_hello1, "harus menerima delta dari sid1");
+        assert!(got_hello1, "must receive delta from sid1");
 
-        // 2. Switch ke sid2 (Pindah ke-1)
+        // 2. Switch to sid2 (switch #1)
         watch_tx.send(sid2.clone()).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        // Kirim event di sid1 (sesi lama) dan sid2 (sesi baru)
+        // Send an event on sid1 (old session) and sid2 (new session)
         let _ = sender1.send(AgentSessionEvent::Delta {
             delta: "stray-1".to_string(),
         });
@@ -987,14 +987,14 @@ mod tests {
                 }
             }
         }
-        assert!(!got_stray1, "tidak boleh menerima event nyasar dari sid1");
-        assert!(got_hello2, "harus menerima delta dari sid2");
+        assert!(!got_stray1, "must not receive stray events from sid1");
+        assert!(got_hello2, "must receive delta from sid2");
 
-        // 3. Switch ke sid3 (Pindah ke-2 berturut-turut)
+        // 3. Switch to sid3 (switch #2 in a row)
         watch_tx.send(sid3.clone()).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        // Kirim event di sid2 (sesi lama) dan sid3 (sesi baru)
+        // Send an event on sid2 (old session) and sid3 (new session)
         let _ = sender2.send(AgentSessionEvent::Delta {
             delta: "stray-2".to_string(),
         });
@@ -1015,14 +1015,14 @@ mod tests {
                 }
             }
         }
-        assert!(!got_stray2, "tidak boleh menerima event nyasar dari sid2");
-        assert!(got_hello3, "harus menerima delta dari sid3");
+        assert!(!got_stray2, "must not receive stray events from sid2");
+        assert!(got_hello3, "must receive delta from sid3");
 
         handle.abort();
     }
 
     #[tokio::test]
-    async fn drop_task_group_dan_active_turns_membatalkan_seluruh_task() {
+    async fn drop_task_group_and_active_turns_cancel_all_tasks() {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
         use std::time::Duration;
@@ -1048,21 +1048,21 @@ mod tests {
             });
             at.insert("sess-drop-test".to_string(), h2);
 
-            // Pada titik ini kedua task sedang berjalan.
-            // Saat keluar blok, tg dan at di-drop.
+            // At this point both tasks are running.
+            // On leaving the block, tg and at are dropped.
         }
 
-        // Beri sedikit jeda agar sinyal abort diproses
+        // Give a short delay for the abort signal to be processed
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        // Kedua flag tidak boleh pernah diset true karena task di-abort saat drop
+        // Neither flag must ever be set to true because the tasks are aborted on drop
         assert!(
             !flag_tg.load(Ordering::SeqCst),
-            "TaskGroup harus membatalkan task saat di-drop"
+            "TaskGroup must cancel tasks when dropped"
         );
         assert!(
             !flag_at.load(Ordering::SeqCst),
-            "ActiveTurns harus membatalkan turn saat di-drop"
+            "ActiveTurns must cancel turns when dropped"
         );
     }
 }
