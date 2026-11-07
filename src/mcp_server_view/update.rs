@@ -121,6 +121,10 @@ pub fn handle_mcp_server_action(
             state.sync_model_prev();
             Some(None)
         }
+        Action::McpServerSyncKey(key) => {
+            state.sync_search_handle_key(*key);
+            Some(None)
+        }
         Action::McpServerSyncConfirm => match state.execute_sync() {
             Ok(msg) => Some(Some(msg)),
             Err(e) => Some(Some(format!("Sync error: {e}"))),

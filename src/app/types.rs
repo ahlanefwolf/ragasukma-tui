@@ -206,6 +206,7 @@ pub enum Action {
     McpServerSyncModelNext,
     McpServerSyncModelPrev,
     McpServerSyncConfirm,
+    McpServerSyncKey(KeyEvent),
 
     ShowDiffPreview {
         file_path: String,

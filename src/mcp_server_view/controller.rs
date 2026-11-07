@@ -36,11 +36,11 @@ impl McpServerTabState {
         // 3. Sync Tools modal
         if self.is_sync_modal_open {
             return match code {
-                KeyCode::Esc | KeyCode::Char('q') => Some(Action::McpServerSyncModalClose),
-                KeyCode::Down | KeyCode::Char('j') => Some(Action::McpServerSyncModelNext),
-                KeyCode::Up | KeyCode::Char('k') => Some(Action::McpServerSyncModelPrev),
+                KeyCode::Esc => Some(Action::McpServerSyncModalClose),
+                KeyCode::Down | KeyCode::Tab => Some(Action::McpServerSyncModelNext),
+                KeyCode::Up | KeyCode::BackTab => Some(Action::McpServerSyncModelPrev),
                 KeyCode::Enter => Some(Action::McpServerSyncConfirm),
-                _ => None,
+                _ => Some(Action::McpServerSyncKey(key)),
             };
         }
 

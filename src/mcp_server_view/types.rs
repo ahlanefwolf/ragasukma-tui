@@ -14,7 +14,7 @@ impl McpServerExt for McpServer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum McpFormField {
     Name,
-    JsonConfig,
+    Config,
     Enabled,
     SaveBtn,
     CancelBtn,
@@ -24,8 +24,8 @@ impl McpFormField {
     #[must_use]
     pub fn next(self) -> Self {
         match self {
-            Self::Name => Self::JsonConfig,
-            Self::JsonConfig => Self::Enabled,
+            Self::Name => Self::Config,
+            Self::Config => Self::Enabled,
             Self::Enabled => Self::SaveBtn,
             Self::SaveBtn => Self::CancelBtn,
             Self::CancelBtn => Self::Name,
@@ -36,8 +36,8 @@ impl McpFormField {
     pub fn prev(self) -> Self {
         match self {
             Self::Name => Self::CancelBtn,
-            Self::JsonConfig => Self::Name,
-            Self::Enabled => Self::JsonConfig,
+            Self::Config => Self::Name,
+            Self::Enabled => Self::Config,
             Self::SaveBtn => Self::Enabled,
             Self::CancelBtn => Self::SaveBtn,
         }
@@ -67,6 +67,7 @@ pub struct McpServerTabState {
     pub is_sync_modal_open: bool,
     pub available_models: Vec<String>,
     pub selected_model_idx: usize,
+    pub sync_search_input: TextInput,
     pub is_syncing: bool,
     pub sync_status_message: Option<String>,
 

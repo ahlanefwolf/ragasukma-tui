@@ -28,11 +28,13 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
         ]
     } else if state.is_sync_modal_open {
         vec![
-            Span::styled(" [j/k] ", Theme::key_badge()),
-            Span::raw("Select Model "),
+            Span::styled(" [Type] ", Theme::key_badge()),
+            Span::raw("Filter "),
+            Span::styled(" [↑/↓/Tab] ", Theme::key_badge()),
+            Span::raw("Navigate "),
             Span::styled(" [Enter] ", Theme::key_badge()),
             Span::raw("Start Sync "),
-            Span::styled(" [Esc/q] ", Theme::key_badge()),
+            Span::styled(" [Esc] ", Theme::key_badge()),
             Span::raw("Cancel "),
         ]
     } else if state.is_form_open {
@@ -171,7 +173,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // Name input
-            Constraint::Min(6),    // JSON textarea
+            Constraint::Min(6),    // Markdown textarea
             Constraint::Length(2), // Status (Aktif toggle)
             Constraint::Length(1), // Error
             Constraint::Length(3), // Buttons
@@ -179,7 +181,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
         .split(inner_area);
 
     render_text_input(frame, inner[0], &state.form_name, "Server Name", &Theme);
-    render_text_input(frame, inner[1], &state.form_json, "Configuration", &Theme);
+    render_text_input(frame, inner[1], &state.form_json, "Configuration (Markdown)", &Theme);
 
     // 3. Status (Enabled/Disabled toggle)
     let enabled_focused = state.focused_field == McpFormField::Enabled;
@@ -393,17 +395,35 @@ fn render_tools_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) 
 }
 
 fn render_sync_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
-    let popup_area = centered_rect(55, 45, area);
+    let popup_area = centered_rect(65, 55, area);
     frame.render_widget(Clear, popup_area);
 
     let server_name = state
         .selected_server()
         .map_or("Unknown", |s| s.name.as_str());
 
+    let filtered_models = state.filtered_sync_models();
+    let total = filtered_models.len();
+    let sel = state.selected_model_idx;
+
     let block = Block::default()
-        .title(format!(" Sync Tools: {} ", server_name))
+        .title(Span::styled(
+            format!("  Sync Tools: {} ", server_name),
+            Theme::header_title(),
+        ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Theme::GOLD_PRIMARY));
+        .border_style(Theme::border_focused())
+        .title_bottom(Line::from(vec![
+            Span::styled(" [Type] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Filter  ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled("[↑/↓/Tab] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Navigate  ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled("[Enter] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Start Sync  ", Style::default().fg(Theme::TEXT_SECONDARY)),
+            Span::styled("[Esc] ", Style::default().fg(Theme::GOLD_PRIMARY)),
+            Span::styled("Cancel ", Style::default().fg(Theme::TEXT_SECONDARY)),
+        ]))
+        .style(Theme::block_base());
 
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
@@ -411,40 +431,74 @@ fn render_sync_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // Description / instructions
-            Constraint::Min(3),    // Model list
-            Constraint::Length(2), // Status / Hint
+            Constraint::Length(3), // Search filter text input
+            Constraint::Min(4),    // Model list
+            Constraint::Length(2), // Status / feedback
         ])
         .split(inner);
 
-    let intro = Paragraph::new("Select model to execute server tools & Markdown sync:")
-        .style(Style::default().fg(Theme::TEXT_MUTED));
-    frame.render_widget(intro, chunks[0]);
+    render_text_input(
+        frame,
+        chunks[0],
+        &state.sync_search_input,
+        "Filter Models",
+        &Theme,
+    );
 
-    let items: Vec<ListItem> = state
-        .available_models
+    let visible_height = chunks[1].height.saturating_sub(2) as usize;
+    let (start, end) = if visible_height == 0 || total <= visible_height {
+        (0, total)
+    } else {
+        let half = visible_height / 2;
+        let start = if sel < half {
+            0
+        } else if sel + (visible_height - half) >= total {
+            total.saturating_sub(visible_height)
+        } else {
+            sel.saturating_sub(half)
+        };
+        (start, (start + visible_height).min(total))
+    };
+
+    let items: Vec<ListItem> = filtered_models[start..end]
         .iter()
         .enumerate()
-        .map(|(idx, model)| {
-            let is_sel = idx == state.selected_model_idx;
-            let style = if is_sel {
-                Style::default()
-                    .fg(Theme::GOLD_PRIMARY)
-                    .add_modifier(Modifier::BOLD)
+        .map(|(rel_idx, m)| {
+            let abs_idx = start + rel_idx;
+            let is_sel = abs_idx == sel;
+
+            let line = if is_sel {
+                Line::from(vec![
+                    Span::styled(
+                        " ❯ ",
+                        Style::default()
+                            .fg(Theme::GOLD_PRIMARY)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("[◈ {}]", m),
+                        Style::default()
+                            .fg(Theme::GOLD_PRIMARY)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ])
             } else {
-                Style::default().fg(Theme::TEXT_PRIMARY)
+                Line::from(vec![
+                    Span::raw("   "),
+                    Span::styled(m.as_str(), Style::default().fg(Theme::TEXT_PRIMARY)),
+                ])
             };
-            let prefix = if is_sel { "▶ " } else { "  " };
-            ListItem::new(format!("{}{}", prefix, model)).style(style)
+            ListItem::new(line)
         })
         .collect();
 
-    let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Theme::BORDER_SUBTLE))
-            .title(" Available Models "),
-    );
+    let counter = format!(" Available Models ({total}) ");
+    let list_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border_subtle())
+        .title(Span::styled(counter, Theme::header_title()));
+
+    let list = List::new(items).block(list_block);
     frame.render_widget(list, chunks[1]);
 
     let status_text = if state.is_syncing {
@@ -452,7 +506,7 @@ fn render_sync_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
     } else if let Some(ref msg) = state.sync_status_message {
         msg.clone()
     } else {
-        "[Enter] Start Sync    [Esc/q] Cancel".to_string()
+        "Press Enter to run sync with the selected model".to_string()
     };
 
     let status_paragraph = Paragraph::new(status_text)

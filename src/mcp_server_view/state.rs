@@ -91,10 +91,7 @@ impl McpServerTabState {
             is_form_open: false,
             editing_id: None,
             form_name: TextInput::new_single_line().with_placeholder("Server display name"),
-            form_json: TextInput::new_multiline_editor().with_placeholder("# MCP Configuration
-
-```json
-..."),
+            form_json: TextInput::new_multiline_editor().with_placeholder("# MCP Configuration (Markdown)\n\n- transport: stdio\n- command: npx\n- args: -y ...\n\n## Capabilities\nServer capabilities and specifications."),
             form_enabled: true,
             focused_field: McpFormField::Name,
             form_error: None,
@@ -104,6 +101,9 @@ impl McpServerTabState {
             is_sync_modal_open: false,
             available_models: Vec::new(),
             selected_model_idx: 0,
+            sync_search_input: TextInput::new_single_line()
+                .with_placeholder("Type model name or keyword to filter...")
+                .with_focus(true),
             is_syncing: false,
             sync_status_message: None,
             delete_confirm_id: None,
@@ -112,7 +112,7 @@ impl McpServerTabState {
 
     pub fn update_field_focus(&mut self) {
         self.form_name.is_focused = self.focused_field == McpFormField::Name;
-        self.form_json.is_focused = self.focused_field == McpFormField::JsonConfig;
+        self.form_json.is_focused = self.focused_field == McpFormField::Config;
     }
 
     pub fn set_servers(&mut self, servers: Vec<McpServer>) {
@@ -208,15 +208,7 @@ Server capabilities and parameter specifications.
         self.is_form_open = true;
         self.editing_id = Some(id);
         self.form_name.set_value(&name);
-
-        // Format pretty JSON if valid JSON
-        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&config) {
-            self.form_json
-                .set_value(serde_json::to_string_pretty(&val).unwrap_or_else(|_| config.clone()));
-        } else {
-            self.form_json.set_value(&config);
-        }
-
+        self.form_json.set_value(&config);
         self.form_enabled = is_enabled;
         self.focused_field = McpFormField::Name;
         self.form_error = None;
@@ -270,6 +262,8 @@ Server capabilities and parameter specifications.
             }
             self.available_models = models;
             self.selected_model_idx = 0;
+            self.sync_search_input.clear();
+            self.sync_search_input.focus();
             self.sync_status_message = None;
             self.is_syncing = false;
             self.is_sync_modal_open = true;
@@ -279,18 +273,52 @@ Server capabilities and parameter specifications.
     pub fn close_sync_modal(&mut self) {
         self.is_sync_modal_open = false;
         self.is_syncing = false;
+        self.sync_search_input.clear();
+        self.sync_search_input.unfocus();
         self.sync_status_message = None;
     }
 
+    pub fn filtered_sync_models(&self) -> Vec<String> {
+        let q = self.sync_search_input.value.trim().to_lowercase();
+        if q.is_empty() {
+            self.available_models.clone()
+        } else {
+            self.available_models
+                .iter()
+                .filter(|m| m.to_lowercase().contains(&q))
+                .cloned()
+                .collect()
+        }
+    }
+
     pub fn sync_model_next(&mut self) {
-        if !self.available_models.is_empty() {
-            self.selected_model_idx =
-                (self.selected_model_idx + 1).min(self.available_models.len() - 1);
+        let filtered = self.filtered_sync_models();
+        if !filtered.is_empty() {
+            if self.selected_model_idx + 1 >= filtered.len() {
+                self.selected_model_idx = 0;
+            } else {
+                self.selected_model_idx += 1;
+            }
         }
     }
 
     pub fn sync_model_prev(&mut self) {
-        self.selected_model_idx = self.selected_model_idx.saturating_sub(1);
+        let filtered = self.filtered_sync_models();
+        if !filtered.is_empty() {
+            if self.selected_model_idx == 0 {
+                self.selected_model_idx = filtered.len() - 1;
+            } else {
+                self.selected_model_idx -= 1;
+            }
+        }
+    }
+
+    pub fn sync_search_handle_key(&mut self, key: crossterm::event::KeyEvent) {
+        self.sync_search_input.handle_key(key);
+        let filtered = self.filtered_sync_models();
+        if self.selected_model_idx >= filtered.len() && !filtered.is_empty() {
+            self.selected_model_idx = filtered.len() - 1;
+        }
     }
 
     pub fn execute_sync(&mut self) -> Result<String, String> {
@@ -298,10 +326,11 @@ Server capabilities and parameter specifications.
             return Err("No server selected for sync".to_string());
         };
 
-        let chosen_model = self
-            .available_models
+        let filtered = self.filtered_sync_models();
+        let chosen_model = filtered
             .get(self.selected_model_idx)
-            .map(|s| s.as_str());
+            .map(|s| s.as_str())
+            .or_else(|| self.available_models.first().map(|s| s.as_str()));
 
         self.is_syncing = true;
         match service::sync_tools_for_server(&server, chosen_model) {
@@ -310,6 +339,8 @@ Server capabilities and parameter specifications.
                 self.server_tools = tools;
                 self.is_syncing = false;
                 self.is_sync_modal_open = false;
+                self.sync_search_input.clear();
+                self.sync_search_input.unfocus();
                 let msg = format!("Successfully synced {count} tools for server '{}'", server.name);
                 self.sync_status_message = Some(msg.clone());
                 Ok(msg)
@@ -345,7 +376,7 @@ Server capabilities and parameter specifications.
             McpFormField::Name => {
                 self.form_name.handle_key(key);
             }
-            McpFormField::JsonConfig => {
+            McpFormField::Config => {
                 self.form_json.handle_key(key);
             }
             McpFormField::Enabled => {
@@ -362,7 +393,7 @@ Server capabilities and parameter specifications.
             McpFormField::Name => {
                 self.form_name.paste(text);
             }
-            McpFormField::JsonConfig => {
+            McpFormField::Config => {
                 self.form_json.paste(text);
             }
             _ => {}
@@ -476,7 +507,7 @@ mod tests {
 
         // Switch to Markdown Config
         state.next_field();
-        assert_eq!(state.focused_field, McpFormField::JsonConfig);
+        assert_eq!(state.focused_field, McpFormField::Config);
 
         // Input Markdown Content
         state.form_json.clear();
@@ -507,16 +538,22 @@ mod tests {
         assert!(!state.available_models.is_empty());
         assert_eq!(state.selected_model_idx, 0);
 
-        state.available_models = vec!["model-a".to_string(), "model-b".to_string()];
+        state.available_models = vec!["claude-3-5".to_string(), "deepseek-coder".to_string()];
         state.sync_model_next();
         assert_eq!(state.selected_model_idx, 1);
 
-        // Boundary check (clamped to len - 1)
+        // Wrap around cycling
         state.sync_model_next();
-        assert_eq!(state.selected_model_idx, 1);
+        assert_eq!(state.selected_model_idx, 0);
 
         state.sync_model_prev();
-        assert_eq!(state.selected_model_idx, 0);
+        assert_eq!(state.selected_model_idx, 1);
+
+        // Test filtering
+        state.sync_search_input.set_value("deep");
+        let filtered = state.filtered_sync_models();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0], "deepseek-coder");
 
         state.close_sync_modal();
         assert!(!state.is_sync_modal_open);

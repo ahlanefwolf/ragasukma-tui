@@ -14,7 +14,9 @@ impl App {
                 || self.agent.model_modal.is_open))
             || (self.active_tab == 4 && self.custom_llm.is_form_open)
             || (self.active_tab == 5
-                && (self.mcp_server.is_form_open || self.mcp_server.delete_confirm_id.is_some()))
+                && (self.mcp_server.is_form_open
+                    || self.mcp_server.is_sync_modal_open
+                    || self.mcp_server.delete_confirm_id.is_some()))
     }
 
     pub fn handle_key_event(&self, key: KeyEvent) -> Option<Action> {
