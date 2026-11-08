@@ -3,10 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, Clear, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Wrap,
-    },
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 
 use super::helpers::centered_rect;
@@ -84,20 +81,6 @@ pub fn render_project_switcher_modal(frame: &mut Frame, area: Rect, state: &Agen
 
     let list = List::new(items).block(block);
     frame.render_widget(list, popup_area);
-
-    if total > inner_height {
-        let mut scrollbar_state = ScrollbarState::default()
-            .content_length(total)
-            .position(sel);
-        frame.render_stateful_widget(
-            Scrollbar::default()
-                .orientation(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("▲"))
-                .end_symbol(Some("▼")),
-            popup_area,
-            &mut scrollbar_state,
-        );
-    }
 }
 
 pub fn render_create_project_modal(frame: &mut Frame, area: Rect, modal: &CreateProjectModalState) {
@@ -470,18 +453,4 @@ pub fn render_model_selector_modal(frame: &mut Frame, state: &AgentWorkspaceStat
 
     let list = List::new(items);
     frame.render_widget(list, list_area);
-
-    if total > inner_height && inner_height > 0 {
-        let mut scrollbar_state = ScrollbarState::default()
-            .content_length(total)
-            .position(sel);
-        frame.render_stateful_widget(
-            Scrollbar::default()
-                .orientation(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("▲"))
-                .end_symbol(Some("▼")),
-            list_area,
-            &mut scrollbar_state,
-        );
-    }
 }

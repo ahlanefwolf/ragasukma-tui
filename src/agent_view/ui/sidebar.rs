@@ -3,9 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-    },
+    widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
 use crate::agent_view::states::AgentWorkspaceState;
@@ -292,20 +290,6 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 .border_style(border_style)
                 .style(Theme::block_base());
             frame.render_widget(List::new(task_items).block(block), chunks[2]);
-
-            if total > inner_height {
-                let mut scrollbar_state = ScrollbarState::default()
-                    .content_length(total)
-                    .position(sel);
-                frame.render_stateful_widget(
-                    Scrollbar::default()
-                        .orientation(ScrollbarOrientation::VerticalRight)
-                        .begin_symbol(Some("▲"))
-                        .end_symbol(Some("▼")),
-                    chunks[2],
-                    &mut scrollbar_state,
-                );
-            }
         }
         AgentSidebarTab::Files => {
             let is_files_focused = state.focus_area == AgentFocusArea::Files;
@@ -423,20 +407,6 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 .border_style(border_style)
                 .style(Theme::block_base());
             frame.render_widget(List::new(file_items).block(block), chunks[2]);
-
-            if total > inner_height {
-                let mut scrollbar_state = ScrollbarState::default()
-                    .content_length(total)
-                    .position(sel);
-                frame.render_stateful_widget(
-                    Scrollbar::default()
-                        .orientation(ScrollbarOrientation::VerticalRight)
-                        .begin_symbol(Some("▲"))
-                        .end_symbol(Some("▼")),
-                    chunks[2],
-                    &mut scrollbar_state,
-                );
-            }
         }
         AgentSidebarTab::Mcp => {
             let is_mcp_focused = state.focus_area == AgentFocusArea::McpTools;
@@ -521,20 +491,6 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 .border_style(border_style)
                 .style(Theme::block_base());
             frame.render_widget(List::new(mcp_items).block(block), chunks[2]);
-
-            if total > inner_height {
-                let mut scrollbar_state = ScrollbarState::default()
-                    .content_length(total)
-                    .position(sel);
-                frame.render_stateful_widget(
-                    Scrollbar::default()
-                        .orientation(ScrollbarOrientation::VerticalRight)
-                        .begin_symbol(Some("▲"))
-                        .end_symbol(Some("▼")),
-                    chunks[2],
-                    &mut scrollbar_state,
-                );
-            }
         }
     }
 

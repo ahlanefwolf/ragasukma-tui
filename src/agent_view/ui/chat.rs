@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Borders, Paragraph},
 };
 
 use super::message_renderer::{
@@ -39,7 +39,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         .style(Theme::block_base());
 
     let chat_inner = chat_block.inner(chunks[0]);
-    let text_width = chat_inner.width.saturating_sub(1) as usize;
+    let text_width = chat_inner.width as usize;
     let inner_height = chat_inner.height as usize;
 
     let message_count = state.messages.len();
@@ -124,39 +124,9 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     }
     .min(max_scroll);
 
-    let scrollbar_area = Rect {
-        x: chat_inner.x + chat_inner.width.saturating_sub(1),
-        y: chat_inner.y,
-        width: 1.min(chat_inner.width),
-        height: chat_inner.height,
-    };
-
-    let text_area = Rect {
-        x: chat_inner.x,
-        y: chat_inner.y,
-        width: chat_inner.width.saturating_sub(1),
-        height: chat_inner.height,
-    };
-
     let p = Paragraph::new(cache.lines.clone()).scroll((effective_scroll as u16, 0));
     frame.render_widget(chat_block, chunks[0]);
-    frame.render_widget(p, text_area);
-
-    if max_scroll > 0 && scrollbar_area.width > 0 {
-        let mut scrollbar_state =
-            ScrollbarState::new(total_visual_lines).position(effective_scroll.min(max_scroll));
-        frame.render_stateful_widget(
-            Scrollbar::default()
-                .orientation(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("▲"))
-                .end_symbol(Some("▼"))
-                .thumb_symbol("█")
-                .track_symbol(Some("│"))
-                .style(Style::default().fg(Theme::CYAN_ACCENT)),
-            scrollbar_area,
-            &mut scrollbar_state,
-        );
-    }
+    frame.render_widget(p, chat_inner);
 
     // Input Bar Card
     let input_border = if state.tag_query.is_some() {
