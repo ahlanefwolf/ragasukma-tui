@@ -551,6 +551,7 @@ impl AgentWorkspaceState {
             self.tag_query = None;
             self.scroll_offset = 0;
             self.auto_scroll = true;
+            self.chat_visible_limit = crate::agent_view::ui::message_renderer::DEFAULT_CHAT_MESSAGE_LIMIT;
             Some(trimmed)
         }
     }
@@ -627,6 +628,13 @@ impl AgentWorkspaceState {
 
     pub fn scroll_up(&mut self) {
         let max = self.chat_max_scroll.get();
+        // If user reaches the top of the currently rendered messages, lazy load older messages (limit += 25)
+        if self.scroll_offset >= max && self.chat_visible_limit < self.messages.len() {
+            self.chat_visible_limit = (self.chat_visible_limit
+                + crate::agent_view::ui::message_renderer::CHAT_LAZY_LOAD_STEP)
+                .min(self.messages.len());
+        }
+        let max = self.chat_max_scroll.get();
         self.scroll_offset = (self.scroll_offset.saturating_add(1)).min(max);
         self.auto_scroll = false;
     }
@@ -641,6 +649,7 @@ impl AgentWorkspaceState {
     }
 
     pub fn scroll_to_top(&mut self) {
+        self.chat_visible_limit = self.messages.len();
         self.scroll_offset = self.chat_max_scroll.get();
         self.auto_scroll = false;
     }

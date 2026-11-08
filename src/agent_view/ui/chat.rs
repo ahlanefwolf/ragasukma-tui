@@ -43,6 +43,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let inner_height = chat_inner.height as usize;
 
     let message_count = state.messages.len();
+    let visible_limit = state.chat_visible_limit;
     let last_content_len = state.messages.last().map(|m| m.content.len()).unwrap_or(0);
     let is_running = state.is_running;
     let expanded_tools_len = state.expanded_tools.len();
@@ -51,6 +52,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let mut cache = state.chat_layout_cache.borrow_mut();
     let is_cache_valid = cache.width == text_width
         && cache.message_count == message_count
+        && cache.visible_limit == visible_limit
         && cache.last_content_len == last_content_len
         && cache.is_running == is_running
         && cache.expanded_tools_len == expanded_tools_len
@@ -74,12 +76,36 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
                 ),
             ]));
         } else {
-            for (idx, msg) in state.messages.iter().enumerate() {
+            let (visible_messages, hidden_count) =
+                crate::agent_view::ui::message_renderer::get_lazy_message_window(
+                    &state.messages,
+                    visible_limit,
+                );
+
+            if hidden_count > 0 {
+                chat_lines.push(Line::from(vec![
+                    Span::styled(
+                        format!(
+                            "  ↑ [ {} older message{} hidden — scroll up to load ]",
+                            hidden_count,
+                            if hidden_count == 1 { "" } else { "s" }
+                        ),
+                        Style::default()
+                            .fg(Theme::CYAN_ACCENT)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]));
+                chat_lines.push(Line::from(""));
+            }
+
+            let start_idx = hidden_count;
+            for (idx, msg) in visible_messages.iter().enumerate() {
+                let actual_idx = start_idx + idx;
                 let config = MessageRenderConfig {
                     tab_size: 4,
                     max_tool_lines: 40,
                     reasoning_expanded,
-                    tool_expanded: state.expanded_tools.contains(&idx),
+                    tool_expanded: state.expanded_tools.contains(&actual_idx),
                 };
                 chat_lines.extend(render_message_to_lines(msg, &config));
             }
@@ -107,6 +133,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         cache.lines = wrap_lines_to_width(chat_lines, text_width);
         cache.width = text_width;
         cache.message_count = message_count;
+        cache.visible_limit = visible_limit;
         cache.last_content_len = last_content_len;
         cache.is_running = is_running;
         cache.expanded_tools_len = expanded_tools_len;
@@ -124,7 +151,11 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     }
     .min(max_scroll);
 
-    let p = Paragraph::new(cache.lines.clone()).scroll((effective_scroll as u16, 0));
+    // Viewport-only slice to avoid cloning offscreen lines (saves RAM and CPU every frame)
+    let start = effective_scroll.min(total_visual_lines);
+    let end = (start + inner_height).min(total_visual_lines);
+    let visible_lines = cache.lines[start..end].to_vec();
+    let p = Paragraph::new(visible_lines);
     frame.render_widget(chat_block, chunks[0]);
     frame.render_widget(p, chat_inner);
 

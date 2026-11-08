@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct ChatLayoutCache {
     pub width: usize,
     pub message_count: usize,
+    pub visible_limit: usize,
     pub last_content_len: usize,
     pub is_running: bool,
     pub expanded_tools_len: usize,
@@ -41,6 +42,8 @@ pub struct AgentWorkspaceState {
     pub reasoning_expanded: bool,
     pub auto_scroll: bool,
     pub spinner_tick: usize,
+    /// Number of most recent messages to render (lazy load window limit).
+    pub chat_visible_limit: usize,
 
     // Phase 5: Prompt History Navigation
     pub history: Vec<String>,
@@ -123,6 +126,7 @@ impl Default for AgentWorkspaceState {
             reasoning_expanded: false,
             auto_scroll: true,
             spinner_tick: 0,
+            chat_visible_limit: crate::agent_view::ui::message_renderer::DEFAULT_CHAT_MESSAGE_LIMIT,
             history: Vec::new(),
             history_index: None,
             history_draft: String::new(),
@@ -185,6 +189,7 @@ impl AgentWorkspaceState {
 
     pub fn set_messages(&mut self, messages: Vec<ChatMessage>) {
         self.messages = messages;
+        self.chat_visible_limit = crate::agent_view::ui::message_renderer::DEFAULT_CHAT_MESSAGE_LIMIT;
         self.enforce_message_limit();
     }
 
@@ -288,6 +293,7 @@ impl AgentWorkspaceState {
                 }
             })
             .collect();
+        self.chat_visible_limit = crate::agent_view::ui::message_renderer::DEFAULT_CHAT_MESSAGE_LIMIT;
         self.enforce_message_limit();
         self.scroll_offset = 0;
         self.auto_scroll = true;
@@ -295,6 +301,7 @@ impl AgentWorkspaceState {
 
     pub fn clear_chat(&mut self) {
         self.messages.clear();
+        self.chat_visible_limit = crate::agent_view::ui::message_renderer::DEFAULT_CHAT_MESSAGE_LIMIT;
         self.scroll_offset = 0;
         self.expanded_tools.clear();
         self.auto_scroll = true;

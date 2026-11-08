@@ -6,6 +6,26 @@ use ratatui::{
 use crate::agent_view::types::{ChatMessage, MessageRole, ToolExecutionStatus};
 use crate::theme::Theme;
 
+/// Default number of chat messages to render initially (lazy load window limit).
+pub const DEFAULT_CHAT_MESSAGE_LIMIT: usize = 25;
+
+/// Number of older messages to load when scrolling up to the top.
+pub const CHAT_LAZY_LOAD_STEP: usize = 25;
+
+/// Returns a sliced window of messages for lazy rendering and the count of hidden older messages.
+pub fn get_lazy_message_window(
+    messages: &[ChatMessage],
+    limit: usize,
+) -> (&[ChatMessage], usize) {
+    let effective_limit = limit.max(1);
+    if messages.len() > effective_limit {
+        let hidden = messages.len() - effective_limit;
+        (&messages[hidden..], hidden)
+    } else {
+        (messages, 0)
+    }
+}
+
 /// Standard Ratatui text formatting configuration for chat/tool messages.
 #[derive(Debug, Clone)]
 pub struct MessageRenderConfig {
