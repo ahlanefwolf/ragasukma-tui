@@ -176,18 +176,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         Span::styled("  Message Input ", Theme::badge_gray())
     };
 
-    let prompt_prefix = Span::styled(
-        "❯ ",
-        Style::default()
-            .fg(if state.tag_query.is_some() {
-                Theme::CYAN_ACCENT
-            } else {
-                Theme::GOLD_PRIMARY
-            })
-            .add_modifier(Modifier::BOLD),
-    );
-
-    let prompt_width = 2usize; // "❯ "
+    let prompt_width = 0usize;
     let available_width = (chunks[1].width as usize)
         .saturating_sub(2 + prompt_width)
         .max(5);
@@ -199,7 +188,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let visible_lines: Vec<Line> = if state.input_buffer.is_empty() {
         let placeholder = if is_input_focused {
             Span::styled(
-                "Type a prompt, or @ to attach file context...",
+                "Type a prompt, or @ to attach file context... (Shift+Enter for newline)",
                 Style::default()
                     .fg(Theme::TEXT_SECONDARY)
                     .add_modifier(Modifier::ITALIC),
@@ -210,23 +199,13 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
                 Style::default().fg(Theme::TEXT_SECONDARY),
             )
         };
-        vec![Line::from(vec![prompt_prefix, placeholder])]
+        vec![Line::from(vec![placeholder])]
     } else {
         let start_line = state.input_scroll_line;
         let end_line = (start_line + 3).min(vlines.len());
         let mut rendered = Vec::new();
 
-        for (line_idx, vl) in vlines.iter().enumerate().take(end_line).skip(start_line) {
-            let line_prefix = if vl.is_paragraph_start {
-                if line_idx == 0 {
-                    prompt_prefix.clone()
-                } else {
-                    Span::styled("❯ ", Style::default().fg(Theme::TEXT_SECONDARY))
-                }
-            } else {
-                Span::styled("  ", Style::default().fg(Theme::TEXT_SECONDARY))
-            };
-
+        for (_line_idx, vl) in vlines.iter().enumerate().take(end_line).skip(start_line) {
             let visible_slice = if vl.start_byte < vl.end_byte
                 && vl.end_byte <= state.input_buffer.len()
                 && state.input_buffer.is_char_boundary(vl.start_byte)
@@ -237,7 +216,7 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
                 ""
             };
 
-            let mut spans = vec![line_prefix];
+            let mut spans = Vec::new();
             let mut current_idx = 0;
             let buf = visible_slice;
 

@@ -316,6 +316,8 @@ impl AgentWorkspaceState {
     }
 
     pub fn sanitize_pasted_text(text: &str) -> String {
+        // Strip trailing CRLF/LF that is commonly copied from terminal output/commands in Windows
+        let text = text.trim_end_matches(&['\r', '\n'][..]);
         let text = text.replace('\r', "");
         let raw_lines: Vec<&str> = text.split('\n').collect();
         if raw_lines.len() <= 1 {
