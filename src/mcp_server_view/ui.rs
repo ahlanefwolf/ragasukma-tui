@@ -3,10 +3,10 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, TableState, Wrap},
 };
 
-use super::types::{McpFormField, McpServerTabState};
+use super::types::{McpFormField, McpPane, McpServerTabState};
 use crate::theme::Theme;
 use crate::ui::render_text_input;
 
@@ -19,10 +19,19 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
             Span::styled(" [n/Esc] ", Theme::key_badge()),
             Span::raw("Cancel "),
         ]
+    } else if state.is_tool_detail_open {
+        vec![
+            Span::styled(" [↑/↓/j/k] ", Theme::key_badge()),
+            Span::raw("Scroll Spec "),
+            Span::styled(" [Esc/q/Enter] ", Theme::key_badge()),
+            Span::raw("Close Detail "),
+        ]
     } else if state.is_tools_modal_open {
         vec![
             Span::styled(" [j/k] ", Theme::key_badge()),
             Span::raw("Navigate Tools "),
+            Span::styled(" [Enter/d] ", Theme::key_badge()),
+            Span::raw("View Spec "),
             Span::styled(" [Esc/q/t] ", Theme::key_badge()),
             Span::raw("Close "),
         ]
@@ -47,32 +56,53 @@ pub fn get_footer_key_hints(state: &McpServerTabState) -> Vec<Span<'static>> {
             Span::raw("Cancel "),
         ]
     } else {
-        vec![
-            Span::styled(" [j/k] ", Theme::key_badge()),
-            Span::raw("Navigate "),
-            Span::styled(" [Space/Enter] ", Theme::key_badge()),
-            Span::raw("Toggle Enabled "),
-            Span::styled(" [a] ", Theme::key_badge()),
-            Span::raw("Add "),
-            Span::styled(" [e] ", Theme::key_badge()),
-            Span::raw("Edit "),
-            Span::styled(" [t] ", Theme::key_badge()),
-            Span::raw("Tools "),
-            Span::styled(" [s] ", Theme::key_badge()),
-            Span::raw("Sync Tools "),
-            Span::styled(" [d] ", Theme::key_badge()),
-            Span::raw("Delete "),
-            Span::styled(" [r] ", Theme::key_badge()),
-            Span::raw("Refresh "),
-            Span::styled(" [Ctrl+Q] ", Theme::key_badge()),
-            Span::raw("Quit "),
-        ]
+        match state.active_pane {
+            McpPane::Servers => vec![
+                Span::styled(" [Tab/→] ", Theme::key_badge()),
+                Span::raw("Tools Pane "),
+                Span::styled(" [j/k] ", Theme::key_badge()),
+                Span::raw("Navigate "),
+                Span::styled(" [Space] ", Theme::key_badge()),
+                Span::raw("Toggle Enabled "),
+                Span::styled(" [a] ", Theme::key_badge()),
+                Span::raw("Add "),
+                Span::styled(" [e] ", Theme::key_badge()),
+                Span::raw("Edit "),
+                Span::styled(" [s] ", Theme::key_badge()),
+                Span::raw("Sync Tools "),
+                Span::styled(" [d] ", Theme::key_badge()),
+                Span::raw("Delete "),
+                Span::styled(" [r] ", Theme::key_badge()),
+                Span::raw("Refresh "),
+            ],
+            McpPane::Tools => vec![
+                Span::styled(" [Tab/Esc/←] ", Theme::key_badge()),
+                Span::raw("Servers Pane "),
+                Span::styled(" [j/k] ", Theme::key_badge()),
+                Span::raw("Select Tool "),
+                Span::styled(" [Enter/d] ", Theme::key_badge()),
+                Span::raw("Tool Detail/Config "),
+                Span::styled(" [s] ", Theme::key_badge()),
+                Span::raw("Sync Tools "),
+                Span::styled(" [r] ", Theme::key_badge()),
+                Span::raw("Refresh "),
+            ],
+        }
     }
 }
 
 pub fn render_mcp_server_tab(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
-    // Render full-height so the card matches every other tab (no bottom gap).
-    render_server_table(frame, area, state);
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(42), Constraint::Percentage(58)])
+        .split(area);
+
+    render_servers_card(frame, chunks[0], state);
+    render_tools_card(frame, chunks[1], state);
+
+    if state.is_tool_detail_open {
+        render_tool_detail_modal(frame, area, state);
+    }
 
     if state.is_tools_modal_open {
         render_tools_modal(frame, area, state);
@@ -91,14 +121,27 @@ pub fn render_mcp_server_tab(frame: &mut Frame, area: Rect, state: &McpServerTab
     }
 }
 
-fn render_server_table(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
+fn render_servers_card(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
+    let is_active = state.active_pane == McpPane::Servers;
+    let border_color = if is_active {
+        Theme::GOLD_PRIMARY
+    } else {
+        Theme::BORDER_SUBTLE
+    };
+
+    let title = format!(
+        " MCP Servers ({}) {} ",
+        state.servers.len(),
+        if is_active { "●" } else { "" }
+    );
+
     let block = Block::default()
-        .title(" MCP Servers ")
+        .title(title)
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Theme::BORDER_SUBTLE));
+        .border_style(Style::default().fg(border_color));
 
     if state.servers.is_empty() {
-        let empty_msg = Paragraph::new("No MCP servers registered. Press [a] to add a new server.")
+        let empty_msg = Paragraph::new("No MCP servers registered.\nPress [a] to add a new server.")
             .alignment(Alignment::Center)
             .style(Style::default().fg(Theme::TEXT_MUTED))
             .block(block);
@@ -106,8 +149,7 @@ fn render_server_table(frame: &mut Frame, area: Rect, state: &McpServerTabState)
         return;
     }
 
-    // Only 2 columns: Name and Status
-    let header = Row::new(vec!["Server Name", "Status"])
+    let header = Row::new(vec!["Server", "Type", "Status"])
         .style(
             Style::default()
                 .fg(Theme::GOLD_PRIMARY)
@@ -119,22 +161,42 @@ fn render_server_table(frame: &mut Frame, area: Rect, state: &McpServerTabState)
         .servers
         .iter()
         .map(|s| {
+            let transport = if s.config.contains("transport: sse")
+                || s.config.contains("transport: http")
+                || s.config.contains("url:")
+            {
+                "http/sse"
+            } else {
+                "stdio"
+            };
+
             let status_span = if s.is_enabled != 0 {
                 Span::styled(
-                    "● Enabled",
+                    "● Active",
                     Style::default()
                         .fg(Theme::STATUS_SUCCESS)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
-                Span::styled("○ Disabled", Style::default().fg(Theme::TEXT_MUTED))
+                Span::styled("○ Off", Style::default().fg(Theme::TEXT_MUTED))
             };
 
-            Row::new(vec![Line::from(s.name.as_str()), Line::from(status_span)])
+            Row::new(vec![
+                Line::from(s.name.as_str()),
+                Line::from(Span::styled(
+                    transport,
+                    Style::default().fg(Theme::CYAN_ACCENT),
+                )),
+                Line::from(status_span),
+            ])
         })
         .collect();
 
-    let widths = [Constraint::Percentage(70), Constraint::Percentage(30)];
+    let widths = [
+        Constraint::Percentage(50),
+        Constraint::Percentage(25),
+        Constraint::Percentage(25),
+    ];
 
     let mut table_state = TableState::default();
     table_state.select(Some(state.selected_idx));
@@ -147,9 +209,194 @@ fn render_server_table(frame: &mut Frame, area: Rect, state: &McpServerTabState)
                 .fg(Theme::GOLD_PRIMARY)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("❯ ");
+        .highlight_symbol(if is_active { "❯ " } else { "  " });
 
     frame.render_stateful_widget(table, area, &mut table_state);
+}
+
+fn render_tools_card(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
+    let is_active = state.active_pane == McpPane::Tools;
+    let border_color = if is_active {
+        Theme::GOLD_PRIMARY
+    } else {
+        Theme::BORDER_SUBTLE
+    };
+
+    let server_name = state
+        .selected_server()
+        .map_or("No Server", |s| s.name.as_str());
+
+    let title = format!(
+        " Tools: {} ({} tools) {} ",
+        server_name,
+        state.server_tools.len(),
+        if is_active { "●" } else { "" }
+    );
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(border_color));
+
+    if state.server_tools.is_empty() {
+        let msg = if state.selected_server().is_none() {
+            "Select an MCP server from the left pane to view its tools."
+        } else {
+            "No tools registered for this server yet.\n\nPress [s] to sync/discover tools from the server."
+        };
+        let empty_p = Paragraph::new(msg)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(Theme::TEXT_MUTED))
+            .block(block);
+        frame.render_widget(empty_p, area);
+        return;
+    }
+
+    let items: Vec<ListItem> = state
+        .server_tools
+        .iter()
+        .enumerate()
+        .map(|(i, tool)| {
+            let is_selected = i == state.tools_selected_idx;
+            let marker = if is_selected && is_active {
+                "❯ "
+            } else if is_selected {
+                "• "
+            } else {
+                "  "
+            };
+
+            // Extract brief description if available
+            let brief_desc = extract_tool_description(&tool.config);
+            let max_w = (area.width as usize).saturating_sub(8).max(30);
+            let display_desc = if brief_desc.chars().count() > max_w {
+                let truncated: String = brief_desc.chars().take(max_w.saturating_sub(3)).collect();
+                format!("{}...", truncated)
+            } else {
+                brief_desc
+            };
+
+            let header_style = if is_selected {
+                Style::default()
+                    .fg(Theme::GOLD_PRIMARY)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Theme::TEXT_PRIMARY)
+            };
+
+            let lines = vec![
+                Line::from(vec![
+                    Span::styled(marker, Style::default().fg(Theme::GOLD_PRIMARY)),
+                    Span::styled(tool.name.as_str(), header_style),
+                ]),
+                Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(
+                        display_desc,
+                        Style::default().fg(Theme::TEXT_MUTED),
+                    ),
+                ]),
+            ];
+
+            ListItem::new(lines)
+        })
+        .collect();
+
+    let list = List::new(items).block(block);
+    frame.render_widget(list, area);
+}
+
+fn extract_tool_description(config: &str) -> String {
+    for line in config.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("description:") {
+            return trimmed
+                .trim_start_matches("description:")
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .trim()
+                .to_string();
+        }
+        if trimmed.starts_with("- description:") {
+            return trimmed
+                .trim_start_matches("- description:")
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .trim()
+                .to_string();
+        }
+        if !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && !trimmed.starts_with("```")
+            && !trimmed.starts_with("name:")
+            && !trimmed.starts_with("tools:")
+        {
+            let desc = trimmed.trim_start_matches("- ").trim();
+            return desc.to_string();
+        }
+    }
+    "No description available".to_string()
+}
+
+fn render_tool_detail_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
+    let popup_area = centered_rect(85, 85, area);
+    frame.render_widget(Clear, popup_area);
+
+    let selected_tool = match state.selected_tool() {
+        Some(t) => t,
+        None => return,
+    };
+
+    let server_name = state
+        .selected_server()
+        .map_or("Unknown Server", |s| s.name.as_str());
+
+    let title = format!(
+        " Tool Detail & Spec: {} ({}) ([Esc/q/Enter] Close, [↑/↓/j/k] Scroll) ",
+        selected_tool.name, server_name
+    );
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Theme::GOLD_PRIMARY));
+
+    let content_area = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    let lines: Vec<Line> = if selected_tool.config.trim().is_empty() {
+        vec![Line::from(Span::styled(
+            "No specification details available for this tool.",
+            Style::default().fg(Theme::TEXT_MUTED),
+        ))]
+    } else {
+        selected_tool
+            .config
+            .lines()
+            .map(|line| {
+                let l = line.trim();
+                let style = if l.starts_with('#') {
+                    Style::default()
+                        .fg(Theme::GOLD_PRIMARY)
+                        .add_modifier(Modifier::BOLD)
+                } else if l.starts_with("- ") || l.starts_with("* ") {
+                    Style::default().fg(Theme::CYAN_ACCENT)
+                } else if l.starts_with("```") {
+                    Style::default().fg(Theme::TEXT_MUTED)
+                } else {
+                    Style::default().fg(Theme::TEXT_PRIMARY)
+                };
+                Line::from(Span::styled(line.to_string(), style))
+            })
+            .collect()
+    };
+
+    let paragraph = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((state.tool_detail_scroll as u16, 0));
+    frame.render_widget(paragraph, content_area);
 }
 
 fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
@@ -389,7 +636,8 @@ fn render_tools_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) 
                     .title(format!(" Spec: {} ", selected_tool.name))
                     .borders(Borders::NONE),
             )
-            .style(Style::default().fg(Theme::TEXT_PRIMARY));
+            .style(Style::default().fg(Theme::TEXT_PRIMARY))
+            .wrap(Wrap { trim: false });
         frame.render_widget(doc, chunks[1]);
     }
 }
@@ -502,7 +750,7 @@ fn render_sync_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
     frame.render_widget(list, chunks[1]);
 
     let status_text = if state.is_syncing {
-        "⏳ Syncing tools and generating Markdown documentation...".to_string()
+        "Syncing tools and generating Markdown documentation...".to_string()
     } else if let Some(ref msg) = state.sync_status_message {
         msg.clone()
     } else {

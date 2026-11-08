@@ -44,10 +44,17 @@ impl McpFormField {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpPane {
+    Servers,
+    Tools,
+}
+
 #[derive(Debug, Clone)]
 pub struct McpServerTabState {
     pub servers: Vec<McpServer>,
     pub selected_idx: usize,
+    pub active_pane: McpPane,
 
     // Form modal state
     pub is_form_open: bool,
@@ -58,10 +65,12 @@ pub struct McpServerTabState {
     pub focused_field: McpFormField,
     pub form_error: Option<String>,
 
-    // Tools list modal state
+    // Tools list & detail state
     pub is_tools_modal_open: bool,
     pub server_tools: Vec<McpServerTool>,
     pub tools_selected_idx: usize,
+    pub is_tool_detail_open: bool,
+    pub tool_detail_scroll: usize,
 
     // Sync modal state & model runner
     pub is_sync_modal_open: bool,

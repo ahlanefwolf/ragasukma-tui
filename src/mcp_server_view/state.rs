@@ -1,7 +1,7 @@
 use ragasukma_core::agent::models::McpServer;
 
 use super::service;
-use super::types::{McpFormField, McpServerTabState};
+use super::types::{McpFormField, McpPane, McpServerTabState};
 use crate::ui::TextInput;
 
 /// Maximum characters rendered for the `config_preview_summary` hint.
@@ -88,16 +88,20 @@ impl McpServerTabState {
         Self {
             servers: Vec::new(),
             selected_idx: 0,
+            active_pane: McpPane::Servers,
             is_form_open: false,
             editing_id: None,
             form_name: TextInput::new_single_line().with_placeholder("Server display name"),
-            form_json: TextInput::new_multiline_editor().with_placeholder("# MCP Configuration (Markdown)\n\n- transport: stdio\n- command: npx\n- args: -y ...\n\n## Capabilities\nServer capabilities and specifications."),
+            form_json: TextInput::new_multiline_editor()
+                .with_placeholder("Enter MCP server configuration (Markdown)..."),
             form_enabled: true,
             focused_field: McpFormField::Name,
             form_error: None,
             is_tools_modal_open: false,
             server_tools: Vec::new(),
             tools_selected_idx: 0,
+            is_tool_detail_open: false,
+            tool_detail_scroll: 0,
             is_sync_modal_open: false,
             available_models: Vec::new(),
             selected_model_idx: 0,
@@ -122,12 +126,33 @@ impl McpServerTabState {
         } else if self.selected_idx >= self.servers.len() {
             self.selected_idx = self.servers.len() - 1;
         }
+        self.load_tools_for_selected();
     }
 
     pub fn reload(&mut self) -> Result<(), String> {
         let servers = service::load_servers()?;
         self.set_servers(servers);
         Ok(())
+    }
+
+    pub fn load_tools_for_selected(&mut self) {
+        if let Some(server) = self.selected_server() {
+            match service::load_server_tools(&server.id) {
+                Ok(tools) => {
+                    self.server_tools = tools;
+                    if self.tools_selected_idx >= self.server_tools.len() {
+                        self.tools_selected_idx = self.server_tools.len().saturating_sub(1);
+                    }
+                }
+                Err(_) => {
+                    self.server_tools.clear();
+                    self.tools_selected_idx = 0;
+                }
+            }
+        } else {
+            self.server_tools.clear();
+            self.tools_selected_idx = 0;
+        }
     }
 
     #[must_use]
@@ -138,6 +163,7 @@ impl McpServerTabState {
     pub fn select_next(&mut self) {
         if !self.servers.is_empty() {
             self.selected_idx = (self.selected_idx + 1) % self.servers.len();
+            self.load_tools_for_selected();
         }
     }
 
@@ -148,7 +174,40 @@ impl McpServerTabState {
             } else {
                 self.selected_idx - 1
             };
+            self.load_tools_for_selected();
         }
+    }
+
+    pub fn toggle_pane(&mut self) {
+        self.active_pane = match self.active_pane {
+            McpPane::Servers => McpPane::Tools,
+            McpPane::Tools => McpPane::Servers,
+        };
+    }
+
+    pub fn open_tool_detail(&mut self) {
+        if !self.server_tools.is_empty() {
+            self.is_tool_detail_open = true;
+            self.tool_detail_scroll = 0;
+        }
+    }
+
+    pub fn close_tool_detail(&mut self) {
+        self.is_tool_detail_open = false;
+        self.tool_detail_scroll = 0;
+    }
+
+    pub fn tool_detail_scroll_up(&mut self) {
+        self.tool_detail_scroll = self.tool_detail_scroll.saturating_sub(1);
+    }
+
+    pub fn tool_detail_scroll_down(&mut self) {
+        self.tool_detail_scroll = self.tool_detail_scroll.saturating_add(1);
+    }
+
+    #[must_use]
+    pub fn selected_tool(&self) -> Option<&ragasukma_core::agent::models::McpServerTool> {
+        self.server_tools.get(self.tools_selected_idx)
     }
 
     pub fn toggle_enabled(&mut self) -> Result<String, String> {
@@ -171,21 +230,7 @@ impl McpServerTabState {
         self.is_form_open = true;
         self.editing_id = None;
         self.form_name.clear();
-        let default_config = r#"# MCP Server Configuration
-
-## Runtime Execution
-```exec
-transport: stdio
-command: npx
-args:
-  - "-y"
-  - "@modelcontextprotocol/server-everything"
-```
-
-## Notes & Capabilities
-Server capabilities and parameter specifications.
-"#;
-        self.form_json.set_value(default_config);
+        self.form_json.clear();
         self.form_enabled = true;
         self.focused_field = McpFormField::Name;
         self.form_error = None;

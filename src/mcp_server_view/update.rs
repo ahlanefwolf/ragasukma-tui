@@ -105,6 +105,26 @@ pub fn handle_mcp_server_action(
             state.tools_select_prev();
             Some(None)
         }
+        Action::McpServerTogglePane => {
+            state.toggle_pane();
+            Some(None)
+        }
+        Action::McpServerToolDetailOpen => {
+            state.open_tool_detail();
+            Some(None)
+        }
+        Action::McpServerToolDetailClose => {
+            state.close_tool_detail();
+            Some(None)
+        }
+        Action::McpServerToolDetailScrollUp => {
+            state.tool_detail_scroll_up();
+            Some(None)
+        }
+        Action::McpServerToolDetailScrollDown => {
+            state.tool_detail_scroll_down();
+            Some(None)
+        }
         Action::McpServerSyncTools => {
             state.open_sync_modal();
             Some(None)
