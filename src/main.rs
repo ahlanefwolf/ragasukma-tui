@@ -23,6 +23,19 @@ async fn main() -> Result<()> {
     // 1.1 Ensure assets and configuration files exist (auto-create if missing)
     ragasukma_tui::assets::ensure_assets_exist();
 
+    // 1.2 Background maintenance (N-1).
+    //
+    // This used to be dead code: `run_retention_loop` had no caller at all, so neither the
+    // startup sweep that resets sessions stranded at `running` by a crashed process nor the
+    // periodic retention pruning ever ran. `retention_task` performs one sweep immediately
+    // and then repeats on the configured interval (a zero interval means "startup sweep
+    // only"). It is spawned rather than awaited so the TUI starts regardless of DB latency,
+    // and it runs before the bridge reads sessions so the first `SessionsLoaded` already
+    // sees corrected rows.
+    tokio::spawn(async {
+        ragasukma_core::agent::maintenance::run_retention_loop().await;
+    });
+
     // 2. Initialize terminal (raw mode, alternate screen)
     let mut term = terminal::init()?;
 

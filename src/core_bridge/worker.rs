@@ -79,19 +79,33 @@ impl ActiveTurns {
     }
 
     /// Cancel the turn task for a specific session if present.
+    ///
+    /// Returns `true` only if a turn was genuinely still running and got aborted. A handle
+    /// whose task has already finished is not a cancellation: reporting `true` would make the
+    /// caller emit `TurnCancelled` for a turn that actually completed, showing "cancelled"
+    /// over a finished answer. The finished handle is dropped either way.
     pub fn cancel(&mut self, session_id: &str) -> bool {
-        if let Some(handle) = self.turns.remove(session_id) {
-            handle.abort();
-            true
-        } else {
-            false
+        match self.turns.remove(session_id) {
+            Some(handle) if !handle.is_finished() => {
+                handle.abort();
+                true
+            }
+            Some(_) => false,
+            None => false,
         }
     }
 
     /// Register a new turn task for a session. If the session already has a task,
     /// the old task is aborted first.
+    ///
+    /// The abort is logged because the aborted task cannot report it itself: `abort()`
+    /// gives the task no chance to emit an event, so a silently replaced turn is
+    /// indistinguishable from one that is still working.
     pub fn insert(&mut self, session_id: String, handle: tokio::task::JoinHandle<()>) {
-        if let Some(old) = self.turns.insert(session_id, handle) {
+        if let Some(old) = self.turns.insert(session_id.clone(), handle) {
+            tracing::warn!(
+                "Replacing a still-running turn for session {session_id}; aborting the old task"
+            );
             old.abort();
         }
     }
@@ -326,11 +340,20 @@ async fn execute_turn_pipeline(
     .await;
 
     match res {
-        Ok(reply) => {
-            let _ = worker_tx.send(CoreBridgeEvent::TurnCompleted {
-                session_id,
-                summary: reply,
-            });
+        Ok(outcome) => {
+            if outcome.is_completed() {
+                let _ = worker_tx.send(CoreBridgeEvent::TurnCompleted {
+                    session_id,
+                    summary: outcome.reply().to_string(),
+                });
+            } else {
+                // The turn stopped because the session was cancelled (or its status was
+                // changed externally) and produced no answer. Reporting this as
+                // `TurnCompleted` used to leave the TUI showing a finished turn with an
+                // empty reply; `TurnCancelled` is what the UI already knows how to unwind.
+                tracing::info!("Turn for {session_id} stopped early: {:?}", outcome);
+                finish_cancelled_turn(&worker_tx, session_id).await;
+            }
         }
         Err(e) => {
             if is_retry {
@@ -344,6 +367,24 @@ async fn execute_turn_pipeline(
             });
         }
     }
+}
+
+/// Reports a turn that ended without an answer, and makes sure the session is left idle.
+///
+/// Two things have to happen together: the UI must be told (otherwise the spinner keeps
+/// turning, since `is_running` is only ever cleared by an event), and the `sessions.status`
+/// column must be reset (otherwise `SessionsLoaded` rebuilds `is_running` from it and the
+/// session looks busy again on the next load).
+async fn finish_cancelled_turn(
+    worker_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+    session_id: String,
+) {
+    if let Err(e) = ragasukma_core::agent::repository::update_session_status(&session_id, "idle")
+        .await
+    {
+        tracing::warn!("Could not reset cancelled session {session_id} to idle: {e}");
+    }
+    let _ = worker_tx.send(CoreBridgeEvent::TurnCancelled { session_id });
 }
 
 /// Helper untuk memancarkan hasil pembaruan kuota pemakaian model (T8 / Fase 5.2).
@@ -431,15 +472,30 @@ pub fn spawn_core_bridge_worker(
 
             match cmd {
                 CoreBridgeCommand::CancelTurn { session_id } => {
-                    // Without an explicit session_id —> cancel the turn on the active session.
+                    // Without an explicit session_id — cancel the turn on the active session.
                     let sid = match session_id {
                         Some(sid) => sid,
-                        None => {
-                            set_active_status(&worker_tx, &active_sid, &active_status, "idle");
-                            active_sid.clone()
-                        }
+                        None => active_sid.clone(),
                     };
-                    active_turns.cancel(&sid);
+                    // `cancel` only aborts the task. An aborted task never gets to report
+                    // anything, and the TUI clears `is_running` exclusively from events, so
+                    // this used to leave the spinner turning forever. The notification and
+                    // the status reset therefore have to be issued here, by the canceller.
+                    //
+                    // The return value matters (N-3): `cancel` is `false` when the session had
+                    // no turn in flight. Ignoring it made Esc after a finished turn emit a
+                    // `TurnCancelled` for a turn the model had already answered, which the UI
+                    // unwinds as a stop. Only a real cancel may report one.
+                    if active_turns.cancel(&sid) {
+                        if sid == active_sid {
+                            set_active_status(&worker_tx, &active_sid, &active_status, "idle");
+                        }
+                        finish_cancelled_turn(&worker_tx, sid).await;
+                    } else {
+                        tracing::debug!(
+                            "Cancel requested for session {sid} but no turn was in flight; ignoring"
+                        );
+                    }
                 }
                 CoreBridgeCommand::RetryTurn => {
                     if let Some((_retry_prompt, model_override)) = last_turn_request.clone() {
@@ -1002,6 +1058,60 @@ mod tests {
         assert!(
             !flag_at.load(Ordering::SeqCst),
             "ActiveTurns must cancel turns when dropped"
+        );
+    }
+
+    /// N-3 regression: `cancel` must only report (and act on) a turn that is still running.
+    ///
+    /// The Esc key always calls `cancel`, including when the UI still believes a turn is
+    /// running but the task has already finished. A `true` return in that case would make the
+    /// caller emit `TurnCancelled` for a turn that actually completed, leaving the transcript
+    /// showing "cancelled" for a finished answer.
+    #[tokio::test]
+    async fn cancel_reports_only_genuinely_running_turns() {
+        let mut turns = ActiveTurns::new();
+
+        // Nothing running at all: cancel must report "nothing to cancel".
+        assert!(
+            !turns.cancel("n3-idle"),
+            "cancel on an unknown session must return false"
+        );
+
+        // A live turn: cancel must succeed and terminate the task.
+        let (release, wait) = tokio::sync::oneshot::channel::<()>();
+        let alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let flag = alive.clone();
+        let handle = tokio::spawn(async move {
+            let _ = wait.await;
+            flag.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
+        turns.insert("n3-running".to_string(), handle);
+
+        assert!(
+            turns.cancel("n3-running"),
+            "cancel on a running turn must return true"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            alive.load(std::sync::atomic::Ordering::SeqCst),
+            "cancel must abort the running task before it can finish its work"
+        );
+        let _ = release.send(());
+
+        // The handle was removed, so a second Esc must not claim it cancelled anything again.
+        assert!(
+            !turns.cancel("n3-running"),
+            "cancel must be idempotent: a second call must return false"
+        );
+
+        // A turn that finished on its own, but whose handle is still registered because
+        // `retain_active` has not run yet. Returning `true` here is the bug: the caller would
+        // emit TurnCancelled for a turn that had already completed.
+        turns.insert("n3-finished".to_string(), tokio::spawn(async {}));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            !turns.cancel("n3-finished"),
+            "cancel must not report a turn that already finished as cancelled"
         );
     }
 }
