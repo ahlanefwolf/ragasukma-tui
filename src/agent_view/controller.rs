@@ -265,9 +265,11 @@ mod tests {
 
     #[test]
     fn test_enter_key_swallowed_when_tag_query_active() {
-        let mut state = AgentWorkspaceState::default();
-        state.is_input_focused = true;
-        state.tag_query = Some(FileTagQuery::new("test".to_string(), vec![], 0));
+        let mut state = AgentWorkspaceState {
+            is_input_focused: true,
+            tag_query: Some(FileTagQuery::new("test".to_string(), vec![], 0)),
+            ..Default::default()
+        };
 
         let enter_event = KeyEvent {
             code: KeyCode::Enter,
