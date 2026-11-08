@@ -92,8 +92,7 @@ impl McpServerTabState {
             is_form_open: false,
             editing_id: None,
             form_name: TextInput::new_single_line().with_placeholder("Server display name"),
-            form_json: TextInput::new_multiline_editor()
-                .with_placeholder("Enter MCP server configuration (Markdown)..."),
+            form_json: TextInput::new_multiline_editor(),
             form_enabled: true,
             focused_field: McpFormField::Name,
             form_error: None,

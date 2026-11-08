@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -6,6 +8,14 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::theme::Theme;
+
+/// Representasi baris visual untuk pembungkusan teks multiline (soft wrapping).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InputVisualLine {
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub is_paragraph_start: bool,
+}
 
 /// Mode perilaku input teks untuk menangani baris baru (newline) dan tombol Enter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -52,6 +62,7 @@ pub struct TextInput {
     pub is_password: bool,      // Masking karakter (misal API key: "••••••")
     pub max_length: Option<usize>,
     pub mode: TextInputMode,    // Mode penanganan newline dan Enter
+    pub last_wrap_width: Cell<Option<usize>>, // Cache lebar wrap visual saat dirender
 }
 
 impl Default for TextInput {
@@ -65,6 +76,7 @@ impl Default for TextInput {
             is_password: false,
             max_length: None,
             mode: TextInputMode::SingleLine,
+            last_wrap_width: Cell::new(None),
         }
     }
 }
@@ -456,10 +468,141 @@ impl TextInput {
         self.ensure_char_boundary();
     }
 
+    /// Menghitung baris visual dengan pembungkusan teks otomatis (soft wrap)
+    /// jika teks melebihi lebar maksimum horizontal `wrap_width`.
+    #[must_use]
+    pub fn compute_visual_lines(&self, wrap_width: usize) -> Vec<InputVisualLine> {
+        let wrap = wrap_width.max(1);
+        let display = self.display_content();
+        if display.is_empty() {
+            return vec![InputVisualLine {
+                start_byte: 0,
+                end_byte: 0,
+                is_paragraph_start: true,
+            }];
+        }
+
+        let mut vlines = Vec::new();
+        let mut phys_start = 0;
+        let total_len = display.len();
+
+        while phys_start <= total_len {
+            let phys_end = match display[phys_start..].find('\n') {
+                Some(idx) => phys_start + idx,
+                None => total_len,
+            };
+
+            let phys_str = &display[phys_start..phys_end];
+            let char_count = phys_str.chars().count();
+
+            if char_count == 0 {
+                vlines.push(InputVisualLine {
+                    start_byte: phys_start,
+                    end_byte: phys_end,
+                    is_paragraph_start: true,
+                });
+            } else {
+                let mut current_seg_chars = 0;
+                let mut seg_start_byte = phys_start;
+                let mut is_first = true;
+
+                for (byte_offset, _ch) in phys_str.char_indices() {
+                    if current_seg_chars == wrap {
+                        let seg_end_byte = phys_start + byte_offset;
+                        vlines.push(InputVisualLine {
+                            start_byte: seg_start_byte,
+                            end_byte: seg_end_byte,
+                            is_paragraph_start: is_first,
+                        });
+                        is_first = false;
+                        seg_start_byte = seg_end_byte;
+                        current_seg_chars = 0;
+                    }
+                    current_seg_chars += 1;
+                }
+
+                vlines.push(InputVisualLine {
+                    start_byte: seg_start_byte,
+                    end_byte: phys_end,
+                    is_paragraph_start: is_first,
+                });
+
+                if char_count > 0 && char_count.is_multiple_of(wrap) && self.cursor == phys_end {
+                    vlines.push(InputVisualLine {
+                        start_byte: phys_end,
+                        end_byte: phys_end,
+                        is_paragraph_start: false,
+                    });
+                }
+            }
+
+            if phys_end == total_len {
+                break;
+            }
+            phys_start = phys_end + 1;
+        }
+
+        vlines
+    }
+
+    /// Mendapatkan posisi kursor visual (baris visual, kolom visual)
+    /// berdasarkan pembungkusan teks `wrap_width`.
+    #[must_use]
+    pub fn get_cursor_visual_position(&self, wrap_width: usize) -> (usize, usize) {
+        let vlines = self.compute_visual_lines(wrap_width);
+        let safe_pos = self.cursor.min(self.value.len());
+
+        for (idx, vl) in vlines.iter().enumerate() {
+            if safe_pos == vl.end_byte
+                && idx + 1 < vlines.len()
+                && vlines[idx + 1].start_byte == vl.end_byte
+            {
+                continue;
+            }
+
+            if safe_pos >= vl.start_byte && safe_pos <= vl.end_byte {
+                let display = self.display_content();
+                let col = display[vl.start_byte..safe_pos].chars().count();
+                return (idx, col);
+            }
+        }
+
+        let last_idx = vlines.len() - 1;
+        let last_vl = &vlines[last_idx];
+        let display = self.display_content();
+        let col = display[last_vl.start_byte..safe_pos.max(last_vl.start_byte)]
+            .chars()
+            .count();
+        (last_idx, col)
+    }
+
     /// Memindahkan kursor ke baris sebelumnya pada teks multiline.
     /// Mengembalikan `true` bila kursor berhasil berpindah baris, atau `false` bila sudah di baris pertama.
     pub fn cursor_up(&mut self) -> bool {
         self.ensure_char_boundary();
+        if self.mode != TextInputMode::SingleLine
+            && let Some(wrap) = self.last_wrap_width.get()
+        {
+            let vlines = self.compute_visual_lines(wrap);
+            let (row, col) = self.get_cursor_visual_position(wrap);
+            if row == 0 {
+                return false;
+            }
+            if let Some(prev_vl) = vlines.get(row - 1) {
+                let prev_str = &self.value[prev_vl.start_byte..prev_vl.end_byte];
+                let prev_char_count = prev_str.chars().count();
+                let target_col = col.min(prev_char_count);
+                let col_byte_offset: usize = prev_str
+                    .chars()
+                    .take(target_col)
+                    .map(|c| c.len_utf8())
+                    .sum();
+                self.cursor = prev_vl.start_byte + col_byte_offset;
+                self.ensure_char_boundary();
+                return true;
+            }
+        }
+
         let cur_line_start = self.value[..self.cursor]
             .rfind('\n')
             .map_or(0, |idx| idx + 1);
@@ -486,6 +629,29 @@ impl TextInput {
     /// Mengembalikan `true` bila kursor berhasil berpindah baris, atau `false` bila sudah di baris terakhir.
     pub fn cursor_down(&mut self) -> bool {
         self.ensure_char_boundary();
+        if self.mode != TextInputMode::SingleLine
+            && let Some(wrap) = self.last_wrap_width.get()
+        {
+            let vlines = self.compute_visual_lines(wrap);
+            let (row, col) = self.get_cursor_visual_position(wrap);
+            if row + 1 >= vlines.len() {
+                return false;
+            }
+            if let Some(next_vl) = vlines.get(row + 1) {
+                let next_str = &self.value[next_vl.start_byte..next_vl.end_byte];
+                let next_char_count = next_str.chars().count();
+                let target_col = col.min(next_char_count);
+                let col_byte_offset: usize = next_str
+                    .chars()
+                    .take(target_col)
+                    .map(|c| c.len_utf8())
+                    .sum();
+                self.cursor = next_vl.start_byte + col_byte_offset;
+                self.ensure_char_boundary();
+                return true;
+            }
+        }
+
         let cur_line_start = self.value[..self.cursor]
             .rfind('\n')
             .map_or(0, |idx| idx + 1);
@@ -825,34 +991,26 @@ pub fn render_text_input(
             frame.set_cursor_position((cursor_x, cursor_y));
         }
     } else {
+        // Multi-line editor mode: otomatis membungkus teks (soft wrap) ke bawah jika melebihi batas kanan
+        input.last_wrap_width.set(Some(available_width));
         let display_str = input.display_content();
-        let (cursor_line, cursor_col) = input.cursor_line_and_col();
+        let vlines = input.compute_visual_lines(available_width);
+        let (cursor_vrow, cursor_vcol) = input.get_cursor_visual_position(available_width);
 
-        let v_scroll = if cursor_line < input.scroll {
-            cursor_line
-        } else if cursor_line >= input.scroll + available_height {
-            cursor_line + 1 - available_height
+        let v_scroll = if cursor_vrow < input.scroll {
+            cursor_vrow
+        } else if cursor_vrow >= input.scroll + available_height {
+            cursor_vrow + 1 - available_height
         } else {
             input.scroll
         };
 
-        let all_lines: Vec<&str> = display_str.split('\n').collect();
         let mut rendered_lines = Vec::with_capacity(available_height);
 
-        for (line_idx, line) in all_lines
-            .into_iter()
-            .enumerate()
-            .skip(v_scroll)
-            .take(available_height)
-        {
-            let h_scroll = if line_idx == cursor_line {
-                TextInput::calculate_scroll(cursor_col, available_width, 0)
-            } else {
-                0
-            };
-            let visible_slice: String = line.chars().skip(h_scroll).take(available_width).collect();
+        for vl in vlines.iter().skip(v_scroll).take(available_height) {
+            let line_slice = &display_str[vl.start_byte..vl.end_byte];
             rendered_lines.push(Line::from(Span::styled(
-                visible_slice,
+                line_slice.to_string(),
                 Style::default().fg(Theme::TEXT_PRIMARY),
             )));
         }
@@ -861,10 +1019,8 @@ pub fn render_text_input(
         frame.render_widget(para, inner_area);
 
         if input.is_focused {
-            let h_scroll = TextInput::calculate_scroll(cursor_col, available_width, 0);
-            let cursor_col_clamped = (cursor_col.saturating_sub(h_scroll) as u16)
-                .min(inner_area.width.saturating_sub(1));
-            let cursor_row_clamped = (cursor_line.saturating_sub(v_scroll) as u16)
+            let cursor_col_clamped = (cursor_vcol as u16).min(inner_area.width.saturating_sub(1));
+            let cursor_row_clamped = (cursor_vrow.saturating_sub(v_scroll) as u16)
                 .min(inner_area.height.saturating_sub(1));
             let cursor_x = inner_area.x + cursor_col_clamped;
             let cursor_y = inner_area.y + cursor_row_clamped;

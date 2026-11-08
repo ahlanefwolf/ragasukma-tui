@@ -421,6 +421,7 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
         .constraints([
             Constraint::Length(3), // Name input
             Constraint::Min(6),    // Markdown textarea
+            Constraint::Length(1), // Hint for markdown usage
             Constraint::Length(2), // Status (Aktif toggle)
             Constraint::Length(1), // Error
             Constraint::Length(3), // Buttons
@@ -428,7 +429,22 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
         .split(inner_area);
 
     render_text_input(frame, inner[0], &state.form_name, "Server Name", &Theme);
-    render_text_input(frame, inner[1], &state.form_json, "Configuration (Markdown)", &Theme);
+    render_text_input(
+        frame,
+        inner[1],
+        &state.form_json,
+        "Configuration & AI Instructions (Markdown)",
+        &Theme,
+    );
+
+    // Hint: clarify what markdown is used for
+    let hint_line = Line::from(vec![
+        Span::styled(
+            "Markdown guides the AI Agent on how to use tools. Include runtime config in a ```json or YAML block.",
+            Style::default().fg(Theme::TEXT_MUTED),
+        ),
+    ]);
+    frame.render_widget(Paragraph::new(hint_line), inner[2]);
 
     // 3. Status (Enabled/Disabled toggle)
     let enabled_focused = state.focused_field == McpFormField::Enabled;
@@ -451,20 +467,20 @@ fn render_form_modal(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
             Style::default().fg(Theme::TEXT_MUTED),
         ),
     ]);
-    frame.render_widget(Paragraph::new(status_line), inner[2]);
+    frame.render_widget(Paragraph::new(status_line), inner[3]);
 
     // 4. Error line
     if let Some(err) = &state.form_error {
         let err_widget =
             Paragraph::new(format!("! {err}")).style(Style::default().fg(Theme::STATUS_ERROR));
-        frame.render_widget(err_widget, inner[3]);
+        frame.render_widget(err_widget, inner[4]);
     }
 
     // 5. Buttons
     let btn_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(inner[4]);
+        .split(inner[5]);
 
     let save_focused = state.focused_field == McpFormField::SaveBtn;
     let save_style = if save_focused {
