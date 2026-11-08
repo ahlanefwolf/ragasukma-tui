@@ -30,4 +30,17 @@ impl AgentWorkspaceState {
 
         self.all_workspace_tag_items = items;
     }
+
+    /// Automatically reload and synchronize MCP servers and active IDs for the current project.
+    pub fn reload_mcp_servers(&mut self) -> Result<usize, String> {
+        let (servers, active_ids) =
+            crate::mcp_server_view::service::load_for_project(self.active_project_id.as_deref())?;
+        let count = servers.len();
+        self.mcp_servers = servers;
+        self.mcp_active_ids = active_ids;
+        if self.selected_mcp_idx >= self.mcp_servers.len() {
+            self.selected_mcp_idx = self.mcp_servers.len().saturating_sub(1);
+        }
+        Ok(count)
+    }
 }

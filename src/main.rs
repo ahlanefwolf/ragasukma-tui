@@ -146,6 +146,7 @@ async fn run_app(
                 }
                 AppEvent::McpServersLoaded(servers) => {
                     app.mcp_server.set_servers(servers);
+                    let _ = app.agent.reload_mcp_servers();
                 }
                 AppEvent::Tick => {
                     app.on_tick();

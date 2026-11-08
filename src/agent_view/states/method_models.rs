@@ -118,6 +118,9 @@ impl AgentWorkspaceState {
             AgentSidebarTab::Files => AgentSidebarTab::Mcp,
             AgentSidebarTab::Mcp => AgentSidebarTab::Tasks,
         };
+        if self.sidebar_tab == AgentSidebarTab::Mcp && self.mcp_servers.is_empty() {
+            let _ = self.reload_mcp_servers();
+        }
     }
 
     pub fn next_session(&mut self) {

@@ -49,23 +49,10 @@ pub(crate) fn handle_action(
                 Err(e) => Some(format!("Failed to update MCP server: {e}")),
             }
         }
-        Action::AgentRefreshMcpServers => {
-            let Some(project_id) = agent.active_project_id.clone() else {
-                return Some(Some("No active project to load MCP servers".to_string()));
-            };
-            match crate::mcp_server_view::service::load_for_project(Some(&project_id)) {
-                Ok((servers, active_ids)) => {
-                    let count = servers.len();
-                    agent.mcp_servers = servers;
-                    agent.mcp_active_ids = active_ids;
-                    if agent.selected_mcp_idx >= agent.mcp_servers.len() {
-                        agent.selected_mcp_idx = agent.mcp_servers.len().saturating_sub(1);
-                    }
-                    Some(format!("Loaded {} MCP server(s) for project", count))
-                }
-                Err(e) => Some(format!("Failed to load MCP servers: {e}")),
-            }
-        }
+        Action::AgentRefreshMcpServers => match agent.reload_mcp_servers() {
+            Ok(count) => Some(format!("Loaded {} MCP server(s) for project", count)),
+            Err(e) => Some(format!("Failed to load MCP servers: {e}")),
+        },
         _ => return None,
     };
 

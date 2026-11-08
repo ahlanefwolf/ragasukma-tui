@@ -261,6 +261,7 @@ impl App {
                 self.agent.workspace_folders = folders;
                 self.agent.active_folder_idx = 0;
                 self.agent.scan_workspace_files();
+                let _ = self.agent.reload_mcp_servers();
             }
             CoreBridgeEvent::ProjectCreated { project } => {
                 let parsed = ragasukma_core::agent::executor::helpers::parse_project_folders(
@@ -280,6 +281,7 @@ impl App {
                 self.agent.sessions.clear();
                 self.agent.active_session_id = None;
                 self.agent.clear_chat();
+                let _ = self.agent.reload_mcp_servers();
 
                 let item = crate::agent_view::types::ProjectItem {
                     id: project.id.clone(),
@@ -312,6 +314,7 @@ impl App {
                 self.agent.sessions.clear();
                 self.agent.active_session_id = None;
                 self.agent.clear_chat();
+                let _ = self.agent.reload_mcp_servers();
             }
             CoreBridgeEvent::ProjectDeleted { id } => {
                 self.agent.projects.retain(|p| p.id != id);
