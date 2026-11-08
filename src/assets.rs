@@ -6,55 +6,70 @@ pub use ragasukma_core::llm::providers::claude::types::ClaudeAccount;
 pub use ragasukma_core::llm::providers::codex::types::CodexAccount;
 pub use ragasukma_core::llm::providers::custom::CustomLlmAccount;
 
-/// Returns the primary assets directory in the project or relative to the executable.
+/// Returns the primary assets/config directory.
+/// - In development mode: checks local `./assets` first so developers can mock files locally.
+/// - In release mode: directly targets the shared OS configuration directory (`~/.config/ragasukma` / `%APPDATA%\ragasukma`),
+///   shared seamlessly between `@ragasukma` (GUI) and `@ragasukma-tui`.
 pub fn get_assets_dir() -> PathBuf {
-    // 1. Current working dir / assets (development mode)
-    let cwd_assets = PathBuf::from("assets");
-    if cwd_assets.exists() && cwd_assets.is_dir() {
-        return cwd_assets;
-    }
-
-    // 2. Relative to executable
-    if let Ok(exe_path) = std::env::current_exe()
-        && let Some(exe_dir) = exe_path.parent()
+    #[cfg(debug_assertions)]
     {
-        let exe_assets = exe_dir.join("assets");
-        if exe_assets.exists() && exe_assets.is_dir() {
-            return exe_assets;
+        // 1. Current working dir / assets (development mode)
+        let cwd_assets = PathBuf::from("assets");
+        if cwd_assets.exists() && cwd_assets.is_dir() {
+            return cwd_assets;
         }
-        let target_parent_assets = exe_dir.join("../../assets");
-        if target_parent_assets.exists() && target_parent_assets.is_dir() {
-            return target_parent_assets;
+
+        // 2. Relative to executable (development target/debug/)
+        if let Ok(exe_path) = std::env::current_exe()
+            && let Some(exe_dir) = exe_path.parent()
+        {
+            let exe_assets = exe_dir.join("assets");
+            if exe_assets.exists() && exe_assets.is_dir() {
+                return exe_assets;
+            }
+            let target_parent_assets = exe_dir.join("../../assets");
+            if target_parent_assets.exists() && target_parent_assets.is_dir() {
+                return target_parent_assets;
+            }
         }
     }
 
-    // 3. Fallback to ~/.config/ragasukma
+    // Production release or fallback: Always shared user configuration directory
     ragasukma_core::config::get_app_config_dir()
 }
 
-/// Locate an account file: check assets directory first, then config dir.
+/// Locate an account file:
+/// Checks shared config directory first in release, or assets dir in debug.
 pub fn find_account_file(filename: &str) -> PathBuf {
-    let assets_file = get_assets_dir().join(filename);
-    if assets_file.exists() {
-        return assets_file;
-    }
-
     let config_file = ragasukma_core::config::get_app_config_dir().join(filename);
     if config_file.exists() {
         return config_file;
     }
 
-    assets_file
+    #[cfg(debug_assertions)]
+    {
+        let assets_file = get_assets_dir().join(filename);
+        if assets_file.exists() {
+            return assets_file;
+        }
+    }
+
+    config_file
 }
 
 /// Ensures required asset directories and template JSON files exist.
-/// Auto-creates missing account JSONs if they do not exist anywhere.
+/// Auto-creates missing account JSONs in the shared config directory if they do not exist anywhere.
 pub fn ensure_assets_exist() {
-    let assets_dir = get_assets_dir();
-    let _ = fs::create_dir_all(&assets_dir);
-
     let config_dir = ragasukma_core::config::get_app_config_dir();
     let _ = fs::create_dir_all(&config_dir);
+    let assets_dir = get_assets_dir();
+
+    #[cfg(debug_assertions)]
+    {
+        if assets_dir != config_dir {
+            let _ = fs::create_dir_all(&assets_dir);
+        }
+    }
 
     // 1. Antigravity accounts
     ensure_file_with_template(
@@ -187,6 +202,16 @@ pub fn load_claude_accounts() -> Vec<ClaudeAccount> {
     let file = find_account_file("claude_accounts.json");
     if let Ok(content) = fs::read_to_string(&file)
         && let Ok(accounts) = serde_json::from_str::<Vec<ClaudeAccount>>(&content)
+    {
+        return accounts;
+    }
+    Vec::new()
+}
+
+pub fn load_custom_llm_accounts() -> Vec<CustomLlmAccount> {
+    let file = find_account_file("api_llm_accounts.json");
+    if let Ok(content) = fs::read_to_string(&file)
+        && let Ok(accounts) = serde_json::from_str::<Vec<CustomLlmAccount>>(&content)
     {
         return accounts;
     }
