@@ -32,14 +32,31 @@ pub fn install_panic_hook() {
         let _ = restore();
         tracing::error!("FATAL PANIC: {:#?}", panic_info);
         let panic_msg = format!("\n[FATAL PANIC] {:#?}\n", panic_info);
+
+        #[cfg(debug_assertions)]
+        {
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("tui_panic.log")
+            {
+                use std::io::Write;
+                let _ = file.write_all(panic_msg.as_bytes());
+            }
+        }
+
+        // Always write panic log to system cache dir
+        let cache_logs = ragasukma_core::config::get_app_cache_dir().join("logs");
+        let _ = std::fs::create_dir_all(&cache_logs);
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("tui_panic.log")
+            .open(cache_logs.join("tui_panic.log"))
         {
             use std::io::Write;
             let _ = file.write_all(panic_msg.as_bytes());
         }
+
         original_hook(panic_info);
     }));
 }

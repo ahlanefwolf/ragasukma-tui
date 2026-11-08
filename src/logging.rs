@@ -31,21 +31,28 @@ impl std::io::Write for MultiWriter {
 }
 
 /// Initialize a non-blocking file-based tracing subscriber.
-/// This logs all errors, warnings, and diagnostic information to `ragasukma-tui.log`
-/// in both the current working directory and ~/.config/ragasukma/logs/ragasukma-tui.log.
+/// - In development mode (debug build): logs to both `ragasukma-tui.log` in CWD and the OS cache directory.
+/// - In release mode: logs ONLY to OS cache directory (`~/.cache/ragasukma/logs/` or `%LOCALAPPDATA%\ragasukma\cache\logs\`),
+///   never polluting the user's working directory.
 pub fn init_logging() -> WorkerGuard {
-    let local_log_path = PathBuf::from("ragasukma-tui.log");
-    let app_dir = ragasukma_core::config::get_app_config_dir();
-    let log_dir = app_dir.join("logs");
+    let cache_dir = ragasukma_core::config::get_app_cache_dir();
+    let log_dir = cache_dir.join("logs");
     let _ = std::fs::create_dir_all(&log_dir);
     let global_log_path = log_dir.join("ragasukma-tui.log");
 
-    // Open logs in append mode so past warnings and errors are not lost across runs
-    let file_local = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&local_log_path)
-        .ok();
+    // In debug mode, allow writing to local `ragasukma-tui.log` for easy development tailing.
+    #[cfg(debug_assertions)]
+    let file_local = {
+        let local_log_path = PathBuf::from("ragasukma-tui.log");
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&local_log_path)
+            .ok()
+    };
+
+    #[cfg(not(debug_assertions))]
+    let file_local = None;
 
     let file_global = std::fs::OpenOptions::new()
         .create(true)
@@ -60,8 +67,14 @@ pub fn init_logging() -> WorkerGuard {
 
     let (non_blocking, guard) = tracing_appender::non_blocking(multi_writer);
 
+    let default_filter = if cfg!(debug_assertions) {
+        "info,ragasukma_tui=trace,ragasukma_core=trace"
+    } else {
+        "info,ragasukma_tui=info,ragasukma_core=info"
+    };
+
     let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,ragasukma_tui=trace,ragasukma_core=trace"));
+        .unwrap_or_else(|_| EnvFilter::new(default_filter));
 
     let subscriber = tracing_subscriber::registry().with(env_filter).with(
         tracing_subscriber::fmt::layer()
@@ -100,9 +113,14 @@ pub fn init_logging() -> WorkerGuard {
         default_panic(info);
     }));
 
+    #[cfg(debug_assertions)]
     tracing::info!(
-        "=== Ragasukma TUI logging session started (target: {:?} and {:?}) ===",
-        local_log_path,
+        "=== Ragasukma TUI logging session started (local: ragasukma-tui.log, global: {:?}) ===",
+        global_log_path
+    );
+    #[cfg(not(debug_assertions))]
+    tracing::info!(
+        "=== Ragasukma TUI logging session started (global cache: {:?}) ===",
         global_log_path
     );
 
