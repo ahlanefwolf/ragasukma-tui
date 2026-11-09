@@ -3,7 +3,10 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, TableState, Wrap},
+    widgets::{
+        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Row, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Table, TableState, Wrap,
+    },
 };
 
 use super::types::{McpFormField, McpPane, McpServerTabState};
@@ -303,7 +306,22 @@ fn render_tools_card(frame: &mut Frame, area: Rect, state: &McpServerTabState) {
         .collect();
 
     let list = List::new(items).block(block);
-    frame.render_widget(list, area);
+    let mut list_state = ListState::default();
+    list_state.select(Some(state.tools_selected_idx));
+    frame.render_stateful_widget(list, area, &mut list_state);
+
+    if state.server_tools.len() > 1 {
+        let mut scrollbar_state = ScrollbarState::default()
+            .content_length(state.server_tools.len())
+            .position(state.tools_selected_idx);
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("▲"))
+            .end_symbol(Some("▼"));
+
+        frame.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
+    }
 }
 
 fn extract_tool_description(config: &str) -> String {
