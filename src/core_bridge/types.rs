@@ -142,6 +142,9 @@ pub enum CoreBridgeEvent {
     TurnCancelled {
         session_id: String,
     },
+    StreamReset {
+        session_id: String,
+    },
     TurnFailed {
         session_id: String,
         error: String,

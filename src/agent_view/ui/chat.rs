@@ -45,6 +45,13 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
     let message_count = state.messages.len();
     let visible_limit = state.chat_visible_limit;
     let last_content_len = state.messages.last().map(|m| m.content.len()).unwrap_or(0);
+    let last_reasoning_len = state
+        .messages
+        .last()
+        .and_then(|m| m.reasoning.as_ref())
+        .map(|r| r.len())
+        .unwrap_or(0);
+    let last_tools_len = state.messages.last().map(|m| m.tool_calls.len()).unwrap_or(0);
     let is_running = state.is_running;
     let expanded_tools_len = state.expanded_tools.len();
     let reasoning_expanded = state.reasoning_expanded;
@@ -54,6 +61,8 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         && cache.message_count == message_count
         && cache.visible_limit == visible_limit
         && cache.last_content_len == last_content_len
+        && cache.last_reasoning_len == last_reasoning_len
+        && cache.last_tools_len == last_tools_len
         && cache.is_running == is_running
         && cache.expanded_tools_len == expanded_tools_len
         && cache.reasoning_expanded == reasoning_expanded
@@ -135,6 +144,8 @@ pub fn render_center_chat(frame: &mut Frame, area: Rect, state: &AgentWorkspaceS
         cache.message_count = message_count;
         cache.visible_limit = visible_limit;
         cache.last_content_len = last_content_len;
+        cache.last_reasoning_len = last_reasoning_len;
+        cache.last_tools_len = last_tools_len;
         cache.is_running = is_running;
         cache.expanded_tools_len = expanded_tools_len;
         cache.reasoning_expanded = reasoning_expanded;

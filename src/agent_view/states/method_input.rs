@@ -447,7 +447,18 @@ impl AgentWorkspaceState {
             } else {
                 last.reasoning = Some(thought.to_string());
             }
+            return;
         }
+
+        self.messages.push(ChatMessage {
+            role: MessageRole::Assistant,
+            sender_name: "Agent".to_string(),
+            content: String::new(),
+            timestamp: "now".to_string(),
+            tool_calls: Vec::new(),
+            reasoning: Some(thought.to_string()),
+        });
+        self.enforce_message_limit();
     }
 
     pub fn finish_turn(&mut self) {

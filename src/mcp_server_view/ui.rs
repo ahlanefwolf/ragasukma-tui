@@ -173,7 +173,7 @@ fn render_servers_card(frame: &mut Frame, area: Rect, state: &McpServerTabState)
                 "stdio"
             };
 
-            let status_span = if s.is_enabled != 0 {
+            let status_span = if s.is_enabled {
                 Span::styled(
                     "● Active",
                     Style::default()

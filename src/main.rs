@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    let pool = ragasukma_core::llm::usage::get_pool().await.clone();
+    let pool = ragasukma_core::db::get_pool().await.clone();
     let bridge_res = ragasukma_tui::core_bridge::CoreBridge::initialize(pool, bridge_evt_tx).await;
     match bridge_res {
         Ok(bridge) => {
@@ -70,7 +70,7 @@ async fn main() -> Result<()> {
     // Spawn background MCP server loader
     let mcp_tx = events.tx.clone();
     tokio::spawn(async move {
-        match ragasukma_core::agent::repository::projects_and_sessions::list_mcp_servers().await {
+        match ragasukma_core::repository::agent::projects_and_sessions::list_mcp_servers().await {
             Ok(servers) => {
                 let _ = mcp_tx.send(AppEvent::McpServersLoaded(servers));
             }

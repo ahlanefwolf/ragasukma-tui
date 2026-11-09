@@ -1,8 +1,9 @@
 use ragasukma_core::agent::events::{get_session_sender, is_session_task_running};
 use ragasukma_core::agent::models::AgentSessionEvent;
-use ragasukma_core::agent::repository::{
-    create_message, create_project, create_session, delete_project, delete_session, get_project,
-    list_messages, list_projects, list_sessions, update_session_model,
+use ragasukma_core::repository::agent::messages::{create_message, list_messages};
+use ragasukma_core::repository::agent::projects_and_sessions::{
+    create_project, create_session, delete_project, delete_session, get_project, list_projects,
+    list_sessions, update_session_model,
 };
 use sqlx::SqlitePool;
 use tokio::sync::{mpsc, watch};
@@ -166,6 +167,9 @@ pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<C
             details,
         }),
         AgentSessionEvent::Error { message } => Some(CoreBridgeEvent::Error(message)),
+        AgentSessionEvent::StreamReset => Some(CoreBridgeEvent::StreamReset {
+            session_id: sid.to_string(),
+        }),
         AgentSessionEvent::Done { reply: _ } => {
             tracing::info!("Agent session turn stream finished for: {sid}");
             None
@@ -379,7 +383,7 @@ async fn finish_cancelled_turn(
     worker_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
     session_id: String,
 ) {
-    if let Err(e) = ragasukma_core::agent::repository::update_session_status(&session_id, "idle")
+    if let Err(e) = ragasukma_core::repository::agent::projects_and_sessions::update_session_status(&session_id, "idle")
         .await
     {
         tracing::warn!("Could not reset cancelled session {session_id} to idle: {e}");
@@ -600,7 +604,7 @@ pub fn spawn_core_bridge_worker(
                         serde_json::to_string(&valid_folders).ok()
                     };
                     if let Ok(Some(proj)) = get_project(&project_id).await {
-                        if let Err(e) = ragasukma_core::agent::repository::update_project(
+                        if let Err(e) = ragasukma_core::repository::agent::projects_and_sessions::update_project(
                             &proj.id,
                             &proj.name,
                             &proj.description,
@@ -958,7 +962,7 @@ mod tests {
         assert!(got_hello1, "must receive delta from sid1");
 
         // 2. Switch to sid2 (switch #1)
-        watch_tx.send(sid2.clone()).unwrap();
+        assert!(watch_tx.send(sid2.clone()).is_ok());
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         // Send an event on sid1 (old session) and sid2 (new session)
@@ -986,7 +990,7 @@ mod tests {
         assert!(got_hello2, "must receive delta from sid2");
 
         // 3. Switch to sid3 (switch #2 in a row)
-        watch_tx.send(sid3.clone()).unwrap();
+        assert!(watch_tx.send(sid3.clone()).is_ok());
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         // Send an event on sid2 (old session) and sid3 (new session)

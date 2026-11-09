@@ -216,7 +216,7 @@ impl McpServerTabState {
         let id = server.id.clone();
         let name = server.name.clone();
         let config = server.config.clone();
-        let new_status = server.is_enabled == 0;
+        let new_status = server.is_enabled;
 
         service::save_server(&id, &name, &config, new_status)?;
         self.reload()?;
@@ -245,7 +245,7 @@ impl McpServerTabState {
                 server.id.clone(),
                 server.name.clone(),
                 server.config.clone(),
-                server.is_enabled != 0,
+                server.is_enabled,
             )
         };
 
@@ -573,7 +573,7 @@ mod tests {
             id: "srv-1".into(),
             name: "Server 1".into(),
             config: "# Demo".into(),
-            is_enabled: 1,
+            is_enabled: true,
             created_at: 1000,
         };
         state.set_servers(vec![server]);
@@ -610,13 +610,13 @@ mod tests {
             id: "1".into(),
             name: "Test".into(),
             config: md.into(),
-            is_enabled: 1,
+            is_enabled: true,
             created_at: 1000,
         };
         let servers = vec![server];
         let summary = config_preview_summary(&servers, 0);
         assert!(summary.is_some());
-        let text = summary.unwrap();
+        let text = summary.unwrap_or_default();
         assert!(text.contains("stdio") || text.contains("npx") || text.contains("transport"));
     }
 }

@@ -1,5 +1,5 @@
 use ragasukma_core::agent::models::{McpServer, McpServerTool};
-use ragasukma_core::agent::repository::projects_and_sessions::{
+use ragasukma_core::repository::agent::projects_and_sessions::{
     create_or_update_mcp_server, delete_mcp_server, get_project_mcp_server_ids, list_mcp_servers,
     set_project_mcp_servers,
 };
@@ -36,7 +36,7 @@ pub fn load_servers() -> Result<Vec<McpServer>, String> {
 pub fn load_server_tools(
     server_id: &str,
 ) -> Result<Vec<ragasukma_core::agent::models::McpServerTool>, String> {
-    block_on(ragasukma_core::agent::repository::list_mcp_server_tools(server_id))?
+    block_on(ragasukma_core::repository::agent::projects_and_sessions::list_mcp_server_tools(server_id))?
         .map_err(|e| e.to_string())
 }
 

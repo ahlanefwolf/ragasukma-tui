@@ -1,5 +1,6 @@
 use anyhow::Result;
-use ragasukma_core::agent::repository::{list_messages, list_projects, list_sessions};
+use ragasukma_core::repository::agent::messages::list_messages;
+use ragasukma_core::repository::agent::projects_and_sessions::{list_projects, list_sessions};
 use sqlx::SqlitePool;
 use tokio::sync::mpsc;
 

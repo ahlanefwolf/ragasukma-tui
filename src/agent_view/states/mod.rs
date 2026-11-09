@@ -9,6 +9,8 @@ pub struct ChatLayoutCache {
     pub message_count: usize,
     pub visible_limit: usize,
     pub last_content_len: usize,
+    pub last_reasoning_len: usize,
+    pub last_tools_len: usize,
     pub is_running: bool,
     pub expanded_tools_len: usize,
     pub reasoning_expanded: bool,

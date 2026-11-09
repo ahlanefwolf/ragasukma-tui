@@ -9,11 +9,17 @@ impl App {
                 self.set_status(format!("Agent ready (session {})", session_id));
             }
             CoreBridgeEvent::StatusChange { session_id, status } => {
-                if let Some(ref sid) = session_id
-                    && status == "running"
-                    && let Some(s) = self.agent.sessions.iter_mut().find(|s| &s.id == sid)
-                {
-                    s.is_running = true;
+                let is_running = status == "running";
+                if let Some(ref sid) = session_id {
+                    if let Some(s) = self.agent.sessions.iter_mut().find(|s| &s.id == sid) {
+                        s.is_running = is_running;
+                    }
+                    if self.agent.active_session_id.as_deref() == Some(sid) {
+                        self.agent.is_running = is_running;
+                        if !is_running {
+                            self.agent.active_turn_id = None;
+                        }
+                    }
                 }
                 if session_id.as_ref() == self.agent.active_session_id.as_ref()
                     || session_id.is_none()
@@ -103,9 +109,12 @@ impl App {
             }
             CoreBridgeEvent::TurnCompleted {
                 session_id,
-                summary: msg,
+                summary,
             } => {
-                tracing::info!("Turn completed for {session_id}: {msg}");
+                let msg = summary;
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
+                    s.is_running = false;
+                }
                 let is_active = Some(&session_id) == self.agent.active_session_id.as_ref();
                 if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
                     s.is_running = false;
@@ -164,6 +173,18 @@ impl App {
                     let _ = tx.send(crate::core_bridge::types::CoreBridgeCommand::LoadHistory {
                         session_id,
                     });
+                }
+            }
+            CoreBridgeEvent::StreamReset { session_id } => {
+                if Some(&session_id) == self.agent.active_session_id.as_ref()
+                    && let Some(last) = self
+                        .agent
+                        .messages
+                        .last_mut()
+                        .filter(|m| m.role == crate::agent_view::types::MessageRole::Assistant)
+                {
+                    last.content.clear();
+                    last.reasoning = None;
                 }
             }
             CoreBridgeEvent::TurnFailed { error, session_id } => {
@@ -370,6 +391,10 @@ impl App {
                 let req_count = asst_count + tool_count;
                 if let Some(pos) = self.agent.sessions.iter().position(|s| s.id == session_id) {
                     self.agent.selected_session_idx = pos;
+                    self.agent.is_running = self.agent.sessions[pos].is_running;
+                    if !self.agent.is_running {
+                        self.agent.active_turn_id = None;
+                    }
                     if sum_in > 0 || sum_out > 0 {
                         self.agent.sessions[pos].total_tokens_input = sum_in;
                         self.agent.sessions[pos].total_tokens_output = sum_out;
