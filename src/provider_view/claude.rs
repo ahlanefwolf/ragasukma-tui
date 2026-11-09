@@ -12,15 +12,9 @@ pub fn load_claude_tab() -> ProviderTabState {
         state.accounts = raw_accounts
             .into_iter()
             .map(|a| {
-                let plan = a
-                    .plan_type
-                    .filter(|s| !s.trim().is_empty())
-                    .unwrap_or_else(|| "Standard".to_string());
-
                 AccountInfo {
                     id: a.id,
                     email: a.email.unwrap_or_else(|| "No Email".to_string()),
-                    plan,
                     is_active: a.is_active,
                     status: if a.is_rate_limited {
                         format!("Rate Limited ({}s)", a.rate_limited_seconds_left)

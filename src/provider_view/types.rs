@@ -10,7 +10,6 @@ pub struct ModelQuotaItem {
 pub struct AccountInfo {
     pub id: String,
     pub email: String,
-    pub plan: String,
     pub is_active: bool,
     pub status: String,
     pub quotas: Vec<ModelQuotaItem>,

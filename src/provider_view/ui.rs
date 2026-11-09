@@ -55,18 +55,23 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
         .enumerate()
         .map(|(i, acc)| {
             let is_selected = i == state.selected_account_idx;
-            let status_badge = if acc.is_active {
+            let status_badge = if acc.status.starts_with("Rate Limited") {
                 Span::styled(
-                    " ● ACTIVE ",
+                    " ⚠ RATE LIMITED",
+                    Theme::status_warning().add_modifier(Modifier::BOLD),
+                )
+            } else if acc.is_active {
+                Span::styled(
+                    " ● ACTIVE",
                     Theme::status_success().add_modifier(Modifier::BOLD),
                 )
             } else {
-                Span::styled(" ○ INACTIVE ", Theme::text_secondary())
+                Span::styled(" ○ INACTIVE", Theme::text_secondary())
             };
 
             let prefix = if is_selected { "❯ " } else { "  " };
 
-            let line1 = Line::from(vec![
+            let line = Line::from(vec![
                 Span::styled(
                     prefix,
                     if is_selected {
@@ -83,16 +88,11 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                         Theme::text_secondary()
                     },
                 ),
-            ]);
-
-            let line2 = Line::from(vec![
-                Span::raw("    "),
-                Span::styled(&acc.plan, Theme::text_secondary()),
                 Span::raw(" "),
                 status_badge,
             ]);
 
-            ListItem::new(vec![line1, line2, Line::from("")])
+            ListItem::new(line)
         })
         .collect();
 
@@ -146,13 +146,6 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
             Line::from(vec![
                 Span::styled("Email:      ", Theme::text_secondary()),
                 Span::styled(&account.email, Theme::text_primary()),
-            ]),
-            Line::from(vec![
-                Span::styled("Tier/Plan:  ", Theme::text_secondary()),
-                Span::styled(
-                    &account.plan,
-                    Theme::text_gold().add_modifier(Modifier::BOLD),
-                ),
             ]),
             Line::from(vec![
                 Span::styled("Status:     ", Theme::text_secondary()),

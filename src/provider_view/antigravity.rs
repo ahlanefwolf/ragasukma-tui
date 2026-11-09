@@ -11,15 +11,9 @@ pub fn load_antigravity_tab() -> ProviderTabState {
         state.accounts = raw_accounts
             .into_iter()
             .map(|a| {
-                let plan = a
-                    .tier_id
-                    .filter(|s| !s.trim().is_empty())
-                    .unwrap_or_else(|| "Standard".to_string());
-
                 AccountInfo {
                     id: a.id.clone(),
                     email: a.email.unwrap_or(a.id),
-                    plan,
                     is_active: a.is_active,
                     status: if a.is_active {
                         "Active".to_string()
