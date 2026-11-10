@@ -18,7 +18,7 @@ pub struct CoreBridge {
 impl CoreBridge {
     pub async fn initialize(
         db_pool: SqlitePool,
-        event_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
+        event_tx: mpsc::Sender<CoreBridgeEvent>,
     ) -> Result<Self> {
         let mut initial_projects = list_projects().await.unwrap_or_default();
         // Prioritize project with the most recent activity (latest updated_at)
@@ -44,10 +44,12 @@ impl CoreBridge {
         let sid = session_id.clone();
         let pid = project_id.clone();
 
-        let _ = event_tx.send(CoreBridgeEvent::Connected {
-            project_id: pid.clone(),
-            session_id: sid.clone(),
-        });
+        let _ = event_tx
+            .send(CoreBridgeEvent::Connected {
+                project_id: pid.clone(),
+                session_id: sid.clone(),
+            })
+            .await;
 
         // Emit initial project list
         let project_dtos = initial_projects
@@ -60,11 +62,13 @@ impl CoreBridge {
             })
             .collect::<Vec<_>>();
 
-        let _ = event_tx.send(CoreBridgeEvent::ProjectsLoaded {
-            projects: project_dtos,
-            active_id: pid.clone(),
-            active_name: project_name,
-        });
+        let _ = event_tx
+            .send(CoreBridgeEvent::ProjectsLoaded {
+                projects: project_dtos,
+                active_id: pid.clone(),
+                active_name: project_name,
+            })
+            .await;
 
         // Emit initial session list and history
         let sessions_dto = existing_sessions
@@ -72,17 +76,21 @@ impl CoreBridge {
             .map(SessionDto::from)
             .collect::<Vec<_>>();
 
-        let _ = event_tx.send(CoreBridgeEvent::SessionsLoaded {
-            sessions: sessions_dto,
-            active_id: sid.clone(),
-        });
+        let _ = event_tx
+            .send(CoreBridgeEvent::SessionsLoaded {
+                sessions: sessions_dto,
+                active_id: sid.clone(),
+            })
+            .await;
 
         if let Ok(msgs) = list_messages(&sid).await {
             let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
-            let _ = event_tx.send(CoreBridgeEvent::HistoryLoaded {
-                session_id: sid.clone(),
-                messages: dtos,
-            });
+            let _ = event_tx
+                .send(CoreBridgeEvent::HistoryLoaded {
+                    session_id: sid.clone(),
+                    messages: dtos,
+                })
+                .await;
         }
 
         // Satu sumber kebenaran untuk sesi aktif: watch channel dari worker.

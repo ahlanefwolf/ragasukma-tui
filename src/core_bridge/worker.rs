@@ -196,29 +196,24 @@ pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<C
 /// session is running. Every `MessageCreated`/`StepInfo` is evidence the session
 /// masih aktif, jadi cache di-`running`-kan lagi dan perbedaannya di-emit.
 pub fn spawn_session_subscriber(
-    sub_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
+    sub_tx: mpsc::Sender<CoreBridgeEvent>,
     mut watch_rx: watch::Receiver<String>,
-    active_status: std::sync::Arc<std::sync::RwLock<String>>,
+    active_status: std::sync::Arc<tokio::sync::RwLock<String>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut active_sid = watch_rx.borrow_and_update().clone();
+        let mut active_sid = watch_rx.borrow().clone();
         let mut broadcast_rx = get_session_sender(&active_sid).subscribe();
 
         loop {
-            if sub_tx.is_closed() {
-                break;
-            }
-
             tokio::select! {
-                changed = watch_rx.changed() => {
-                    if changed.is_err() {
-                        // Sender dropped: the worker has stopped, nothing can
-                        // change the active session anymore.
+                res = watch_rx.changed() => {
+                    if res.is_err() {
+                        // Watch channel closed, worker has shut down
                         break;
                     }
-                    let cur = watch_rx.borrow_and_update().clone();
-                    if cur != active_sid {
-                        active_sid = cur;
+                    let new_sid = watch_rx.borrow().clone();
+                    if new_sid != active_sid {
+                        active_sid = new_sid;
                         broadcast_rx = get_session_sender(&active_sid).subscribe();
                         // New session: sync the actual status of whether the background task is running,
                         // and emit the status transition to the UI so it syncs immediately.
@@ -227,13 +222,11 @@ pub fn spawn_session_subscriber(
                         } else {
                             "idle".to_string()
                         };
-                        if let Ok(mut st) = active_status.write() {
-                            *st = initial_st.clone();
-                        }
+                        *active_status.write().await = initial_st.clone();
                         let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
                             session_id: Some(active_sid.clone()),
                             status: initial_st,
-                        });
+                        }).await;
                     }
                 }
                 evt = broadcast_rx.recv() => {
@@ -242,20 +235,18 @@ pub fn spawn_session_subscriber(
                             // An explicit status transition from the core is the source
                             // of truth: update the cache before the event is forwarded,
                             // so `resync_status` does not overwrite it back.
-                            if let AgentSessionEvent::StatusChange { status } = &event
-                                && let Ok(mut st) = active_status.write()
-                            {
-                                st.clone_from(status);
+                            if let AgentSessionEvent::StatusChange { status } = &event {
+                                active_status.write().await.clone_from(status);
                             } else if matches!(
                                 event,
                                 AgentSessionEvent::MessageCreated(_) | AgentSessionEvent::StepInfo { .. }
                             ) {
                                 // Activity evidence without a visible `running` transition
                                 // (lag / late subscribe) -> recover.
-                                resync_status(&sub_tx, &active_sid, &active_status);
+                                resync_status(&sub_tx, &active_sid, &active_status).await;
                             }
                             if let Some(bridge_evt) = map_core_event_to_bridge(&active_sid, event)
-                                && sub_tx.send(bridge_evt).is_err()
+                                && sub_tx.send(bridge_evt).await.is_err()
                             {
                                 break;
                             }
@@ -281,14 +272,12 @@ pub fn spawn_session_subscriber(
 /// `running` is lost (subscriber lag / late subscribe), the TUI would be stuck in
 /// `idle` even though the turn is running. Activity evidence (`MessageCreated`,
 /// `StepInfo`) dipakai untuk memulihkan state tersebut.
-fn resync_status(
-    sub_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+async fn resync_status(
+    sub_tx: &mpsc::Sender<CoreBridgeEvent>,
     sid: &str,
-    active_status: &std::sync::RwLock<String>,
+    active_status: &tokio::sync::RwLock<String>,
 ) {
-    let Ok(mut st) = active_status.write() else {
-        return;
-    };
+    let mut st = active_status.write().await;
     if st.as_str() == "running" {
         return;
     }
@@ -296,7 +285,7 @@ fn resync_status(
     let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
         session_id: Some(sid.to_string()),
         status: "running".to_string(),
-    });
+    }).await;
 }
 
 /// Explicitly set the active session status from the worker side (not from activity
@@ -306,15 +295,13 @@ fn resync_status(
 /// while this function writes the truth known by the worker itself
 /// (turn started -> `running`, turn cancelled -> `idle`). Both share the same cache
 /// so transitions are not double-emitted.
-fn set_active_status(
-    sub_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+async fn set_active_status(
+    sub_tx: &mpsc::Sender<CoreBridgeEvent>,
     sid: &str,
-    active_status: &std::sync::RwLock<String>,
+    active_status: &tokio::sync::RwLock<String>,
     status: &str,
 ) {
-    let Ok(mut st) = active_status.write() else {
-        return;
-    };
+    let mut st = active_status.write().await;
     if st.as_str() == status {
         return;
     }
@@ -322,13 +309,13 @@ fn set_active_status(
     let _ = sub_tx.send(CoreBridgeEvent::StatusChange {
         session_id: Some(sid.to_string()),
         status: status.to_string(),
-    });
+    }).await;
 }
 
 async fn execute_turn_pipeline(
     session_id: String,
     model_override: Option<String>,
-    worker_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
+    worker_tx: mpsc::Sender<CoreBridgeEvent>,
     is_retry: bool,
 ) {
     if is_retry {
@@ -349,7 +336,7 @@ async fn execute_turn_pipeline(
                 let _ = worker_tx.send(CoreBridgeEvent::TurnCompleted {
                     session_id,
                     summary: outcome.reply().to_string(),
-                });
+                }).await;
             } else {
                 // The turn stopped because the session was cancelled (or its status was
                 // changed externally) and produced no answer. Reporting this as
@@ -368,7 +355,7 @@ async fn execute_turn_pipeline(
             let _ = worker_tx.send(CoreBridgeEvent::TurnFailed {
                 session_id,
                 error: e.to_string(),
-            });
+            }).await;
         }
     }
 }
@@ -380,7 +367,7 @@ async fn execute_turn_pipeline(
 /// column must be reset (otherwise `SessionsLoaded` rebuilds `is_running` from it and the
 /// session looks busy again on the next load).
 async fn finish_cancelled_turn(
-    worker_tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+    worker_tx: &mpsc::Sender<CoreBridgeEvent>,
     session_id: String,
 ) {
     if let Err(e) = ragasukma_core::repository::agent::projects_and_sessions::update_session_status(&session_id, "idle")
@@ -388,12 +375,12 @@ async fn finish_cancelled_turn(
     {
         tracing::warn!("Could not reset cancelled session {session_id} to idle: {e}");
     }
-    let _ = worker_tx.send(CoreBridgeEvent::TurnCancelled { session_id });
+    let _ = worker_tx.send(CoreBridgeEvent::TurnCancelled { session_id }).await;
 }
 
 /// Helper untuk memancarkan hasil pembaruan kuota pemakaian model (T8 / Fase 5.2).
-fn emit_usage_quota_result(
-    tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+async fn emit_usage_quota_result(
+    tx: &mpsc::Sender<CoreBridgeEvent>,
     provider: String,
     summary: ragasukma_core::llm::usage::LlmUsageSummary,
 ) {
@@ -403,12 +390,12 @@ fn emit_usage_quota_result(
         output_tokens: summary.total_output_tokens,
         total_tokens: summary.total_tokens,
         requests: summary.total_requests,
-    });
+    }).await;
 }
 
 /// Helper untuk memancarkan hasil pembaruan kuota per akun provider (T8 / Fase 5.2).
 fn emit_account_quota_result(
-    tx: &mpsc::UnboundedSender<CoreBridgeEvent>,
+    tx: &mpsc::Sender<CoreBridgeEvent>,
     provider: String,
     account_id: String,
     result: Result<Vec<crate::provider_view::ModelQuotaItem>, String>,
@@ -421,7 +408,7 @@ fn emit_account_quota_result(
                 account_id,
                 provider
             );
-            let _ = tx.send(CoreBridgeEvent::AccountQuotaUpdated {
+            let _ = tx.blocking_send(CoreBridgeEvent::AccountQuotaUpdated {
                 provider,
                 account_id,
                 quotas,
@@ -435,7 +422,7 @@ fn emit_account_quota_result(
                 provider,
                 err
             );
-            let _ = tx.send(CoreBridgeEvent::StatusChange {
+            let _ = tx.blocking_send(CoreBridgeEvent::StatusChange {
                 session_id: None,
                 status: format!("Failed to load quota for {}: {}", provider, err),
             });
@@ -445,7 +432,7 @@ fn emit_account_quota_result(
 
 pub fn spawn_core_bridge_worker(
     mut cmd_rx: mpsc::UnboundedReceiver<CoreBridgeCommand>,
-    worker_tx: mpsc::UnboundedSender<CoreBridgeEvent>,
+    worker_tx: mpsc::Sender<CoreBridgeEvent>,
     watch_tx: watch::Sender<String>,
     mut worker_project_id: String,
     initial_sid: String,
@@ -455,7 +442,7 @@ pub fn spawn_core_bridge_worker(
         let mut active_sid = initial_sid;
         // Active session status cache — shared between the worker (explicit status
         // writer) and the subscriber (resync based on activity evidence).
-        let active_status = std::sync::Arc::new(std::sync::RwLock::new("idle".to_string()));
+        let active_status = std::sync::Arc::new(tokio::sync::RwLock::new("idle".to_string()));
 
         // Spawn the subscriber loop (the active session is monitored via a watch channel).
         // The handle is stored in `tasks` so the subscriber also stops when the worker
@@ -492,7 +479,7 @@ pub fn spawn_core_bridge_worker(
                     // unwinds as a stop. Only a real cancel may report one.
                     if active_turns.cancel(&sid) {
                         if sid == active_sid {
-                            set_active_status(&worker_tx, &active_sid, &active_status, "idle");
+                            set_active_status(&worker_tx, &active_sid, &active_status, "idle").await;
                         }
                         finish_cancelled_turn(&worker_tx, sid).await;
                     } else {
@@ -507,10 +494,12 @@ pub fn spawn_core_bridge_worker(
                         let exec_tx = worker_tx.clone();
                         let sid_key = sid_exec.clone();
 
-                        let _ = worker_tx.send(CoreBridgeEvent::StatusChange {
-                            session_id: Some(sid_exec.clone()),
-                            status: "running".to_string(),
-                        });
+                        let _ = worker_tx
+                            .send(CoreBridgeEvent::StatusChange {
+                                session_id: Some(sid_exec.clone()),
+                                status: "running".to_string(),
+                            })
+                            .await;
 
                         let handle = tokio::spawn(async move {
                             execute_turn_pipeline(
@@ -523,9 +512,11 @@ pub fn spawn_core_bridge_worker(
                         });
                         active_turns.insert(sid_key, handle);
                     } else {
-                        let _ = worker_tx.send(CoreBridgeEvent::Error(
-                            "Cannot retry: no previous prompt turn found".to_string(),
-                        ));
+                        let _ = worker_tx
+                            .send(CoreBridgeEvent::Error(
+                                "Cannot retry: no previous prompt turn found".to_string(),
+                            ))
+                            .await;
                     }
                 }
                 CoreBridgeCommand::CreateProject {
@@ -562,22 +553,27 @@ pub fn spawn_core_bridge_worker(
                                 description: Some(new_proj.description.clone()),
                                 root_path: new_proj.root_path.clone(),
                             };
-                            let _ =
-                                worker_tx.send(CoreBridgeEvent::ProjectCreated { project: dto });
+                            let _ = worker_tx
+                                .send(CoreBridgeEvent::ProjectCreated { project: dto })
+                                .await;
 
                             // Auto switch to newly created project
                             worker_project_id = new_proj.id.clone();
                             active_sid = String::new();
                             let _ = watch_tx.send(active_sid.clone());
-                            let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
-                                project_id: worker_project_id.clone(),
-                                project_name: new_proj.name.clone(),
-                                root_path: new_proj.root_path.clone(),
-                            });
-                            let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
-                                sessions: Vec::new(),
-                                active_id: String::new(),
-                            });
+                            let _ = worker_tx
+                                .send(CoreBridgeEvent::ProjectSwitched {
+                                    project_id: worker_project_id.clone(),
+                                    project_name: new_proj.name.clone(),
+                                    root_path: new_proj.root_path.clone(),
+                                })
+                                .await;
+                            let _ = worker_tx
+                                .send(CoreBridgeEvent::SessionsLoaded {
+                                    sessions: Vec::new(),
+                                    active_id: String::new(),
+                                })
+                                .await;
                         }
                         Err(e) => {
                             tracing::error!("Failed to create project: {e}");
@@ -625,11 +621,13 @@ pub fn spawn_core_bridge_worker(
                                     root_path: p.root_path,
                                 })
                                 .collect();
-                            let _ = worker_tx.send(CoreBridgeEvent::ProjectsLoaded {
-                                projects: project_dtos,
-                                active_id: project_id.clone(),
-                                active_name,
-                            });
+                            let _ = worker_tx
+                                .send(CoreBridgeEvent::ProjectsLoaded {
+                                    projects: project_dtos,
+                                    active_id: project_id.clone(),
+                                    active_name,
+                                })
+                                .await;
                         }
                     }
                 }
@@ -654,31 +652,39 @@ pub fn spawn_core_bridge_worker(
                         .map(|s| s.id.clone())
                         .unwrap_or_default();
                     let _ = watch_tx.send(active_sid.clone());
-                    let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
-                        project_id: worker_project_id.clone(),
-                        project_name,
-                        root_path: project_root_path,
-                    });
+                    let _ = worker_tx
+                        .send(CoreBridgeEvent::ProjectSwitched {
+                            project_id: worker_project_id.clone(),
+                            project_name,
+                            root_path: project_root_path,
+                        })
+                        .await;
                     let sessions_summary = sessions.into_iter().map(SessionDto::from).collect();
-                    let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
-                        sessions: sessions_summary,
-                        active_id: active_sid.clone(),
-                    });
+                    let _ = worker_tx
+                        .send(CoreBridgeEvent::SessionsLoaded {
+                            sessions: sessions_summary,
+                            active_id: active_sid.clone(),
+                        })
+                        .await;
                     if !active_sid.is_empty()
                         && let Ok(msgs) = list_messages(&active_sid).await
                     {
                         let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
-                        let _ = worker_tx.send(CoreBridgeEvent::HistoryLoaded {
-                            session_id: active_sid.clone(),
-                            messages: dtos,
-                        });
+                        let _ = worker_tx
+                            .send(CoreBridgeEvent::HistoryLoaded {
+                                session_id: active_sid.clone(),
+                                messages: dtos,
+                            })
+                            .await;
                     }
                 }
                 CoreBridgeCommand::DeleteProject { project_id } => {
                     let _ = delete_project(&project_id).await;
-                    let _ = worker_tx.send(CoreBridgeEvent::ProjectDeleted {
-                        id: project_id.clone(),
-                    });
+                    let _ = worker_tx
+                        .send(CoreBridgeEvent::ProjectDeleted {
+                            id: project_id.clone(),
+                        })
+                        .await;
                     if worker_project_id == project_id {
                         // If deleted current project, switch to first available project
                         let mut rem_projects = list_projects().await.unwrap_or_default();
@@ -692,15 +698,19 @@ pub fn spawn_core_bridge_worker(
                             if let Some(fs) = first_sess {
                                 active_sid = fs.id.clone();
                                 let _ = watch_tx.send(active_sid.clone());
-                                let _ = worker_tx.send(CoreBridgeEvent::ProjectSwitched {
-                                    project_id: worker_project_id.clone(),
-                                    project_name: first.name.clone(),
-                                    root_path: first.root_path.clone(),
-                                });
-                                let _ = worker_tx.send(CoreBridgeEvent::SessionsLoaded {
-                                    sessions: sessions.into_iter().map(SessionDto::from).collect(),
-                                    active_id: active_sid.clone(),
-                                });
+                                let _ = worker_tx
+                                    .send(CoreBridgeEvent::ProjectSwitched {
+                                        project_id: worker_project_id.clone(),
+                                        project_name: first.name.clone(),
+                                        root_path: first.root_path.clone(),
+                                    })
+                                    .await;
+                                let _ = worker_tx
+                                    .send(CoreBridgeEvent::SessionsLoaded {
+                                        sessions: sessions.into_iter().map(SessionDto::from).collect(),
+                                        active_id: active_sid.clone(),
+                                    })
+                                    .await;
                             }
                         }
                     }
@@ -712,10 +722,12 @@ pub fn spawn_core_bridge_worker(
                     {
                         active_sid = new_sess.id.clone();
                         let _ = watch_tx.send(new_sess.id.clone());
-                        let _ = worker_tx.send(CoreBridgeEvent::SessionCreated {
-                            id: new_sess.id,
-                            title: new_sess.title,
-                        });
+                        let _ = worker_tx
+                            .send(CoreBridgeEvent::SessionCreated {
+                                id: new_sess.id,
+                                title: new_sess.title,
+                            })
+                            .await;
                     }
                 }
                 CoreBridgeCommand::SwitchSession { session_id } => {
@@ -733,10 +745,12 @@ pub fn spawn_core_bridge_worker(
                             .await;
                     if let Ok(msgs) = list_messages(&session_id).await {
                         let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
-                        let _ = worker_tx.send(CoreBridgeEvent::HistoryLoaded {
-                            session_id,
-                            messages: dtos,
-                        });
+                        let _ = worker_tx
+                            .send(CoreBridgeEvent::HistoryLoaded {
+                                session_id,
+                                messages: dtos,
+                            })
+                            .await;
                     }
                 }
                 CoreBridgeCommand::UpdateSessionModel { session_id, model } => {
@@ -749,15 +763,19 @@ pub fn spawn_core_bridge_worker(
                 }
                 CoreBridgeCommand::DeleteSession { session_id } => {
                     let _ = delete_session(&session_id).await;
-                    let _ = worker_tx.send(CoreBridgeEvent::SessionDeleted { id: session_id });
+                    let _ = worker_tx
+                        .send(CoreBridgeEvent::SessionDeleted { id: session_id })
+                        .await;
                 }
                 CoreBridgeCommand::LoadHistory { session_id } => {
                     if let Ok(msgs) = list_messages(&session_id).await {
                         let dtos = msgs.into_iter().map(PersistedMessageDto::from).collect();
-                        let _ = worker_tx.send(CoreBridgeEvent::HistoryLoaded {
-                            session_id,
-                            messages: dtos,
-                        });
+                        let _ = worker_tx
+                            .send(CoreBridgeEvent::HistoryLoaded {
+                                session_id,
+                                messages: dtos,
+                            })
+                            .await;
                     }
                 }
                 CoreBridgeCommand::ExecuteTurn {
@@ -774,7 +792,7 @@ pub fn spawn_core_bridge_worker(
                     // the old status during the first seconds of the turn, and `CancelTurn`
                     // looks like a no-op. Setting the cache + emitting here makes the status
                     // correct from the moment the command is received.
-                    set_active_status(&worker_tx, &current_turn_sid, &active_status, "running");
+                    set_active_status(&worker_tx, &current_turn_sid, &active_status, "running").await;
                     let _ = create_message(
                         &current_turn_sid,
                         "user",
@@ -817,7 +835,7 @@ pub fn spawn_core_bridge_worker(
                         )
                         .await;
 
-                        emit_usage_quota_result(&quota_tx, prov, summary);
+                        emit_usage_quota_result(&quota_tx, prov, summary).await;
                     }));
                 }
                 CoreBridgeCommand::RefreshAccountQuota {
@@ -923,9 +941,9 @@ mod tests {
         use crate::core_bridge::worker::spawn_session_subscriber;
         use ragasukma_core::agent::events::get_session_sender;
         use ragasukma_core::agent::models::AgentSessionEvent;
-        use std::sync::{Arc, RwLock};
+        use std::sync::Arc;
         use std::time::Duration;
-        use tokio::sync::{mpsc, watch};
+        use tokio::sync::{mpsc, watch, RwLock};
         use tokio::time::timeout;
 
         let sid1 = "test-session-1".to_string();
@@ -933,7 +951,7 @@ mod tests {
         let sid3 = "test-session-3".to_string();
 
         let (watch_tx, watch_rx) = watch::channel(sid1.clone());
-        let (sub_tx, mut sub_rx) = mpsc::unbounded_channel();
+        let (sub_tx, mut sub_rx) = mpsc::channel(1024);
         let active_status = Arc::new(RwLock::new("idle".to_string()));
 
         let handle = spawn_session_subscriber(sub_tx, watch_rx, active_status);

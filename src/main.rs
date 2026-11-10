@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
     let mut events = EventHandler::new(Duration::from_millis(250));
 
     // 4. Initialize Core Bridge and forward agent streaming events to TUI event loop
-    let (bridge_evt_tx, mut bridge_evt_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (bridge_evt_tx, mut bridge_evt_rx) = tokio::sync::mpsc::channel(1024);
     let app_tx = events.tx.clone();
     tokio::spawn(async move {
         while let Some(evt) = bridge_evt_rx.recv().await {
