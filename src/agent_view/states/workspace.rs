@@ -1,6 +1,37 @@
 use super::helpers::collect_recursive_tag_items;
 use super::*;
 
+fn block_on<F>(future: F) -> Result<F::Output, String>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        match handle.runtime_flavor() {
+            tokio::runtime::RuntimeFlavor::MultiThread => {
+                Ok(tokio::task::block_in_place(|| handle.block_on(future)))
+            }
+            _ => std::thread::scope(|s| {
+                s.spawn(|| {
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .map_err(|e| e.to_string())
+                        .map(|rt| rt.block_on(future))
+                })
+                .join()
+                .map_err(|_| "thread joined with error".to_string())?
+            }),
+        }
+    } else {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())
+            .map(|rt| rt.block_on(future))
+    }
+}
+
 impl AgentWorkspaceState {
     pub fn refresh_workspace_tag_items(&mut self) {
         if self.workspace_folders.is_empty() {
@@ -31,10 +62,25 @@ impl AgentWorkspaceState {
         self.all_workspace_tag_items = items;
     }
 
-    /// Automatically reload and synchronize MCP servers and active IDs for the current project.
+    /// Automatically reload and synchronize MCP servers and active IDs for the current active session.
     pub fn reload_mcp_servers(&mut self) -> Result<usize, String> {
-        let (servers, active_ids) =
-            crate::mcp_server_view::service::load_for_project(self.active_project_id.as_deref())?;
+        let session_id = self.active_session_id.clone();
+        let (servers, active_ids) = block_on(async move {
+            let servers =
+                ragasukma_core::repository::agent::projects_and_sessions::list_mcp_servers()
+                    .await
+                    .map_err(|e| e.to_string())?;
+            let active_ids = if let Some(sid) = session_id {
+                ragasukma_core::repository::agent::projects_and_sessions::get_session_active_mcp_servers(&sid)
+                    .await
+                    .map(|list| list.into_iter().map(|(srv, _)| srv.id).collect())
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            Ok::<_, String>((servers, active_ids))
+        })??;
+
         let count = servers.len();
         self.mcp_servers = servers;
         self.mcp_active_ids = active_ids;

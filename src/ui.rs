@@ -73,7 +73,6 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
         " [3] Codex ",
         " [4] Claude ",
         " [5] Custom LLM ",
-        " [6] MCP Servers ",
     ];
     let tabs = Tabs::new(tab_titles)
         .block(
@@ -94,7 +93,6 @@ fn render_body(frame: &mut Frame, area: Rect, app: &App) {
         2 => crate::provider_view::render_provider_tab(frame, area, &app.codex),
         3 => crate::provider_view::render_provider_tab(frame, area, &app.claude),
         4 => crate::custom_llm_view::render_custom_llm_tab(frame, area, &app.custom_llm),
-        5 => crate::mcp_server_view::render_mcp_server_tab(frame, area, &app.mcp_server),
         _ => {}
     }
 }
@@ -106,7 +104,6 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         2 => crate::provider_view::ui::get_footer_key_hints(&app.codex),
         3 => crate::provider_view::ui::get_footer_key_hints(&app.claude),
         4 => crate::custom_llm_view::ui::get_footer_key_hints(&app.custom_llm),
-        5 => crate::mcp_server_view::ui::get_footer_key_hints(&app.mcp_server),
         _ => vec![],
     };
 

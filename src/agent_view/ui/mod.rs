@@ -336,8 +336,6 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         AgentFocusArea::McpTools => {
             hints.push(Span::styled(" [↑/↓|j/k] ", Theme::key_badge()));
             hints.push(Span::raw("Select "));
-            hints.push(Span::styled(" [Space] ", Theme::key_badge()));
-            hints.push(Span::raw("Toggle "));
             hints.push(Span::styled(" [s] ", Theme::key_badge()));
             hints.push(Span::raw("Switch "));
             if width > 90 {

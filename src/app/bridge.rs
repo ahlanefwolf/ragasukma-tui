@@ -362,6 +362,7 @@ impl App {
                     })
                     .collect();
                 self.agent.active_session_id = Some(active_id.clone());
+                let _ = self.agent.reload_mcp_servers();
                 if let Some(pos) = self.agent.sessions.iter().position(|s| s.id == active_id) {
                     self.agent.selected_session_idx = pos;
                     if let Some(ref m) = self.agent.sessions[pos].model {

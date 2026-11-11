@@ -206,9 +206,6 @@ impl AgentWorkspaceState {
             KeyCode::Char('n') if self.focus_area == AgentFocusArea::Tasks => {
                 Some(Action::AgentNewTask)
             }
-            KeyCode::Char(' ') if self.focus_area == AgentFocusArea::McpTools => {
-                Some(Action::AgentToggleMcpServer)
-            }
 
             KeyCode::Down | KeyCode::Char('j') => match self.focus_area {
                 AgentFocusArea::Tasks => Some(Action::AgentNextTask),
@@ -231,7 +228,6 @@ impl AgentWorkspaceState {
                 AgentFocusArea::Files => Some(Action::AgentToggleFileTreeExpand),
                 AgentFocusArea::Input => Some(Action::AgentSubmitPrompt),
                 AgentFocusArea::Chat => Some(Action::AgentFocusInput),
-                AgentFocusArea::McpTools => Some(Action::AgentToggleMcpServer),
                 _ => None,
             },
             KeyCode::Char('a')

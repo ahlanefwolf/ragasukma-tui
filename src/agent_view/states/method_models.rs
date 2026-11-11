@@ -118,7 +118,7 @@ impl AgentWorkspaceState {
             AgentSidebarTab::Files => AgentSidebarTab::Mcp,
             AgentSidebarTab::Mcp => AgentSidebarTab::Tasks,
         };
-        if self.sidebar_tab == AgentSidebarTab::Mcp && self.mcp_servers.is_empty() {
+        if self.sidebar_tab == AgentSidebarTab::Mcp {
             let _ = self.reload_mcp_servers();
         }
     }
@@ -131,6 +131,7 @@ impl AgentWorkspaceState {
                 .get(self.selected_session_idx)
                 .map(|s| s.id.clone());
             self.session_start_instant = std::time::Instant::now();
+            let _ = self.reload_mcp_servers();
         }
     }
 
@@ -146,6 +147,7 @@ impl AgentWorkspaceState {
                 .get(self.selected_session_idx)
                 .map(|s| s.id.clone());
             self.session_start_instant = std::time::Instant::now();
+            let _ = self.reload_mcp_servers();
         }
     }
 

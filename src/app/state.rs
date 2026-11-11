@@ -23,7 +23,6 @@ pub struct App {
     pub codex: ProviderTabState,
     pub claude: ProviderTabState,
     pub custom_llm: CustomLlmTabState,
-    pub mcp_server: crate::mcp_server_view::McpServerTabState,
 
     pub confirm_dialog: Option<ConfirmDialogState>,
     pub diff_modal: Option<DiffApprovalState>,
@@ -46,7 +45,6 @@ impl App {
         let codex = crate::provider_view::codex::load_codex_tab();
         let claude = crate::provider_view::claude::load_claude_tab();
         let custom_llm = CustomLlmTabState::new();
-        let mcp_server = crate::mcp_server_view::McpServerTabState::new();
 
         Self {
             active_tab: 0,
@@ -59,7 +57,6 @@ impl App {
             codex,
             claude,
             custom_llm,
-            mcp_server,
             confirm_dialog: None,
             diff_modal: None,
             error_modal: None,

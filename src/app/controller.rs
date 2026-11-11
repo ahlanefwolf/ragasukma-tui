@@ -13,10 +13,6 @@ impl App {
                 || self.agent.project_modal.is_open
                 || self.agent.model_modal.is_open))
             || (self.active_tab == 4 && self.custom_llm.is_form_open)
-            || (self.active_tab == 5
-                && (self.mcp_server.is_form_open
-                    || self.mcp_server.is_sync_modal_open
-                    || self.mcp_server.delete_confirm_id.is_some()))
     }
 
     pub fn handle_key_event(&self, key: KeyEvent) -> Option<Action> {
@@ -68,7 +64,6 @@ impl App {
             return match self.active_tab {
                 0 => self.agent.handle_key(key),
                 4 => self.custom_llm.handle_key(key),
-                5 => self.mcp_server.handle_key(key),
                 _ => None,
             };
         }
@@ -82,7 +77,6 @@ impl App {
             2 => self.codex.handle_key(key),
             3 => self.claude.handle_key(key),
             4 => self.custom_llm.handle_key(key),
-            5 => self.mcp_server.handle_key(key),
             _ => None,
         };
 
@@ -97,7 +91,6 @@ impl App {
             KeyCode::Char('3') => Some(Action::SwitchTab(2)),
             KeyCode::Char('4') => Some(Action::SwitchTab(3)),
             KeyCode::Char('5') => Some(Action::SwitchTab(4)),
-            KeyCode::Char('6') => Some(Action::SwitchTab(5)),
             KeyCode::Char('[') => Some(Action::PrevTab),
             KeyCode::Char(']') => Some(Action::NextTab),
             KeyCode::Tab => Some(Action::NextTab),
@@ -112,9 +105,6 @@ impl App {
             return Some(Action::AgentPaste(text));
         }
         if self.active_tab == 4 && self.custom_llm.is_form_open {
-            return Some(Action::FormPaste(text));
-        }
-        if self.active_tab == 5 && self.mcp_server.is_form_open {
             return Some(Action::FormPaste(text));
         }
         None

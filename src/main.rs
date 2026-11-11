@@ -83,7 +83,10 @@ async fn main() -> Result<()> {
     // 5. Main application loop
     let run_res = run_app(&mut term, &mut app, &mut events).await;
 
-    // 6. Restore terminal on exit
+    // 6. Graceful cleanup of persistent stdio MCP server processes
+    ragasukma_core::agent::mcp::shutdown_all_stdio_servers().await;
+
+    // 7. Restore terminal on exit
     terminal::restore()?;
 
     if let Err(ref err) = run_res {
@@ -157,8 +160,7 @@ async fn run_app(
                     term.clear()?;
                     app.error_modal = Some(format!("OAuth Login Failed [{}]: {}", provider, error));
                 }
-                AppEvent::McpServersLoaded(servers) => {
-                    app.mcp_server.set_servers(servers);
+                AppEvent::McpServersLoaded(_) => {
                     let _ = app.agent.reload_mcp_servers();
                 }
                 AppEvent::Tick => {

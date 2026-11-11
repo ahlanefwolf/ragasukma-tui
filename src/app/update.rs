@@ -17,30 +17,17 @@ impl App {
         }
 
         // 2. Delegate to active tab view module
-        match self.active_tab {
-            4 => {
-                if let Some(status_opt) = crate::custom_llm_view::update::handle_custom_llm_action(
-                    &mut self.custom_llm,
-                    &action,
-                ) {
-                    if let Some(status) = status_opt {
-                        self.set_status(status);
-                    }
-                    return;
+        if self.active_tab == 4 {
+            let handled = crate::custom_llm_view::update::handle_custom_llm_action(
+                &mut self.custom_llm,
+                &action,
+            );
+            if let Some(status_opt) = handled {
+                if let Some(status) = status_opt {
+                    self.set_status(status);
                 }
+                return;
             }
-            5 => {
-                if let Some(status_opt) = crate::mcp_server_view::update::handle_mcp_server_action(
-                    &mut self.mcp_server,
-                    &action,
-                ) {
-                    if let Some(status) = status_opt {
-                        self.set_status(status);
-                    }
-                    return;
-                }
-            }
-            _ => {}
         }
 
         // 4. Delegate to Provider View module
@@ -67,14 +54,14 @@ impl App {
                 self.should_quit = true;
             }
             Action::NextTab => {
-                self.active_tab = (self.active_tab + 1) % 6;
+                self.active_tab = (self.active_tab + 1) % 5;
                 if self.active_tab >= 1 && self.active_tab <= 3 {
                     self.request_selected_account_quota();
                 }
             }
             Action::PrevTab => {
                 self.active_tab = if self.active_tab == 0 {
-                    5
+                    4
                 } else {
                     self.active_tab - 1
                 };
@@ -83,7 +70,7 @@ impl App {
                 }
             }
             Action::SwitchTab(tab) => {
-                if tab < 6 {
+                if tab < 5 {
                     self.active_tab = tab;
                     if (1..=3).contains(&tab) {
                         self.request_selected_account_quota();

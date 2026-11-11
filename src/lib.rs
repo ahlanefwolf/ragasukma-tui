@@ -15,7 +15,6 @@ pub mod core_bridge;
 pub mod custom_llm_view;
 pub mod event;
 pub mod logging;
-pub mod mcp_server_view;
 pub mod provider_view;
 pub use provider_view as provider_views;
 pub use provider_view::oauth_listener;
