@@ -1,6 +1,6 @@
 [package]
 name = "ragasukma-tui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Ahlan Saputra <hlnsptr@gmail.com>"]
 description = "Terminal User Interface (TUI) for Ragasukma autonomous agent & LLM manager"
