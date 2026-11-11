@@ -6,7 +6,7 @@ use crate::theme::Theme;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::Modifier,
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap},
 };
@@ -48,25 +48,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
 fn render_header(frame: &mut Frame, area: Rect, app: &App) {
     let header_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(22), Constraint::Min(35)])
+        .constraints([Constraint::Min(35), Constraint::Length(22)])
         .split(area);
 
-    // Title Block
-    let title_line = Line::from(vec![
-        Span::styled(" RAGASUKMA ", Theme::header_title()),
-        Span::styled("TUI", Theme::badge_cyan()),
-    ]);
-    let title_widget = Paragraph::new(title_line)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Theme::border_gold())
-                .style(Theme::block_base()),
-        )
-        .alignment(Alignment::Center);
-    frame.render_widget(title_widget, header_chunks[0]);
-
-    // Tabs Block
+    // Tabs Block (Left / Center)
     let tab_titles = vec![
         " [1] Agent ",
         " [2] Antigravity ",
@@ -83,7 +68,28 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
         )
         .highlight_style(Theme::tab_active())
         .select(app.active_tab);
-    frame.render_widget(tabs, header_chunks[1]);
+    frame.render_widget(tabs, header_chunks[0]);
+
+    // Brand Block (Right Corner): 16-bit block pixel logo + RAGASUKMA
+    // Constructed using terminal block elements (▀, ■, ▄) reflecting the SVG horns, core, and wings
+    let brand_line = Line::from(vec![
+        Span::styled("▀", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
+        Span::styled("▄", Style::default().fg(Theme::TEXT_PRIMARY)),
+        Span::styled("■", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
+        Span::styled("▄", Style::default().fg(Theme::TEXT_PRIMARY)),
+        Span::styled("▀", Style::default().fg(Theme::GOLD_PRIMARY).add_modifier(Modifier::BOLD)),
+        Span::raw(" "),
+        Span::styled("RAGASUKMA", Theme::header_title()),
+    ]);
+    let title_widget = Paragraph::new(brand_line)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Theme::border_gold())
+                .style(Theme::block_base()),
+        )
+        .alignment(Alignment::Center);
+    frame.render_widget(title_widget, header_chunks[1]);
 }
 
 fn render_body(frame: &mut Frame, area: Rect, app: &App) {
