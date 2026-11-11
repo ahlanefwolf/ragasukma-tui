@@ -6,6 +6,10 @@ authors = ["Ahlan Saputra <hlnsptr@gmail.com>"]
 description = "Terminal User Interface (TUI) for Ragasukma autonomous agent & LLM manager"
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/ahlanefwolf/ragasukma-tui"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
 
 [dependencies]
 ragasukma-core = { git = "https://github.com/ahlanefwolf/ragasukma-core.git" }
@@ -28,6 +32,13 @@ ignore = "0.4"
 
 [dev-dependencies]
 tempfile = "3.10"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
 
 [patch."https://github.com/ahlanefwolf/ragasukma-core.git"]
 ragasukma-core = { path = "../ragasukma-core" }
