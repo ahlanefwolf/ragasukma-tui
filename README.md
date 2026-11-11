@@ -14,6 +14,10 @@
     and manage multiple service accounts directly from a fast, lightweight terminal screen without touching the mouse.
   </p>
 
+  <p align="center">
+    <img src="previews/2026-11-11_15-00.webp" alt="Ragasukma TUI Preview" width="85%" />
+  </p>
+
 </div>
 
 ---
