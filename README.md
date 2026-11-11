@@ -3,102 +3,102 @@
   <img src="icons/128x128@2x.png" alt="Ragasukma Logo" width="120" height="120" />
 
   # Ragasukma TUI
-  **Layar Kerja Asisten Pengerjaan Berkas Langsung di Terminal**
+  **Terminal Workspace for Hands-on File and Project Assistance**
 
   [![Platform](https://img.shields.io/badge/Platform-Linux_%7C_Windows_%7C_macOS-2F3B46?style=flat-square)](https://github.com/ahlanefwolf/ragasukma-tui/releases)
   [![License: MIT](https://img.shields.io/badge/License-MIT-F2B5D4?style=flat-square)](LICENSE)
   [![Donate](https://img.shields.io/badge/Donate-SociaBuzz-FF7043?style=flat-square)](https://sociabuzz.com/ahlanefwolf)
 
   <p align="center">
-    Ajak asisten mengerjakan berkas dan proyek Anda, pantau sisa kuota,
-    dan kelola berbagai akun layanan langsung dari satu layar hitam yang ringan tanpa mouse.
+    Collaborate with an assistant on your project files, track remaining quotas,
+    and manage multiple service accounts directly from a fast, lightweight terminal screen without touching the mouse.
   </p>
 
 </div>
 
 ---
 
-## Apa Itu Ragasukma TUI?
+## What is Ragasukma TUI?
 
-Bayangkan memiliki rekan kerja yang duduk di sebelah Anda. Anda tinggal berkata:
-*"Tolong perbaiki kesalahan di halaman masuk dan rapikan tampilannya"*.
-Rekan tersebut langsung membaca berkas, menulis perbaikan, dan memastikan semuanya beres.
+Imagine having a colleague sitting right beside you. You simply say:
+*"Please fix the issue on the login page and tidy up its layout"*.
+That colleague immediately reads the files, writes the fixes, and verifies that everything works properly.
 
-**Ragasukma TUI adalah meja kerja tempat Anda dan rekan tersebut berinteraksi.**
-Semua berjalan langsung di dalam jendela perintah (terminal) komputer Anda — sangat ringan, terbuka seketika, dan tidak menghabiskan memori komputer.
+**Ragasukma TUI is the interactive workspace where you and that assistant collaborate.**
+Everything runs right inside your computer's terminal window—instant startup, zero bloat, and minimal memory usage.
 
-Ibarat kendaraan:
-- **Ragasukma Core** adalah mesin yang bekerja di dalam.
-- **Ragasukma TUI** adalah setir dan layar kendali tempat Anda memberi petunjuk arah.
-
----
-
-## Apa Saja Fungsinya?
-
-### Meminta Asisten Bekerja Lewat Kalimat Biasa
-- Ajukan pertanyaan seputar isi berkas Anda tanpa perlu mencarinya satu per satu.
-- Minta asisten memperbaiki bagian yang rusak, menambah fitur baru, atau membersihkan isi berkas.
-- Cukup sebutkan tanda `@` diikuti nama berkas agar asisten langsung tahu berkas mana yang dimaksud.
-
-### Lihat Perubahan Sebelum Disetujui
-- Setiap kali asisten ingin mengubah berkas, Anda akan diperlihatkan bagian apa saja yang ditambah atau dikurangi.
-- Anda memegang kendali penuh: tekan `y` untuk menyetujui atau `n` untuk menolak.
-- Berkas Anda tidak akan pernah diubah diam-diam tanpa izin Anda.
-
-### Mengerjakan Banyak Folder Sekaligus
-- Anda dapat memasukkan beberapa folder kerja ke dalam satu sesi.
-- Berpindah antar-folder kerja dengan mudah tanpa perlu menutup aplikasi.
-
-### Masuk Akun Sekali Sentuh
-- Cukup tekan tombol masuk akun, jendela peramban akan terbuka otomatis untuk menyelesaikan proses masuk.
-- Mendukung layanan populer seperti Claude, Codex, dan Antigravity.
-
-### Melihat Sisa Kuota dan Berpindah Akun
-- Sisa kuota harian dan status tiap akun ditampilkan jelas dalam satu halaman.
-- Punya lebih dari satu akun? Anda bisa berganti akun kerja kapan saja hanya dengan menekan tombol pilihan.
-
-### Menggunakan Model Milik Sendiri
-- Anda dapat menghubungkan layanan cerdas lokal atau layanan lain yang Anda miliki.
-- Cukup masukkan alamat dan kunci akses pada layar yang disediakan tanpa perlu menyunting berkas pengaturan yang rumit.
-
-### Menambah Kemampuan Kerja
-- Asisten dapat disambungkan ke alat pembantu tambahan, seperti pencari informasi web atau pembaca basis data.
-- Pengaturan dapat diuji dan dinyalakan langsung dari layar aplikasi.
-
-### Mengatur Tampilan Berpikir
-- Anda bisa memilih untuk melihat rincian bagaimana asisten memikirkan solusi, atau memilih tampilan ringkas yang bersih.
-
-### Ringan dan Bekerja Penuh Lewat Papan Ketik
-- Membuka aplikasi berlangsung dalam hitungan detik dan menggunakan daya memori yang sangat kecil.
-- Semua navigasi dirancang agar tangan Anda tidak perlu berpindah ke mouse.
+Think of it like a vehicle:
+- **Ragasukma Core** is the engine working under the hood.
+- **Ragasukma TUI** is the steering wheel and dashboard where you steer and give directions.
 
 ---
 
-## Panduan Tombol Penting
+## What Can It Do?
 
-| Tombol | Kegunaan |
+### Instruct Your Assistant Using Everyday Language
+- Ask questions about your files without having to open and search them one by one.
+- Request the assistant to fix broken parts, build new features, or clean up file contents.
+- Simply mention `@` followed by a file name so the assistant instantly knows which file you mean.
+
+### Review Changes Before Approval
+- Whenever the assistant wants to modify a file, you are shown the exact lines added or removed.
+- You maintain complete control: press `y` to approve or `n` to reject.
+- Your files are never changed without your explicit consent.
+
+### Work Across Multiple Folders at Once
+- Add multiple project folders into a single session.
+- Switch between working folders smoothly without ever closing the application.
+
+### One-Touch Account Login
+- Press the login shortcut, and your browser window opens automatically to complete authentication.
+- Supports popular services including Claude, Codex, and Antigravity.
+
+### Monitor Quotas and Switch Accounts
+- View remaining daily quota and account status clearly in one dashboard.
+- Have more than one account? Switch your active working account anytime with a single keypress.
+
+### Bring Your Own Models
+- Connect local intelligent models or any other custom services you run.
+- Just enter the endpoint address and access key in the provided screen without editing complicated configuration files.
+
+### Expand Capabilities with External Tools
+- Connect additional helper tools—such as web research or database lookup utilities—whenever you need them.
+- Test and activate settings directly from the interface.
+
+### Adjustable Thought Display
+- Choose to view the step-by-step reasoning behind the assistant's solutions, or keep the screen clean with concise summaries.
+
+### Lightweight and Keyboard-Driven
+- Launches in seconds with very low memory footprint.
+- All navigation is designed so your hands never need to leave the keyboard.
+
+---
+
+## Key Shortcuts Reference
+
+| Key | Action |
 | :--- | :--- |
-| `1` - `5` | Berpindah layar: Asisten (Agent), Antigravity, Codex, Claude, Custom LLM |
-| `[` / `]` | Pindah ke layar sebelumnya / berikutnya |
-| `i` | Mulai mengetik di kotak pesan |
-| `Enter` | Mengirim pesan atau memilih menu |
-| `Esc` | Batal mengetik atau menutup jendela bantuan |
-| `Tab` | Berpindah antar-bagian tampilan |
-| `m` | Memilih model kecerdasan buatan |
-| `a` | Masuk ke akun baru via peramban, atau menambah folder kerja |
-| `r` | Membuka/menutup rincian cara berpikir asisten, atau menyegarkan kuota |
-| `x` | Membuka/menutup rincian alat yang digunakan asisten |
-| `y` / `n` | Menyetujui atau menolak perubahan berkas |
-| `q` | Keluar dari aplikasi |
-| `Ctrl+C` | Menghentikan pekerjaan asisten yang sedang berjalan, atau keluar |
+| `1` - `5` | Switch tabs: Agent, Antigravity, Codex, Claude, Custom LLM |
+| `[` / `]` | Move to previous / next tab |
+| `i` | Start typing in the message box |
+| `Enter` | Send message or confirm selection |
+| `Esc` | Stop typing or dismiss popup dialogs |
+| `Tab` | Move focus between screen sections |
+| `m` | Select intelligence model |
+| `a` | Add new account via browser login, or add working folders |
+| `r` | Toggle thought reasoning details, or refresh quota |
+| `x` | Toggle tool usage details |
+| `y` / `n` | Approve or reject proposed file changes |
+| `q` | Quit application |
+| `Ctrl+C` | Cancel running assistant task, or quit |
 
-Semua riwayat percakapan dan catatan akun Anda otomatis tersimpan di komputer Anda. Anda dapat menutup aplikasi kapan saja dan melanjutkannya kembali tanpa takut kehilangan data.
+All conversation history and account records are automatically saved on your local computer. You can close the application at any time and resume right where you left off.
 
 ---
 
-## Lisensi
+## License
 
-Dirilis di bawah lisensi [MIT License](LICENSE) — bebas digunakan, dimodifikasi, dan dibagikan.
+Released under the [MIT License](LICENSE) — free to use, modify, and distribute.
 
-Dibuat oleh **Ahlan Saputra** ([@ahlanefwolf](https://github.com/ahlanefwolf)).  
-Hak Cipta (c) 2026 Ahlan Saputra.
+Crafted by **Ahlan Saputra** ([@ahlanefwolf](https://github.com/ahlanefwolf)).  
+Copyright (c) 2026 Ahlan Saputra.
