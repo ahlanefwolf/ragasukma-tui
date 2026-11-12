@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           echo "=== Fetching latest ragasukma-core from git main ==="
-          cargo update -p ragasukma-core
+          cargo update --package https://github.com/ahlanefwolf/ragasukma-core.git#ragasukma-core || cargo update -p ragasukma-core || true
 
       - name: Build TUI Release Binary
         run: |
