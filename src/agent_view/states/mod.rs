@@ -43,6 +43,10 @@ pub struct AgentWorkspaceState {
     pub expanded_tools: HashSet<usize>,
     pub reasoning_expanded: bool,
     pub auto_scroll: bool,
+    /// True when the user manually scrolled away from the bottom *during* an
+    /// active streaming turn. While set, incoming stream deltas must not force
+    /// the viewport back to the bottom. Cleared on new turn / scroll-to-bottom.
+    pub follow_stream: bool,
     pub spinner_tick: usize,
     /// Number of most recent messages to render (lazy load window limit).
     pub chat_visible_limit: usize,
@@ -127,6 +131,7 @@ impl Default for AgentWorkspaceState {
             expanded_tools: HashSet::new(),
             reasoning_expanded: false,
             auto_scroll: true,
+            follow_stream: true,
             spinner_tick: 0,
             chat_visible_limit: crate::agent_view::ui::message_renderer::DEFAULT_CHAT_MESSAGE_LIMIT,
             history: Vec::new(),

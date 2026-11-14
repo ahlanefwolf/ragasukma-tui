@@ -146,11 +146,23 @@ impl App {
                 if is_active {
                     if !msg.trim().is_empty() {
                         let mut found = false;
-                        if let Some(last) = self.agent.messages.last_mut().filter(|m| {
-                            m.role == crate::agent_view::types::MessageRole::Assistant
-                                && m.content.is_empty()
-                        }) {
-                            last.content = msg.clone();
+                        // Reconcile with the final summary instead of blindly appending.
+                        // Take the last assistant message of this turn and overwrite it,
+                        // even if it already has streamed content (prevents duplicates).
+                        if let Some(last) = self
+                            .agent
+                            .messages
+                            .last_mut()
+                            .filter(|m| m.role == crate::agent_view::types::MessageRole::Assistant)
+                        {
+                            let streamed = last.content.trim();
+                            let incoming = msg.trim();
+                            // Only overwrite when the incoming summary actually carries
+                            // content; keep the richer streamed text if the summary is a
+                            // subset/prefix of what was already streamed.
+                            if last.content.is_empty() || !streamed.contains(incoming) {
+                                last.content = msg.clone();
+                            }
                             found = true;
                         }
                         if !found {

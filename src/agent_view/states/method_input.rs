@@ -413,52 +413,66 @@ impl AgentWorkspaceState {
         }
     }
 
-    pub fn append_chunk(&mut self, chunk: &str) {
-        self.auto_scroll = true;
-        if let Some(last) = self
-            .messages
-            .last_mut()
-            .filter(|m| m.role == MessageRole::Assistant)
-        {
-            last.content.push_str(chunk);
-            return;
+    /// Returns the index of the streaming assistant bubble that incoming deltas
+    /// should target. Prefers the last assistant message that has no tool calls yet
+    /// (the "current phase" bubble); if everything has tool calls, falls back to
+    /// creating a fresh bubble. This prevents thoughts/content from leaking into a
+    /// bubble that already produced finished tool cards.
+    fn streaming_target_index(&self) -> Option<usize> {
+        // Only the newest message can be the open phase. If it is an assistant
+        // bubble without tool calls, stream into it; otherwise a new bubble is
+        // created below instead of appending into closed/foreign bubbles.
+        let idx = self.messages.len().checked_sub(1)?;
+        let msg = &self.messages[idx];
+        if msg.role == MessageRole::Assistant && msg.tool_calls.is_empty() {
+            Some(idx)
+        } else {
+            None
         }
-
-        self.messages.push(ChatMessage {
-            role: MessageRole::Assistant,
-            sender_name: "Agent".to_string(),
-            content: chunk.to_string(),
-            timestamp: "now".to_string(),
-            tool_calls: Vec::new(),
-            reasoning: None,
-        });
-        self.enforce_message_limit();
     }
 
-    pub fn append_thought(&mut self, thought: &str) {
-        self.auto_scroll = true;
-        if let Some(last) = self
-            .messages
-            .last_mut()
-            .filter(|m| m.role == MessageRole::Assistant)
-        {
-            if let Some(ref mut r) = last.reasoning {
-                r.push_str(thought);
-            } else {
-                last.reasoning = Some(thought.to_string());
-            }
-            return;
-        }
-
+    /// Push a fresh empty assistant bubble and return its index.
+    fn push_assistant_bubble(&mut self) -> usize {
         self.messages.push(ChatMessage {
             role: MessageRole::Assistant,
             sender_name: "Agent".to_string(),
             content: String::new(),
             timestamp: "now".to_string(),
             tool_calls: Vec::new(),
-            reasoning: Some(thought.to_string()),
+            reasoning: None,
         });
         self.enforce_message_limit();
+        self.messages.len() - 1
+    }
+
+    pub fn append_chunk(&mut self, chunk: &str) {
+        // Only auto-follow when the user has not scrolled away during streaming.
+        if self.follow_stream {
+            self.auto_scroll = true;
+        }
+        let idx = match self.streaming_target_index() {
+            Some(idx) => idx,
+            None => self.push_assistant_bubble(),
+        };
+        if let Some(msg) = self.messages.get_mut(idx) {
+            msg.content.push_str(chunk);
+        }
+    }
+
+    pub fn append_thought(&mut self, thought: &str) {
+        if self.follow_stream {
+            self.auto_scroll = true;
+        }
+        let idx = match self.streaming_target_index() {
+            Some(idx) => idx,
+            None => self.push_assistant_bubble(),
+        };
+        if let Some(msg) = self.messages.get_mut(idx) {
+            match &mut msg.reasoning {
+                Some(r) => r.push_str(thought),
+                None => msg.reasoning = Some(thought.to_string()),
+            }
+        }
     }
 
     pub fn finish_turn(&mut self) {
@@ -650,6 +664,9 @@ impl AgentWorkspaceState {
         let max = self.chat_max_scroll.get();
         self.scroll_offset = (self.scroll_offset.saturating_add(1)).min(max);
         self.auto_scroll = false;
+        // User intentionally scrolled up: stop auto-following the stream so new
+        // deltas do not yank the viewport back to the bottom.
+        self.follow_stream = false;
     }
 
     pub fn scroll_down(&mut self) {
@@ -658,6 +675,8 @@ impl AgentWorkspaceState {
         self.scroll_offset = current.saturating_sub(1);
         if self.scroll_offset == 0 {
             self.auto_scroll = true;
+            // Back at the bottom: resume following the live stream.
+            self.follow_stream = true;
         }
     }
 
@@ -665,12 +684,72 @@ impl AgentWorkspaceState {
         self.chat_visible_limit = self.messages.len();
         self.scroll_offset = self.chat_max_scroll.get();
         self.auto_scroll = false;
+        self.follow_stream = false;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_append_thought_does_not_leak_into_phase_with_tool_calls() {
+        let mut state = AgentWorkspaceState::default();
+        state.start_turn();
+
+        // Phase 1: streaming text + a finished tool call attached to it.
+        state.append_chunk("Let me check that.");
+        {
+            let last = state.messages.last_mut().unwrap();
+            last.tool_calls.push(crate::agent_view::types::ToolCallInfo {
+                id: "t1".to_string(),
+                name: "read_file".to_string(),
+                args_summary: "{}".to_string(),
+                output_summary: Some("ok".to_string()),
+                status: crate::agent_view::types::ToolExecutionStatus::Success,
+                duration_ms: None,
+                stdout: None,
+                stderr: None,
+                exit_code: None,
+                diff_preview: None,
+            });
+        }
+
+        // Phase 2: more reasoning arrives after the tool finished. It must NOT be
+        // appended to the bubble that already owns the tool card; a new bubble is
+        // created instead.
+        state.append_thought("Now thinking further.");
+
+        assert_eq!(state.messages.len(), 2, "expected a fresh bubble for phase 2");
+        assert!(state.messages[0].reasoning.is_none());
+        assert_eq!(
+            state.messages[1].reasoning.as_deref(),
+            Some("Now thinking further.")
+        );
+    }
+
+    #[test]
+    fn test_stream_delta_respects_manual_scroll_away() {
+        let mut state = AgentWorkspaceState::default();
+        state.start_turn();
+        state.append_chunk("hello");
+
+        // User scrolls up mid-stream -> we must stop auto-following.
+        state.scroll_up();
+        assert!(!state.follow_stream);
+        assert!(!state.auto_scroll);
+
+        // Incoming delta must not force the viewport back to bottom.
+        state.append_chunk(" world");
+        assert!(!state.auto_scroll, "delta must not override manual scroll");
+        assert_eq!(state.messages.last().unwrap().content, "hello world");
+
+        // Returning to the bottom resumes following.
+        state.scroll_to_bottom();
+        assert!(state.follow_stream);
+        state.append_chunk("!");
+        assert!(state.auto_scroll);
+    }
 
     #[test]
     fn test_prompt_history_submission_and_navigation() {

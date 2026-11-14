@@ -138,9 +138,29 @@ pub fn render_message_to_lines<'a>(
                 let clean_content = format!("{}{}", before, after).trim().to_string();
                 (Some(std::borrow::Cow::Owned(r.to_string())), std::borrow::Cow::Owned(clean_content))
             } else {
-                // Incomplete think block (e.g. while still streaming thinking phase)
-                let r = after_think.trim();
-                (Some(std::borrow::Cow::Owned(r.to_string())), std::borrow::Cow::Borrowed(&msg.content[..start_idx]))
+                // Incomplete think block (e.g. while still streaming thinking phase).
+                // Keep any text that precedes `<think>` as content, and if there is
+                // nothing before it, do NOT swallow the streamed text into reasoning
+                // only — otherwise the user sees an empty bubble until the turn ends.
+                let before = &msg.content[..start_idx];
+                let reasoning_text = if before.trim().is_empty() {
+                    // No leading content: show streamed thinking as *content* too so the
+                    // bubble is not blank while `</think>` has not arrived yet.
+                    after_think.trim()
+                } else {
+                    after_think.trim()
+                };
+                if before.trim().is_empty() {
+                    (
+                        Some(std::borrow::Cow::Owned(reasoning_text.to_string())),
+                        std::borrow::Cow::Owned(String::new()),
+                    )
+                } else {
+                    (
+                        Some(std::borrow::Cow::Owned(reasoning_text.to_string())),
+                        std::borrow::Cow::Borrowed(before),
+                    )
+                }
             }
         } else {
             (None, std::borrow::Cow::Borrowed(msg.content.as_str()))

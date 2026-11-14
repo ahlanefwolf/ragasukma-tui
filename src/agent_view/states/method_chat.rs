@@ -4,6 +4,7 @@ impl AgentWorkspaceState {
     pub fn scroll_to_bottom(&mut self) {
         self.scroll_offset = 0;
         self.auto_scroll = true;
+        self.follow_stream = true;
     }
 
     pub fn toggle_tool_card(&mut self, idx: usize) {
@@ -126,6 +127,8 @@ impl AgentWorkspaceState {
         self.is_running = true;
         self.scroll_offset = 0;
         self.auto_scroll = true;
+        // Fresh turn: re-enable live-stream auto-follow.
+        self.follow_stream = true;
         if let Some(active_sid) = &self.active_session_id
             && let Some(s) = self.sessions.iter_mut().find(|s| &s.id == active_sid)
         {
