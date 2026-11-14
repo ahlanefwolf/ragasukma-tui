@@ -18,6 +18,7 @@ impl App {
                         self.agent.is_running = is_running;
                         if !is_running {
                             self.agent.active_turn_id = None;
+                            let _ = self.agent.reload_mcp_servers();
                         }
                     }
                 }
@@ -59,7 +60,17 @@ impl App {
                     "Agent step: session={session_id}, action='{action}', details='{det_str}'"
                 );
                 if Some(&session_id) == self.agent.active_session_id.as_ref() {
-                    self.set_status(format!("[Step] {} - {}", action, det_str));
+                    if action == "mcp_sync"
+                        || det_str.contains("mcp_configure_session")
+                        || det_str.contains("activate_extension")
+                        || det_str.contains("mcp_remove_server")
+                        || det_str.contains("mcp_register_server")
+                    {
+                        let _ = self.agent.reload_mcp_servers();
+                    }
+                    if action != "mcp_sync" {
+                        self.set_status(format!("[Step] {} - {}", action, det_str));
+                    }
                 }
             }
             CoreBridgeEvent::ToolCall {
@@ -92,6 +103,13 @@ impl App {
                             });
                     }
                     if let Some(last) = self.agent.messages.last_mut() {
+                        let is_mcp_tool = matches!(
+                            name.as_str(),
+                            "mcp_configure_session"
+                                | "activate_extension"
+                                | "mcp_remove_server"
+                                | "mcp_register_server"
+                        ) || name.starts_with("mcp_");
                         last.tool_calls.push(ToolCallInfo {
                             id: format!("call_{}", last.tool_calls.len() + 1),
                             name,
@@ -104,6 +122,9 @@ impl App {
                             exit_code: None,
                             diff_preview: None,
                         });
+                        if is_mcp_tool {
+                            let _ = self.agent.reload_mcp_servers();
+                        }
                     }
                 }
             }
@@ -116,6 +137,9 @@ impl App {
                     s.is_running = false;
                 }
                 let is_active = Some(&session_id) == self.agent.active_session_id.as_ref();
+                if is_active {
+                    let _ = self.agent.reload_mcp_servers();
+                }
                 if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == session_id) {
                     s.is_running = false;
                 }

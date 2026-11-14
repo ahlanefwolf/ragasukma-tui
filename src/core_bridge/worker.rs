@@ -166,6 +166,25 @@ pub fn map_core_event_to_bridge(sid: &str, event: AgentSessionEvent) -> Option<C
             action,
             details,
         }),
+        AgentSessionEvent::MessageCreated(msg) if msg.role == "tool" => {
+            let content = msg.content.as_deref().unwrap_or_default();
+            if content.contains("MCP server ")
+                || content.contains("Extension ")
+                || content.contains("mcp_configure_session")
+                || content.contains("activate_extension")
+                || content.contains("mcp_remove_server")
+                || content.contains("mcp_register_server")
+            {
+                Some(CoreBridgeEvent::StepInfo {
+                    session_id: sid.to_string(),
+                    iteration: 0,
+                    action: "mcp_sync".to_string(),
+                    details: Some("Synced MCP state".to_string()),
+                })
+            } else {
+                None
+            }
+        }
         AgentSessionEvent::Error { message } => Some(CoreBridgeEvent::Error(message)),
         AgentSessionEvent::StreamReset => Some(CoreBridgeEvent::StreamReset {
             session_id: sid.to_string(),
