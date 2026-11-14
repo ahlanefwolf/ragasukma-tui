@@ -83,8 +83,8 @@ async fn main() -> Result<()> {
     // 5. Main application loop
     let run_res = run_app(&mut term, &mut app, &mut events).await;
 
-    // 6. Graceful cleanup of persistent stdio MCP server processes
-    ragasukma_core::agent::mcp::shutdown_all_stdio_servers().await;
+    // 6. Graceful cleanup of all MCP server processes and reset DB PIDs
+    ragasukma_core::agent::mcp::shutdown_all_mcp_servers().await;
 
     // 7. Restore terminal on exit
     terminal::restore()?;
@@ -112,8 +112,8 @@ async fn run_app(
 
         let mut event = tokio::select! {
             res = events.next() => res?,
-            _ = tokio::signal::ctrl_c() => {
-                tracing::info!("Received Ctrl+C interrupt signal, shutting down cleanly");
+            _ = ragasukma_core::agent::mcp::wait_for_shutdown_signal() => {
+                tracing::info!("Received shutdown signal (Ctrl+C / SIGTERM), shutting down cleanly");
                 app.should_quit = true;
                 break;
             }
