@@ -4,6 +4,16 @@ use crate::app::types::{Action, DiffApprovalState};
 
 impl App {
     pub fn update(&mut self, action: Action) {
+        if matches!(action, Action::AgentSubmitPrompt)
+            && !self.attached_images.is_empty()
+            && let Some(sid) = self.agent.active_session_id.as_deref()
+        {
+            ragasukma_core::agent::executor::set_session_pending_images(
+                sid,
+                std::mem::take(&mut self.attached_images),
+            );
+        }
+
         // 1. Delegate to Agent View module
         if let Some(status_opt) = crate::agent_view::update::handle_agent_action(
             &mut self.agent,
@@ -273,6 +283,17 @@ impl App {
                 self.handle_bridge_event(ev);
             }
             Action::BridgeCommand(cmd) => {
+                if matches!(
+                    cmd,
+                    crate::core_bridge::types::CoreBridgeCommand::ExecuteTurn { .. }
+                ) && !self.attached_images.is_empty()
+                    && let Some(sid) = self.agent.active_session_id.as_deref()
+                {
+                    ragasukma_core::agent::executor::set_session_pending_images(
+                        sid,
+                        std::mem::take(&mut self.attached_images),
+                    );
+                }
                 if let Some(tx) = &self.bridge_cmd_tx {
                     if let Err(e) = tx.send(cmd) {
                         tracing::error!("Failed to dispatch bridge command: {e}");

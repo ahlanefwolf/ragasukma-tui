@@ -31,6 +31,7 @@ pub struct App {
     pub quota_last_fetched: HashMap<(String, String), Instant>,
     pub bridge_cmd_tx: Option<UnboundedSender<CoreBridgeCommand>>,
     pub event_tx: Option<UnboundedSender<AppEvent>>,
+    pub attached_images: Vec<ragasukma_core::llm::types::ImageAttachment>,
 }
 
 pub(crate) fn current_time_str() -> String {
@@ -64,6 +65,7 @@ impl App {
             quota_last_fetched: HashMap::new(),
             bridge_cmd_tx: None,
             event_tx: None,
+            attached_images: Vec::new(),
         }
     }
 

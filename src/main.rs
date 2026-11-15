@@ -157,13 +157,26 @@ async fn run_app(
                         key.kind,
                         key.state
                     );
-                    if let Some(act) = app.handle_key_event(key) {
+                    let is_paste_image = matches!(
+                        key.code,
+                        crossterm::event::KeyCode::Char('i' | 'I')
+                            if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
+                    );
+                    if is_paste_image {
+                        if !try_attach_clipboard_image(app) {
+                            app.set_status("No image or image path in clipboard (Alt+I)".to_string());
+                        }
+                    } else if let Some(act) = app.handle_key_event(key) {
                         tracing::debug!("  -> action {:?}", act);
                         app.update(act);
                     }
                 }
                 AppEvent::Paste(text) => {
-                    if let Some(act) = app.handle_paste_event(text) {
+                    if (text.trim().is_empty() && try_attach_clipboard_image(app))
+                        || try_attach_image_path(app, &text)
+                    {
+                        // Image attached from clipboard or pasted file path
+                    } else if let Some(act) = app.handle_paste_event(text) {
                         app.update(act);
                     }
                 }
@@ -218,4 +231,91 @@ async fn run_app(
         }
     }
     Ok(())
+}
+
+fn try_attach_image_path(app: &mut App, raw: &str) -> bool {
+    let cleaned = raw.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+    if cleaned.is_empty() {
+        return false;
+    }
+    let path = std::path::Path::new(cleaned);
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    let mime_type = match ext.to_ascii_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        _ => return false,
+    };
+    if !path.is_file() {
+        return false;
+    }
+    let Ok(bytes) = std::fs::read(path) else {
+        return false;
+    };
+    use base64::Engine as _;
+    let data_base64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("image")
+        .to_string();
+    app.attached_images.push(ragasukma_core::llm::types::ImageAttachment {
+        mime_type: mime_type.to_string(),
+        data_base64,
+        name: Some(name.clone()),
+    });
+    let total = app.attached_images.len();
+    if let Some(act) = app.handle_paste_event(format!("[image:{total}] ")) {
+        app.update(act);
+    }
+    app.set_status(format!("Image attached: {name} ({total} total)"));
+    tracing::info!("Attached image file '{cleaned}' ({} bytes)", bytes.len());
+    true
+}
+
+fn try_attach_clipboard_image(app: &mut App) -> bool {
+    let Ok(mut clipboard) = arboard::Clipboard::new() else {
+        return false;
+    };
+    let Ok(img_data) = clipboard.get_image() else {
+        if let Ok(text) = clipboard.get_text()
+            && try_attach_image_path(app, &text)
+        {
+            return true;
+        }
+        return false;
+    };
+    let Some(rgba) = image::RgbaImage::from_raw(
+        img_data.width as u32,
+        img_data.height as u32,
+        img_data.bytes.into_owned(),
+    ) else {
+        return false;
+    };
+    let mut png_bytes: Vec<u8> = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut png_bytes);
+    if image::DynamicImage::ImageRgba8(rgba)
+        .write_to(&mut cursor, image::ImageFormat::Png)
+        .is_err()
+    {
+        return false;
+    }
+    use base64::Engine as _;
+    let data_base64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+    let idx = app.attached_images.len() + 1;
+    app.attached_images.push(ragasukma_core::llm::types::ImageAttachment {
+        mime_type: "image/png".to_string(),
+        data_base64,
+        name: Some(format!("clipboard-{idx}.png")),
+    });
+    if let Some(act) = app.handle_paste_event(format!("[image:{idx}] ")) {
+        app.update(act);
+    }
+    app.set_status(format!("Image attached ({idx} total)"));
+    tracing::info!("Attached clipboard image #{idx} ({} bytes PNG)", png_bytes.len());
+    true
 }
