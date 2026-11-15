@@ -378,19 +378,21 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                 Span::styled(title_str, Theme::header_title())
             };
 
-            let title_bottom = if chunks[2].width >= 46 {
+            let title_bottom = if chunks[2].width >= 56 {
                 Line::from(vec![
                     Span::styled(" [", Style::default().fg(Color::DarkGray)),
                     Span::styled(".skills/", Style::default().fg(Color::Cyan)),
-                    Span::styled(" or ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(".skill/", Style::default().fg(Color::Cyan)),
-                    Span::styled(" auto-injected to prompt] ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(", ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(".agents/skills/", Style::default().fg(Color::Cyan)),
+                    Span::styled(", ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(".claude/skills/", Style::default().fg(Color::Cyan)),
+                    Span::styled(" auto-injected] ", Style::default().fg(Color::DarkGray)),
                 ])
             } else if chunks[2].width >= 32 {
                 Line::from(vec![
                     Span::styled(" [", Style::default().fg(Color::DarkGray)),
-                    Span::styled(".skills/", Style::default().fg(Color::Cyan)),
-                    Span::styled(" auto-injected to prompt] ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(".skills/ & .agents/skills/", Style::default().fg(Color::Cyan)),
+                    Span::styled(" -> prompt] ", Style::default().fg(Color::DarkGray)),
                 ])
             } else {
                 Line::from(vec![

@@ -102,6 +102,9 @@ async fn run_app(
     app: &mut App,
     events: &mut EventHandler,
 ) -> Result<()> {
+    let mut last_char_key_at: Option<std::time::Instant> = None;
+    const PASTE_BURST_THRESHOLD: std::time::Duration = std::time::Duration::from_millis(25);
+
     while !app.should_quit {
         if app.needs_clear {
             term.clear()?;
@@ -120,7 +123,33 @@ async fn run_app(
         };
         loop {
             match event {
-                AppEvent::Key(key) => {
+                AppEvent::Key(mut key) => {
+                    let now = std::time::Instant::now();
+                    let in_paste_burst = last_char_key_at
+                        .map(|t| now.duration_since(t) < PASTE_BURST_THRESHOLD)
+                        .unwrap_or(false);
+
+                    if key.code == crossterm::event::KeyCode::Enter
+                        && key.modifiers.is_empty()
+                        && in_paste_burst
+                    {
+                        // Windows terminals (ConPTY/PowerShell) often simulate multi-line paste
+                        // as rapid KeyEvent sequences instead of bracketed paste. Treat rapid
+                        // Enter as Shift+Enter (newline) so it doesn't prematurely submit.
+                        key.modifiers = crossterm::event::KeyModifiers::SHIFT;
+                        last_char_key_at = Some(now);
+                    } else if matches!(
+                        key.code,
+                        crossterm::event::KeyCode::Char(_) | crossterm::event::KeyCode::Tab
+                    ) && !key
+                        .modifiers
+                        .intersects(crossterm::event::KeyModifiers::CONTROL | crossterm::event::KeyModifiers::ALT)
+                    {
+                        last_char_key_at = Some(now);
+                    } else {
+                        last_char_key_at = None;
+                    }
+
                     tracing::debug!(
                         "key: code={:?} mods={:?} kind={:?} state={:?}",
                         key.code,
