@@ -159,12 +159,13 @@ async fn run_app(
                     );
                     let is_paste_image = matches!(
                         key.code,
-                        crossterm::event::KeyCode::Char('i' | 'I')
-                            if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
+                        crossterm::event::KeyCode::Char('g') | crossterm::event::KeyCode::Char('G')
+                            if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+                                && !key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
                     );
                     if is_paste_image {
                         if !try_attach_clipboard_image(app) {
-                            app.set_status("No image or image path in clipboard (Alt+I)".to_string());
+                            app.set_status("No image or image path in clipboard (Ctrl+G)".to_string());
                         }
                     } else if let Some(act) = app.handle_key_event(key) {
                         tracing::debug!("  -> action {:?}", act);
@@ -233,12 +234,36 @@ async fn run_app(
     Ok(())
 }
 
+fn decode_file_uri(raw: &str) -> Option<String> {
+    let stripped = raw.strip_prefix("file://")?;
+    let mut out = String::with_capacity(stripped.len());
+    let bytes = stripped.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(hex) = std::str::from_utf8(&bytes[i + 1..i + 3])
+            && let Ok(val) = u8::from_str_radix(hex, 16)
+        {
+            out.push(val as char);
+            i += 3;
+            continue;
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    Some(out)
+}
+
 fn try_attach_image_path(app: &mut App, raw: &str) -> bool {
-    let cleaned = raw.trim().trim_matches(|c| c == '"' || c == '\'').trim();
+    let first_line = raw.lines().next().unwrap_or(raw);
+    let cleaned = first_line.trim().trim_matches(|c| c == '"' || c == '\'').trim();
     if cleaned.is_empty() {
         return false;
     }
-    let path = std::path::Path::new(cleaned);
+    let decoded = decode_file_uri(cleaned);
+    let path_str = decoded.as_deref().unwrap_or(cleaned);
+    let path = std::path::Path::new(path_str);
     let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return false;
     };
@@ -277,35 +302,12 @@ fn try_attach_image_path(app: &mut App, raw: &str) -> bool {
     true
 }
 
-fn try_attach_clipboard_image(app: &mut App) -> bool {
-    let Ok(mut clipboard) = arboard::Clipboard::new() else {
-        return false;
-    };
-    let Ok(img_data) = clipboard.get_image() else {
-        if let Ok(text) = clipboard.get_text()
-            && try_attach_image_path(app, &text)
-        {
-            return true;
-        }
-        return false;
-    };
-    let Some(rgba) = image::RgbaImage::from_raw(
-        img_data.width as u32,
-        img_data.height as u32,
-        img_data.bytes.into_owned(),
-    ) else {
-        return false;
-    };
-    let mut png_bytes: Vec<u8> = Vec::new();
-    let mut cursor = std::io::Cursor::new(&mut png_bytes);
-    if image::DynamicImage::ImageRgba8(rgba)
-        .write_to(&mut cursor, image::ImageFormat::Png)
-        .is_err()
-    {
+fn attach_png_bytes(app: &mut App, png_bytes: &[u8]) -> bool {
+    if png_bytes.is_empty() {
         return false;
     }
     use base64::Engine as _;
-    let data_base64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+    let data_base64 = base64::engine::general_purpose::STANDARD.encode(png_bytes);
     let idx = app.attached_images.len() + 1;
     app.attached_images.push(ragasukma_core::llm::types::ImageAttachment {
         mime_type: "image/png".to_string(),
@@ -318,4 +320,88 @@ fn try_attach_clipboard_image(app: &mut App) -> bool {
     app.set_status(format!("Image attached ({idx} total)"));
     tracing::info!("Attached clipboard image #{idx} ({} bytes PNG)", png_bytes.len());
     true
+}
+
+#[cfg(target_os = "linux")]
+fn try_linux_cli_clipboard_image(app: &mut App) -> bool {
+    let is_wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
+
+    if is_wayland {
+        if let Ok(out) = std::process::Command::new("wl-paste")
+            .args(["--no-newline", "--type", "image/png"])
+            .output()
+            && out.status.success()
+            && attach_png_bytes(app, &out.stdout)
+        {
+            return true;
+        }
+        if let Ok(out) = std::process::Command::new("wl-paste")
+            .args(["--no-newline", "--type", "text/uri-list"])
+            .output()
+            && out.status.success()
+            && let Ok(text) = String::from_utf8(out.stdout)
+            && try_attach_image_path(app, &text)
+        {
+            return true;
+        }
+    }
+
+    if let Ok(out) = std::process::Command::new("xclip")
+        .args(["-selection", "clipboard", "-t", "image/png", "-o"])
+        .output()
+        && out.status.success()
+        && attach_png_bytes(app, &out.stdout)
+    {
+        return true;
+    }
+
+    if let Ok(out) = std::process::Command::new("xclip")
+        .args(["-selection", "clipboard", "-t", "text/uri-list", "-o"])
+        .output()
+        && out.status.success()
+        && let Ok(text) = String::from_utf8(out.stdout)
+        && try_attach_image_path(app, &text)
+    {
+        return true;
+    }
+
+    false
+}
+
+fn try_attach_clipboard_image(app: &mut App) -> bool {
+    match arboard::Clipboard::new() {
+        Ok(mut clipboard) => {
+            if let Ok(img_data) = clipboard.get_image() {
+                if let Some(rgba) = image::RgbaImage::from_raw(
+                    img_data.width as u32,
+                    img_data.height as u32,
+                    img_data.bytes.into_owned(),
+                ) {
+                    let mut png_bytes: Vec<u8> = Vec::new();
+                    let mut cursor = std::io::Cursor::new(&mut png_bytes);
+                    if image::DynamicImage::ImageRgba8(rgba)
+                        .write_to(&mut cursor, image::ImageFormat::Png)
+                        .is_ok()
+                        && attach_png_bytes(app, &png_bytes)
+                    {
+                        return true;
+                    }
+                }
+            } else if let Ok(text) = clipboard.get_text()
+                && try_attach_image_path(app, &text)
+            {
+                return true;
+            }
+        }
+        Err(err) => {
+            tracing::debug!("arboard::Clipboard::new() failed: {err}");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    if try_linux_cli_clipboard_image(app) {
+        return true;
+    }
+
+    false
 }

@@ -68,7 +68,10 @@ impl AgentWorkspaceState {
 
         // When the input textarea is focused
         if self.is_input_focused {
-            if key.modifiers.contains(KeyModifiers::ALT) && code == KeyCode::Char('s') {
+            if matches!(code, KeyCode::Char('S'))
+                && !key.modifiers.contains(KeyModifiers::CONTROL)
+                && !key.modifiers.contains(KeyModifiers::ALT)
+            {
                 if self.is_running {
                     return Some(Action::AgentCancelTurn);
                 }
@@ -91,22 +94,13 @@ impl AgentWorkspaceState {
                 }
             }
 
-            // --- Newline: EXCLUSIVELY Alt+J. Nothing else may produce a newline. ---
+            // --- Newline: Shift+Enter. ---
             // Checked BEFORE the CONTROL shortcut block below so no other combo can
             // ever reach the newline path.
             {
                 let shift = key.modifiers.contains(KeyModifiers::SHIFT);
                 let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
                 let alt = key.modifiers.contains(KeyModifiers::ALT);
-
-                // Alt+J => the one and only newline.
-                if alt
-                    && !ctrl
-                    && !shift
-                    && matches!(code, KeyCode::Char('j') | KeyCode::Char('J'))
-                {
-                    return Some(Action::AgentInputNewline);
-                }
 
                 // Bare Enter = send. Shift+Enter = newline (modern terminal enhanced protocol).
                 // Other Enter combos remain swallowed dead keys.
@@ -131,6 +125,17 @@ impl AgentWorkspaceState {
                     KeyCode::Char('k') => Some(Action::AgentInputClearToEnd),
                     _ => None,
                 };
+            }
+
+            if key.modifiers.contains(KeyModifiers::SHIFT)
+                && !key.modifiers.contains(KeyModifiers::CONTROL)
+                && !key.modifiers.contains(KeyModifiers::ALT)
+            {
+                match code {
+                    KeyCode::Left => return Some(Action::AgentInputWordLeft),
+                    KeyCode::Right => return Some(Action::AgentInputWordRight),
+                    _ => {}
+                }
             }
 
             return match code {
@@ -164,24 +169,19 @@ impl AgentWorkspaceState {
         }
 
         // Alt shortcuts
-        if key.modifiers.contains(KeyModifiers::ALT) && code == KeyCode::Char('s') {
+        if matches!(code, KeyCode::Char('S'))
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
+            && !key.modifiers.contains(KeyModifiers::ALT)
+        {
             if self.is_running {
                 return Some(Action::AgentCancelTurn);
             }
             return None;
         }
 
-        // Control shortcuts
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            return match code {
-                KeyCode::Char('q') => Some(Action::Quit),
-                _ => None,
-            };
-        }
-
-        // When browsing panels (Folders, Tasks, Files, Chat, Input, Inspector)
+        // Navigating panels
         match code {
-            KeyCode::Char('i') => Some(Action::AgentFocusInput),
+            KeyCode::Char('I') => Some(Action::AgentFocusInput),
             KeyCode::Tab => Some(Action::AgentFocusNextPanel),
             KeyCode::BackTab => Some(Action::AgentFocusPrevPanel),
             KeyCode::Char('b') => Some(Action::AgentToggleSidebar),

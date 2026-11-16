@@ -16,7 +16,7 @@ pub type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;
 
 /// True when the terminal accepted the keyboard-enhancement (kitty keyboard
 /// protocol) request. Only then can the app report modifier info distinctly
-/// (e.g. the Alt+J newline shortcut) instead of collapsing it into a raw key.
+/// (e.g. Shift+Enter) instead of collapsing it into a raw key.
 static KITTY_FLAGS_ACTIVE: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 

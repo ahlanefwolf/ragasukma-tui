@@ -296,17 +296,17 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
                 hints.push(Span::raw("Cancel "));
             } else {
                 if state.is_running {
-                    hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
+                    hints.push(Span::styled(" [Shift+S] ", Theme::badge_red()));
                     hints.push(Span::raw("Stop "));
                 } else {
                     hints.push(Span::styled(" [Enter] ", Theme::key_badge()));
                     hints.push(Span::raw("Send "));
                 }
-                hints.push(Span::styled(" [Alt+J] ", Theme::key_badge()));
+                hints.push(Span::styled(" [Shift+Enter] ", Theme::key_badge()));
                 hints.push(Span::raw("Newline "));
                 hints.push(Span::styled(" [@] ", Theme::key_badge()));
                 hints.push(Span::raw("Tag "));
-                hints.push(Span::styled(" [Alt+I] ", Theme::key_badge()));
+                hints.push(Span::styled(" [Shift+I] ", Theme::key_badge()));
                 hints.push(Span::raw("Image "));
                 hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
                 hints.push(Span::raw("Exit Insert "));
@@ -322,7 +322,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
         }
         AgentFocusArea::Input => {
             if state.is_running {
-                hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
+                hints.push(Span::styled(" [Shift+S] ", Theme::badge_red()));
                 hints.push(Span::raw("Stop "));
             }
             hints.push(Span::styled(" [i/Enter] ", Theme::key_badge()));
@@ -368,7 +368,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
 
     // Lifecycle keys
     if state.is_running {
-        hints.push(Span::styled(" [Alt+S] ", Theme::badge_red()));
+        hints.push(Span::styled(" [Shift+S] ", Theme::badge_red()));
         hints.push(Span::raw("Stop "));
     }
     hints.push(Span::styled(" [Ctrl+Q] ", Theme::key_badge()));

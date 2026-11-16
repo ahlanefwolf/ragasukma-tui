@@ -39,6 +39,14 @@ pub(crate) fn handle_action(
             agent.cursor_right();
             None
         }
+        Action::AgentInputWordLeft => {
+            agent.word_left();
+            None
+        }
+        Action::AgentInputWordRight => {
+            agent.word_right();
+            None
+        }
         Action::AgentInputCursorUp => {
             agent.cursor_up();
             None

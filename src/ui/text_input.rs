@@ -25,7 +25,7 @@ pub enum TextInputMode {
     #[default]
     SingleLine,
     /// Field multi baris dengan perilaku Submit on Enter (khusus Prompt Agent).
-    /// Bare Enter memicu `InputResult::Submit`; Alt+J (atau Shift+Enter jika didukung) memasukkan '\n'.
+    /// Bare Enter memicu `InputResult::Submit`; Shift+Enter memasukkan '\n'.
     MultiLinePrompt,
     /// Field multi baris editor kode/konfigurasi (JSON/Markdown di MCP Server).
     /// Enter memasukkan karakter '\n'; Submit dilakukan via tombol Save atau shortcut form terpisah.
@@ -39,7 +39,7 @@ pub enum InputResult {
     Consumed,
     /// Pengguna menekan Enter (submit)
     Submit,
-    /// Pengguna menekan Alt+J / Shift+Enter untuk newline di mode multiline
+    /// Pengguna menekan Shift+Enter untuk newline di mode multiline
     NewlineInserted,
     /// Pengguna menekan Tab atau Down (pindah ke field berikutnya)
     NextField,
@@ -310,38 +310,6 @@ impl TextInput {
         self.ensure_char_boundary();
     }
 
-    /// Menghapus satu kata ke depan (Alt+D / Delete word forward).
-    pub fn delete_word_forward(&mut self) {
-        self.ensure_char_boundary();
-        if self.cursor >= self.value.len() {
-            return;
-        }
-        let s = &self.value[self.cursor..];
-        let mut chars = s.char_indices().peekable();
-
-        // 1. Lewati spasi di sebelah kanan kursor jika ada
-        while let Some(&(_, c)) = chars.peek() {
-            if c.is_whitespace() {
-                chars.next();
-            } else {
-                break;
-            }
-        }
-
-        // 2. Lewati karakter non-spasi hingga menemukan batas kata atau akhir string
-        let mut target_offset = s.len();
-        for (idx, c) in chars {
-            if c.is_whitespace() {
-                target_offset = idx;
-                break;
-            }
-        }
-
-        let end_idx = self.cursor + target_offset;
-        self.value.drain(self.cursor..end_idx);
-        self.ensure_char_boundary();
-    }
-
     /// Menghapus teks dari awal baris ke posisi kursor saat ini (Ctrl+U).
     pub fn clear_to_start(&mut self) {
         self.ensure_char_boundary();
@@ -411,7 +379,7 @@ impl TextInput {
             self.cursor + self.value[self.cursor..].find('\n').unwrap_or(self.value[self.cursor..].len());
     }
 
-    /// Memindahkan kursor satu kata ke kiri (Alt+Left / Alt+B).
+    /// Memindahkan kursor satu kata ke kiri (Shift+Left).
     pub fn word_left(&mut self) {
         self.ensure_char_boundary();
         if self.cursor == 0 {
@@ -440,7 +408,7 @@ impl TextInput {
         self.ensure_char_boundary();
     }
 
-    /// Memindahkan kursor satu kata ke kanan (Alt+Right / Alt+F).
+    /// Memindahkan kursor satu kata ke kanan (Shift+Right).
     pub fn word_right(&mut self) {
         self.ensure_char_boundary();
         if self.cursor >= self.value.len() {
@@ -693,18 +661,7 @@ impl TextInput {
             return InputResult::PrevField;
         }
 
-        // 3. Alt+J: Deterministik Newline untuk Multiline
-        if alt && !ctrl && matches!(key.code, KeyCode::Char('j') | KeyCode::Char('J')) {
-            return match self.mode {
-                TextInputMode::MultiLinePrompt | TextInputMode::MultiLineEditor => {
-                    self.insert_char('\n');
-                    InputResult::NewlineInserted
-                }
-                TextInputMode::SingleLine => InputResult::Ignored,
-            };
-        }
-
-        // 4. Enter handling
+        // 3. Enter handling
         if key.code == KeyCode::Enter {
             // Shift+Enter / Ctrl+Enter:
             if shift || ctrl {
@@ -775,22 +732,18 @@ impl TextInput {
             }
         }
 
-        // 6. Alt Navigation & Editing Shortcuts
-        if alt && !ctrl {
+        // 6. Shift Navigation Shortcuts
+        if shift && !ctrl && !alt {
             match key.code {
-                KeyCode::Left | KeyCode::Char('b') | KeyCode::Char('B') => {
+                KeyCode::Left => {
                     self.word_left();
                     return InputResult::Consumed;
                 }
-                KeyCode::Right | KeyCode::Char('f') | KeyCode::Char('F') => {
+                KeyCode::Right => {
                     self.word_right();
                     return InputResult::Consumed;
                 }
-                KeyCode::Char('d') | KeyCode::Char('D') => {
-                    self.delete_word_forward();
-                    return InputResult::Consumed;
-                }
-                _ => return InputResult::Ignored,
+                _ => {}
             }
         }
 
@@ -1141,8 +1094,6 @@ mod tests {
         assert_eq!(input.cursor, 0);
         input.delete_word_backward();
         assert_eq!(input.cursor, 0);
-        input.delete_word_forward();
-        assert_eq!(input.cursor, 0);
 
         // Operasi di akhir string
         input.set_value("ragasukma");
@@ -1285,18 +1236,18 @@ mod tests {
         input.handle_key(key_ctrl(KeyCode::Char('e')));
         assert_eq!(input.cursor, input.value.len());
 
-        // Alt+B / Alt+Left (word backward)
-        input.handle_key(key_alt(KeyCode::Char('b')));
+        // Shift+Left (word backward)
+        input.handle_key(key_shift(KeyCode::Left));
         assert_eq!(input.cursor, 22); // awal kata "world"
 
-        input.handle_key(key_alt(KeyCode::Left));
+        input.handle_key(key_shift(KeyCode::Left));
         assert_eq!(input.cursor, 13); // awal kata "terminal"
 
-        // Alt+F / Alt+Right (word forward)
-        input.handle_key(key_alt(KeyCode::Char('f')));
+        // Shift+Right (word forward)
+        input.handle_key(key_shift(KeyCode::Right));
         assert_eq!(input.cursor, 21); // akhir kata "terminal"
 
-        input.handle_key(key_alt(KeyCode::Right));
+        input.handle_key(key_shift(KeyCode::Right));
         assert_eq!(input.cursor, 27); // akhir kata "world"
     }
 
@@ -1340,19 +1291,12 @@ mod tests {
         // Shift+Enter / Ctrl+Enter -> Swallowed dead key
         assert_eq!(prompt.handle_key(key_shift(KeyCode::Enter)), InputResult::Consumed);
         assert_eq!(prompt.handle_key(key_ctrl(KeyCode::Enter)), InputResult::Consumed);
-        // Alt+J -> Insert newline
-        assert_eq!(prompt.handle_key(key_alt(KeyCode::Char('j'))), InputResult::NewlineInserted);
-        assert_eq!(prompt.value, "\n");
-        assert_eq!(prompt.cursor, 1);
 
         // 3. MultiLineEditor:
         let mut editor = TextInput::new_multiline_editor();
         // Bare Enter -> Insert newline
         assert_eq!(editor.handle_key(key(KeyCode::Enter)), InputResult::NewlineInserted);
         assert_eq!(editor.value, "\n");
-        // Alt+J -> Insert newline
-        assert_eq!(editor.handle_key(key_alt(KeyCode::Char('j'))), InputResult::NewlineInserted);
-        assert_eq!(editor.value, "\n\n");
     }
 
     #[test]

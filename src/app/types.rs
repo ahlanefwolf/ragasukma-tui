@@ -77,6 +77,8 @@ pub enum Action {
     AgentInputNewline,
     AgentInputCursorLeft,
     AgentInputCursorRight,
+    AgentInputWordLeft,
+    AgentInputWordRight,
     AgentInputCursorUp,
     AgentInputCursorDown,
     AgentInputCursorHome,

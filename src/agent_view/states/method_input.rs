@@ -495,6 +495,64 @@ impl AgentWorkspaceState {
         }
     }
 
+    pub fn word_left(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos == 0 {
+            return;
+        }
+
+        let prefix = &self.input_buffer[..self.cursor_pos];
+        let mut chars = prefix.char_indices().rev().peekable();
+
+        while let Some(&(_, c)) = chars.peek() {
+            if c.is_whitespace() {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        let mut target_byte = 0;
+        for (idx, c) in chars {
+            if c.is_whitespace() {
+                target_byte = idx + c.len_utf8();
+                break;
+            }
+        }
+
+        self.cursor_pos = target_byte;
+        self.ensure_valid_cursor();
+    }
+
+    pub fn word_right(&mut self) {
+        self.ensure_valid_cursor();
+        if self.cursor_pos >= self.input_buffer.len() {
+            return;
+        }
+
+        let suffix = &self.input_buffer[self.cursor_pos..];
+        let mut chars = suffix.char_indices().peekable();
+
+        while let Some(&(_, c)) = chars.peek() {
+            if c.is_whitespace() {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        let mut target_offset = suffix.len();
+        for (idx, c) in chars {
+            if c.is_whitespace() {
+                target_offset = idx;
+                break;
+            }
+        }
+
+        self.cursor_pos += target_offset;
+        self.ensure_valid_cursor();
+    }
+
     pub fn delete_word_backward(&mut self) {
         self.ensure_valid_cursor();
         if self.cursor_pos == 0 {
