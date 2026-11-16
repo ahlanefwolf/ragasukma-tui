@@ -306,7 +306,7 @@ pub fn get_footer_key_hints(state: &AgentWorkspaceState, width: u16) -> Vec<Span
                 hints.push(Span::raw("Newline "));
                 hints.push(Span::styled(" [@] ", Theme::key_badge()));
                 hints.push(Span::raw("Tag "));
-                hints.push(Span::styled(" [Shift+I] ", Theme::key_badge()));
+                hints.push(Span::styled(" [Ctrl+G] ", Theme::key_badge()));
                 hints.push(Span::raw("Image "));
                 hints.push(Span::styled(" [Esc] ", Theme::key_badge()));
                 hints.push(Span::raw("Exit Insert "));
