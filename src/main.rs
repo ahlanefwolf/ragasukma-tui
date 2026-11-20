@@ -399,9 +399,11 @@ fn try_attach_clipboard_image(app: &mut App) -> bool {
     }
 
     #[cfg(target_os = "linux")]
-    if try_linux_cli_clipboard_image(app) {
-        return true;
+    {
+        try_linux_cli_clipboard_image(app)
     }
-
-    false
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
 }

@@ -17,6 +17,9 @@ pub(crate) fn handle_action(
             None
         }
         Action::AgentSubmitPrompt => {
+            if agent.is_running {
+                return None;
+            }
             agent.close_tag_query();
             if let Some(prompt) = agent.submit_prompt() {
                 if let Some(tx) = bridge_cmd_tx {

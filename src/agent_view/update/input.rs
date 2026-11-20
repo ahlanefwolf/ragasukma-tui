@@ -9,6 +9,9 @@ pub(crate) fn handle_action(
     action: Action,
     _bridge_cmd_tx: Option<&UnboundedSender<CoreBridgeCommand>>,
 ) -> Option<Option<String>> {
+    if agent.is_running {
+        return None;
+    }
     let status = match action {
         Action::AgentInsertChar(c) => {
             agent.insert_char(c);
