@@ -475,6 +475,11 @@ impl App {
                 }
                 self.set_status("Deleted task session".to_string());
             }
+            CoreBridgeEvent::SessionTitleUpdated { id, title } => {
+                if let Some(s) = self.agent.sessions.iter_mut().find(|s| s.id == id) {
+                    s.title = title;
+                }
+            }
         }
     }
 

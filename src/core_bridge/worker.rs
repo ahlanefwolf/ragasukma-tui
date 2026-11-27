@@ -352,10 +352,17 @@ async fn execute_turn_pipeline(
     match res {
         Ok(outcome) => {
             if outcome.is_completed() {
+                let reply = outcome.reply().to_string();
                 let _ = worker_tx.send(CoreBridgeEvent::TurnCompleted {
-                    session_id,
-                    summary: outcome.reply().to_string(),
+                    session_id: session_id.clone(),
+                    summary: reply.clone(),
                 }).await;
+                tokio::spawn(maybe_auto_name_session(
+                    session_id,
+                    model_override,
+                    reply,
+                    worker_tx,
+                ));
             } else {
                 // The turn stopped because the session was cancelled (or its status was
                 // changed externally) and produced no answer. Reporting this as
@@ -376,6 +383,83 @@ async fn execute_turn_pipeline(
                 error: e.to_string(),
             }).await;
         }
+    }
+}
+
+/// Automatically generates a short task title from the LLM's first response
+/// when the session still has a default placeholder title (e.g. `Task #1`).
+async fn maybe_auto_name_session(
+    session_id: String,
+    model_override: Option<String>,
+    reply: String,
+    worker_tx: mpsc::Sender<CoreBridgeEvent>,
+) {
+    let Ok(Some(session)) =
+        ragasukma_core::repository::agent::projects_and_sessions::get_session(&session_id).await
+    else {
+        return;
+    };
+
+    if !session.title.starts_with("Task #") {
+        return;
+    }
+
+    let model = model_override.or(session.model);
+    let snippet: String = reply.chars().take(600).collect();
+
+    let generated = tokio::task::spawn_blocking(move || {
+        let mut client = ragasukma_core::llm::LlmClient::new();
+        if let Some(m) = model.filter(|m| !m.trim().is_empty()) {
+            client.model = m;
+        }
+        let messages = vec![
+            ragasukma_core::llm::types::ChatMessage {
+                role: "system".to_string(),
+                content: "Generate a concise 3 to 6 word title for this task based on the assistant's response. \
+                          Reply with ONLY the title, no quotes, no markdown, no trailing punctuation."
+                    .to_string(),
+            },
+            ragasukma_core::llm::types::ChatMessage {
+                role: "user".to_string(),
+                content: snippet,
+            },
+        ];
+        client.complete_messages_silent(&messages)
+    })
+    .await;
+
+    let Ok(Ok(raw_title)) = generated else {
+        return;
+    };
+
+    let clean_title: String = raw_title
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .trim_matches(|c| c == '"' || c == '\'' || c == '`')
+        .trim()
+        .chars()
+        .take(50)
+        .collect();
+
+    if clean_title.is_empty() {
+        return;
+    }
+
+    if ragasukma_core::repository::agent::projects_and_sessions::update_session_title(
+        &session_id,
+        &clean_title,
+    )
+    .await
+    .is_ok()
+    {
+        let _ = worker_tx
+            .send(CoreBridgeEvent::SessionTitleUpdated {
+                id: session_id,
+                title: clean_title,
+            })
+            .await;
     }
 }
 

@@ -193,6 +193,7 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
 
             let total = state.sessions.len();
             let sel = state.selected_session_idx;
+            let inner_width = (chunks[2].width.saturating_sub(2) as usize).max(1);
             let inner_height = (chunks[2].height.saturating_sub(2) as usize).max(1);
             let offset = if sel >= inner_height {
                 sel.saturating_sub(inner_height - 1)
@@ -225,21 +226,10 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                             ("○ ".to_string(), Theme::TEXT_SECONDARY)
                         };
 
-                        let (status_tag, status_style) = if s.is_running {
-                            (
-                                " [Running]",
-                                Style::default()
-                                    .fg(Theme::CYAN_ACCENT)
-                                    .add_modifier(Modifier::BOLD),
-                            )
-                        } else {
-                            (" [Idle]", Style::default().fg(Theme::TEXT_MUTED))
-                        };
-
                         let total_tokens = s.total_tokens_input + s.total_tokens_output;
                         let token_tag = if total_tokens > 0 {
                             format!(
-                                " [{} tokens]",
+                                " [{}]",
                                 super::helpers::format_compact_number(total_tokens as usize)
                             )
                         } else {
@@ -258,11 +248,23 @@ pub fn render_left_sidebar(frame: &mut Frame, area: Rect, state: &AgentWorkspace
                             Style::default().fg(Theme::TEXT_SECONDARY)
                         };
 
+                        let max_title_len = inner_width.saturating_sub(4 + token_tag.chars().count());
+                        let display_title = if s.title.chars().count() > max_title_len {
+                            if max_title_len > 3 {
+                                let truncated: String =
+                                    s.title.chars().take(max_title_len - 3).collect();
+                                format!("{}...", truncated)
+                            } else {
+                                ".".repeat(max_title_len)
+                            }
+                        } else {
+                            s.title.clone()
+                        };
+
                         ListItem::new(Line::from(vec![
                             Span::styled(cursor_str, Style::default().fg(Theme::GOLD_PRIMARY)),
                             Span::styled(marker, Style::default().fg(marker_color)),
-                            Span::styled(&s.title, style),
-                            Span::styled(status_tag, status_style),
+                            Span::styled(display_title, style),
                             Span::styled(token_tag, Style::default().fg(Theme::TEXT_SECONDARY)),
                         ]))
                     })

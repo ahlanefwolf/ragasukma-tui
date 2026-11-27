@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Cell, Gauge, Paragraph, Row, Table},
 };
 
 use super::types::{ProviderFocusArea, ProviderTabState};
@@ -49,7 +49,12 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
         .split(area);
 
     // Left: Account List
-    let items: Vec<ListItem> = state
+    let header_cells = ["Email", "Status"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Theme::header_title().add_modifier(Modifier::BOLD)));
+    let header = Row::new(header_cells).height(1).bottom_margin(1);
+
+    let rows: Vec<Row> = state
         .accounts
         .iter()
         .enumerate()
@@ -57,21 +62,21 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
             let is_selected = i == state.selected_account_idx;
             let status_badge = if acc.status.starts_with("Rate Limited") {
                 Span::styled(
-                    " ⚠ RATE LIMITED",
+                    "⚠ RATE LIMITED",
                     Theme::status_warning().add_modifier(Modifier::BOLD),
                 )
             } else if acc.is_active {
                 Span::styled(
-                    " ● ACTIVE",
+                    "● ACTIVE",
                     Theme::status_success().add_modifier(Modifier::BOLD),
                 )
             } else {
-                Span::styled(" ○ INACTIVE", Theme::text_secondary())
+                Span::styled("○ INACTIVE", Theme::text_secondary())
             };
 
             let prefix = if is_selected { "❯ " } else { "  " };
 
-            let line = Line::from(vec![
+            let email_cell = Cell::from(Line::from(vec![
                 Span::styled(
                     prefix,
                     if is_selected {
@@ -88,11 +93,10 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
                         Theme::text_secondary()
                     },
                 ),
-                Span::raw(" "),
-                status_badge,
-            ]);
+            ]));
+            let status_cell = Cell::from(status_badge);
 
-            ListItem::new(line)
+            Row::new(vec![email_cell, status_cell]).height(1)
         })
         .collect();
 
@@ -127,8 +131,9 @@ pub fn render_provider_dashboard(frame: &mut Frame, area: Rect, state: &Provider
         .block(list_block);
         frame.render_widget(empty_msg, main_chunks[0]);
     } else {
-        let account_list = List::new(items).block(list_block);
-        frame.render_widget(account_list, main_chunks[0]);
+        let widths = [Constraint::Min(16), Constraint::Length(16)];
+        let account_table = Table::new(rows, widths).header(header).block(list_block);
+        frame.render_widget(account_table, main_chunks[0]);
     }
 
     // Right: Selected Account Quotas & Details

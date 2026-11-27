@@ -108,6 +108,10 @@ pub enum CoreBridgeEvent {
     SessionDeleted {
         id: String,
     },
+    SessionTitleUpdated {
+        id: String,
+        title: String,
+    },
     HistoryLoaded {
         session_id: String,
         messages: Vec<PersistedMessageDto>,
